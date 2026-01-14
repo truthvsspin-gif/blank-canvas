@@ -1,486 +1,566 @@
-import { Link } from "react-router-dom"
-import { useEffect, useMemo, useRef, useState } from "react"
-import { Filter, MoreHorizontal, Plus, Search, Settings } from "lucide-react"
+import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import {
+  ArrowRight,
+  Calendar,
+  ChevronRight,
+  Clock,
+  Filter,
+  Inbox,
+  MessageSquare,
+  MoreHorizontal,
+  Plus,
+  Search,
+  Settings2,
+  Sparkles,
+  TrendingUp,
+  User,
+  UserPlus,
+  Users,
+  Wrench,
+} from "lucide-react";
 
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
-import { Toast } from "@/components/ui/toast"
-import { useLanguage } from "@/components/providers/language-provider"
+} from "@/components/ui/card";
+import { PageHeader } from "@/components/layout/page-header";
+import { useLanguage } from "@/components/providers/language-provider";
+import { useCurrentBusiness } from "@/hooks/use-current-business";
+import { supabase } from "@/lib/supabaseClient";
 
-type Deal = {
-  title: string
-  company: string
-  value: string
-  status: "success" | "warn" | "danger" | "neutral"
-}
+type LeadStage = "new" | "contacted" | "qualified" | "proposal" | "negotiation" | "won" | "lost";
 
-type Column = {
-  key: string
-  titleEs: string
-  titleEn: string
-  deals: Deal[]
-}
+type Lead = {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  stage: LeadStage;
+  source: string | null;
+  created_at: string;
+};
 
-const baseColumns: Column[] = [
-  {
-    key: "qualified",
-    titleEs: "Calificado",
-    titleEn: "Qualified",
-    deals: [
-      { title: "Fresh Goods Deal", company: "Fresh Goods, LLC", value: "$0", status: "danger" },
-      { title: "Mover Deal", company: "Mover Limited", value: "$0", status: "success" },
-      { title: "Silicon Deal", company: "Silicon Links Inc", value: "$0", status: "success" },
-      { title: "Test Deal", company: "Test", value: "$0", status: "neutral" },
-    ],
-  },
-  {
-    key: "contact",
-    titleEs: "Contacto iniciado",
-    titleEn: "Contact made",
-    deals: [
-      { title: "Ownerate Deal", company: "Ownerate LLP", value: "$0", status: "success" },
-      { title: "Omnicorp Deal", company: "Omnicorp", value: "$0", status: "success" },
-      { title: "Blue Marble Deal", company: "Blue Marble LLP", value: "$0", status: "neutral" },
-    ],
-  },
-  {
-    key: "demo",
-    titleEs: "Demo agendada",
-    titleEn: "Demo scheduled",
-    deals: [
-      { title: "Mindbend Deal", company: "Mindbend LLP", value: "$0", status: "warn" },
-      { title: "ABC Deal", company: "ABC Inc", value: "$0", status: "warn" },
-    ],
-  },
-  {
-    key: "proposal",
-    titleEs: "Propuesta enviada",
-    titleEn: "Proposal made",
-    deals: [{ title: "Big Wheels Deal", company: "Big Wheels Inc", value: "$0", status: "success" }],
-  },
-  {
-    key: "negotiation",
-    titleEs: "Negociacion",
-    titleEn: "Negotiation",
-    deals: [
-      { title: "Wolfs Deal", company: "Wolfs Corp", value: "$0", status: "danger" },
-      { title: "Principalspace Deal", company: "Principalspace Inc", value: "$0", status: "success" },
-    ],
-  },
-]
+type RecentActivity = {
+  id: string;
+  type: "booking" | "lead" | "customer" | "conversation";
+  title: string;
+  subtitle: string;
+  time: string;
+  status?: string;
+};
 
-const badgeTone: Record<Deal["status"], string> = {
-  success: "bg-emerald-100 text-emerald-700 border-emerald-200",
-  warn: "bg-amber-100 text-amber-800 border-amber-200",
-  danger: "bg-rose-100 text-rose-700 border-rose-200",
-  neutral: "bg-slate-100 text-slate-600 border-slate-200",
-}
-
-type MenuAction = {
-  label: string
-  onSelect: () => void
-}
-
-function ActionMenu({
-  actions,
-  label,
-}: {
-  actions: MenuAction[]
-  label: string
-}) {
-  const [open, setOpen] = useState(false)
-  const wrapperRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const handleClickOutside = (event: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
-        setOpen(false)
-      }
-    }
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false)
-    }
-
-    document.addEventListener("mousedown", handleClickOutside)
-    document.addEventListener("keydown", handleEscape)
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside)
-      document.removeEventListener("keydown", handleEscape)
-    }
-  }, [open])
-
-  return (
-    <div className="relative" ref={wrapperRef}>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="text-slate-600 hover:text-rose-600"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        aria-label={label}
-      >
-        <MoreHorizontal className="size-4" />
-      </Button>
-      {open ? (
-        <div className="absolute right-0 z-20 mt-2 w-48 rounded-lg border border-slate-200 bg-white shadow-lg shadow-rose-100/30 ring-1 ring-black/5">
-          <div className="py-1">
-            {actions.map((action) => (
-              <button
-                key={action.label}
-                className="flex w-full items-center px-3 py-2 text-left text-sm text-slate-700 hover:bg-rose-50 hover:text-rose-700"
-                onClick={() => {
-                  action.onSelect()
-                  setOpen(false)
-                }}
-                type="button"
-              >
-                {action.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
-    </div>
-  )
-}
+const stageConfig: Record<LeadStage, { labelEs: string; labelEn: string; color: string; bg: string }> = {
+  new: { labelEs: "Nuevo", labelEn: "New", color: "text-blue-700", bg: "bg-blue-100" },
+  contacted: { labelEs: "Contactado", labelEn: "Contacted", color: "text-purple-700", bg: "bg-purple-100" },
+  qualified: { labelEs: "Calificado", labelEn: "Qualified", color: "text-emerald-700", bg: "bg-emerald-100" },
+  proposal: { labelEs: "Propuesta", labelEn: "Proposal", color: "text-amber-700", bg: "bg-amber-100" },
+  negotiation: { labelEs: "Negociación", labelEn: "Negotiation", color: "text-orange-700", bg: "bg-orange-100" },
+  won: { labelEs: "Ganado", labelEn: "Won", color: "text-green-700", bg: "bg-green-100" },
+  lost: { labelEs: "Perdido", labelEn: "Lost", color: "text-red-700", bg: "bg-red-100" },
+};
 
 export default function CrmPage() {
-  const { lang } = useLanguage()
-  const isEs = lang === "es"
-  const [filtersOpen, setFiltersOpen] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [search, setSearch] = useState("")
-  const [stageFilter, setStageFilter] = useState<string[]>([])
-  const [compactCards, setCompactCards] = useState(false)
-  const [feedback, setFeedback] = useState<{ message: string; variant?: "success" | "error" } | null>(null)
+  const { lang } = useLanguage();
+  const isEs = lang === "es";
+  const { businessId, loading: bizLoading } = useCurrentBusiness();
+  
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    customers: 0,
+    leads: 0,
+    bookings: 0,
+    pendingBookings: 0,
+    conversations: 0,
+    services: 0,
+  });
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const copy = isEs
     ? {
-        title: "CRM",
-        subtitle: "Tablero de deals estilo pipeline con estados claros.",
-        addDeal: "Nuevo deal",
-        addService: "Nuevo servicio",
-        totalDeals: "deals",
-        pipeline: "Pipeline",
-        filters: "Filtros",
-        viewAll: "Todos",
-        searchPlaceholder: "Buscar deals",
-        settings: "Ajustes",
-        quickActions: "Acciones rapidas",
-        resetFilters: "Restablecer filtros",
-        openSettings: "Abrir ajustes",
-        compactOn: "Usar tarjetas compactas",
-        compactOff: "Usar tarjetas amplias",
-        compactOnToast: "Vista compacta activada",
-        compactOffToast: "Vista amplia activada",
-        filtersTitle: "Filtros rapidos",
-        filtersDesc: "Filtra por etapa y texto. (Placeholder sin datos reales).",
-        filtersNote: "Se filtrara localmente hasta que conectemos el pipeline a Supabase.",
-        settingsTitle: "Ajustes de tablero",
-        settingsDesc: "Placeholders de configuracion visual.",
-        settingsHint: "Estas opciones son locales por ahora. Usalas como referencia antes de conectar la API real.",
-        columnActions: "Acciones de columna",
-        filterStage: "Filtrar esta etapa",
-        copyColumn: "Copiar nombre",
-        copied: "Nombre copiado",
-        copyFailed: "No se pudo copiar",
-        emptyColumn: "Sin resultados para este filtro",
+        title: "Centro de Gestión",
+        subtitle: "Tu centro de comando para clientes, leads y operaciones.",
+        customers: "Clientes",
+        leads: "Leads",
+        bookings: "Reservas",
+        pending: "Pendientes",
+        conversations: "Conversaciones",
+        services: "Servicios",
+        quickActions: "Acciones Rápidas",
+        newCustomer: "Nuevo Cliente",
+        newBooking: "Nueva Reserva",
+        newService: "Nuevo Servicio",
+        viewAll: "Ver Todo",
+        pipeline: "Pipeline de Leads",
+        pipelineDesc: "Gestiona tus oportunidades de venta",
+        recentActivity: "Actividad Reciente",
+        recentActivityDesc: "Últimas actualizaciones en tu negocio",
+        noLeads: "No hay leads aún",
+        noActivity: "No hay actividad reciente",
+        searchPlaceholder: "Buscar en CRM...",
+        viewCustomers: "Ver Clientes",
+        viewLeads: "Ver Leads",
+        viewBookings: "Ver Reservas",
+        viewInbox: "Ver Inbox",
+        viewServices: "Ver Servicios",
+        today: "Hoy",
+        thisWeek: "Esta Semana",
+        thisMonth: "Este Mes",
       }
     : {
-        title: "CRM",
-        subtitle: "Pipeline-style deals board with clear statuses.",
-        addDeal: "New deal",
-        addService: "New service",
-        totalDeals: "deals",
-        pipeline: "Pipeline",
-        filters: "Filters",
-        viewAll: "All",
-        searchPlaceholder: "Search deals",
-        settings: "Settings",
-        quickActions: "Quick actions",
-        resetFilters: "Reset filters",
-        openSettings: "Open settings",
-        compactOn: "Use compact cards",
-        compactOff: "Use roomy cards",
-        compactOnToast: "Compact cards on",
-        compactOffToast: "Roomy cards on",
-        filtersTitle: "Quick filters",
-        filtersDesc: "Filter by stage and text. (Placeholder with no real data).",
-        filtersNote: "Filtering stays local until we wire this pipeline to Supabase.",
-        settingsTitle: "Board settings",
-        settingsDesc: "Visual configuration placeholders.",
-        settingsHint: "These options are local for now. Use them as a reference before connecting the real API.",
-        columnActions: "Column actions",
-        filterStage: "Filter to this stage",
-        copyColumn: "Copy column name",
-        copied: "Copied column name",
-        copyFailed: "Copy failed",
-        emptyColumn: "No results for this filter",
-      }
-
-  const columns = useMemo(() => {
-    const activeStages = stageFilter.length ? new Set(stageFilter) : null
-    const term = search.toLowerCase().trim()
-
-    return baseColumns
-      .filter((col) => (activeStages ? activeStages.has(col.key) : true))
-      .map((col) => {
-        const filteredDeals = term
-          ? col.deals.filter(
-              (deal) =>
-                deal.title.toLowerCase().includes(term) || deal.company.toLowerCase().includes(term),
-            )
-          : col.deals
-        return { ...col, deals: filteredDeals }
-      })
-  }, [search, stageFilter])
-
-  const totalVisibleDeals = columns.reduce((sum, col) => sum + col.deals.length, 0)
+        title: "Command Center",
+        subtitle: "Your hub for customers, leads, and operations.",
+        customers: "Customers",
+        leads: "Leads",
+        bookings: "Bookings",
+        pending: "Pending",
+        conversations: "Conversations",
+        services: "Services",
+        quickActions: "Quick Actions",
+        newCustomer: "New Customer",
+        newBooking: "New Booking",
+        newService: "New Service",
+        viewAll: "View All",
+        pipeline: "Lead Pipeline",
+        pipelineDesc: "Manage your sales opportunities",
+        recentActivity: "Recent Activity",
+        recentActivityDesc: "Latest updates in your business",
+        noLeads: "No leads yet",
+        noActivity: "No recent activity",
+        searchPlaceholder: "Search CRM...",
+        viewCustomers: "View Customers",
+        viewLeads: "View Leads",
+        viewBookings: "View Bookings",
+        viewInbox: "View Inbox",
+        viewServices: "View Services",
+        today: "Today",
+        thisWeek: "This Week",
+        thisMonth: "This Month",
+      };
 
   useEffect(() => {
-    if (!feedback) return
-    const timeout = window.setTimeout(() => setFeedback(null), 2800)
-    return () => window.clearTimeout(timeout)
-  }, [feedback])
+    if (!businessId) {
+      setLoading(false);
+      return;
+    }
+
+    const fetchData = async () => {
+      setLoading(true);
+
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      const [
+        customersRes,
+        leadsRes,
+        bookingsRes,
+        pendingRes,
+        conversationsRes,
+        servicesRes,
+        leadsDataRes,
+        recentBookingsRes,
+        recentCustomersRes,
+      ] = await Promise.all([
+        supabase.from("customers").select("id", { count: "exact", head: true }).eq("business_id", businessId),
+        supabase.from("leads").select("id", { count: "exact", head: true }).eq("business_id", businessId),
+        supabase.from("bookings").select("id", { count: "exact", head: true }).eq("business_id", businessId),
+        supabase.from("bookings").select("id", { count: "exact", head: true }).eq("business_id", businessId).eq("status", "pending"),
+        supabase.from("conversations").select("id", { count: "exact", head: true }).eq("business_id", businessId).gte("created_at", startOfMonth.toISOString()),
+        supabase.from("services").select("id", { count: "exact", head: true }).eq("business_id", businessId),
+        supabase.from("leads").select("id, name, email, phone, stage, source, created_at").eq("business_id", businessId).order("created_at", { ascending: false }).limit(20),
+        supabase.from("bookings").select("id, service_name, status, scheduled_at, created_at").eq("business_id", businessId).order("created_at", { ascending: false }).limit(5),
+        supabase.from("customers").select("id, full_name, created_at").eq("business_id", businessId).order("created_at", { ascending: false }).limit(5),
+      ]);
+
+      setStats({
+        customers: customersRes.count ?? 0,
+        leads: leadsRes.count ?? 0,
+        bookings: bookingsRes.count ?? 0,
+        pendingBookings: pendingRes.count ?? 0,
+        conversations: conversationsRes.count ?? 0,
+        services: servicesRes.count ?? 0,
+      });
+
+      if (leadsDataRes.data) {
+        setLeads(leadsDataRes.data as Lead[]);
+      }
+
+      // Build recent activity from bookings and customers
+      const activity: RecentActivity[] = [];
+      
+      if (recentBookingsRes.data) {
+        recentBookingsRes.data.forEach((b) => {
+          activity.push({
+            id: `booking-${b.id}`,
+            type: "booking",
+            title: b.service_name,
+            subtitle: isEs ? "Nueva reserva" : "New booking",
+            time: b.created_at,
+            status: b.status,
+          });
+        });
+      }
+
+      if (recentCustomersRes.data) {
+        recentCustomersRes.data.forEach((c) => {
+          activity.push({
+            id: `customer-${c.id}`,
+            type: "customer",
+            title: c.full_name,
+            subtitle: isEs ? "Nuevo cliente" : "New customer",
+            time: c.created_at,
+          });
+        });
+      }
+
+      // Sort by time and take top 8
+      activity.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+      setRecentActivity(activity.slice(0, 8));
+      setLoading(false);
+    };
+
+    fetchData();
+  }, [businessId, isEs]);
+
+  const isLoading = bizLoading || loading;
+
+  // Group leads by stage for pipeline
+  const pipelineStages: LeadStage[] = ["new", "contacted", "qualified", "proposal", "negotiation"];
+  const leadsByStage = pipelineStages.reduce((acc, stage) => {
+    acc[stage] = leads.filter((l) => l.stage === stage);
+    return acc;
+  }, {} as Record<LeadStage, Lead[]>);
+
+  const filteredLeads = searchTerm
+    ? leads.filter(
+        (l) =>
+          l.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          l.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          l.phone?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : leads;
+
+  const formatTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    
+    if (hours < 1) return isEs ? "Hace un momento" : "Just now";
+    if (hours < 24) return isEs ? `Hace ${hours}h` : `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days === 1) return isEs ? "Ayer" : "Yesterday";
+    return isEs ? `Hace ${days} días` : `${days} days ago`;
+  };
+
+  const statCards = [
+    {
+      label: copy.customers,
+      value: stats.customers,
+      icon: Users,
+      href: "/crm/customers",
+      gradient: "from-blue-500/10 to-blue-500/5",
+      iconColor: "text-blue-600",
+      iconBg: "bg-blue-100",
+    },
+    {
+      label: copy.leads,
+      value: stats.leads,
+      icon: UserPlus,
+      href: "/crm/leads",
+      gradient: "from-purple-500/10 to-purple-500/5",
+      iconColor: "text-purple-600",
+      iconBg: "bg-purple-100",
+    },
+    {
+      label: copy.bookings,
+      value: stats.bookings,
+      icon: Calendar,
+      href: "/crm/bookings",
+      gradient: "from-emerald-500/10 to-emerald-500/5",
+      iconColor: "text-emerald-600",
+      iconBg: "bg-emerald-100",
+    },
+    {
+      label: copy.pending,
+      value: stats.pendingBookings,
+      icon: Clock,
+      href: "/crm/bookings",
+      gradient: "from-amber-500/10 to-amber-500/5",
+      iconColor: "text-amber-600",
+      iconBg: "bg-amber-100",
+    },
+    {
+      label: copy.conversations,
+      value: stats.conversations,
+      icon: MessageSquare,
+      href: "/crm/inbox",
+      gradient: "from-accent/10 to-accent/5",
+      iconColor: "text-accent",
+      iconBg: "bg-accent/10",
+    },
+    {
+      label: copy.services,
+      value: stats.services,
+      icon: Wrench,
+      href: "/crm/services",
+      gradient: "from-slate-500/10 to-slate-500/5",
+      iconColor: "text-slate-600",
+      iconBg: "bg-slate-100",
+    },
+  ];
+
+  const quickLinks = [
+    { label: copy.viewCustomers, href: "/crm/customers", icon: Users },
+    { label: copy.viewLeads, href: "/crm/leads", icon: TrendingUp },
+    { label: copy.viewBookings, href: "/crm/bookings", icon: Calendar },
+    { label: copy.viewInbox, href: "/crm/inbox", icon: Inbox },
+    { label: copy.viewServices, href: "/crm/services", icon: Settings2 },
+  ];
 
   return (
-    <div className="space-y-6">
-      {feedback ? <Toast message={feedback.message} variant={feedback.variant} onClose={() => setFeedback(null)} /> : null}
-      <Card className="border-rose-100/70 bg-white shadow-sm shadow-rose-50">
-        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-1">
-            <CardTitle>{copy.title}</CardTitle>
-            <CardDescription>{copy.subtitle}</CardDescription>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 shadow-xs">
-              <span className="text-xs uppercase tracking-[0.14em] text-rose-600">{copy.pipeline}</span>
-              <Badge variant="outline" className="border-slate-200 text-slate-700">
-                {totalVisibleDeals} {copy.totalDeals}
-              </Badge>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-slate-200 text-slate-700"
-              onClick={() => setFiltersOpen((v) => !v)}
-            >
-              <Filter className="mr-2 size-4" />
-              {copy.filters}
-            </Button>
-            <Button variant="outline" size="sm" className="border-slate-200 text-slate-700" asChild>
-              <Link to="/crm/customers">
-                {isEs ? "Ver clientes" : "View customers"}
+    <div className="space-y-8">
+      <PageHeader
+        title={copy.title}
+        description={copy.subtitle}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/crm/customers/new">
+                <Plus className="mr-2 h-4 w-4" />
+                {copy.newCustomer}
               </Link>
             </Button>
-            <Button className="bg-emerald-600 text-white hover:bg-emerald-500" asChild>
+            <Button className="bg-accent text-white hover:bg-accent/90" asChild>
               <Link to="/crm/bookings/new">
-                <Plus className="mr-2 size-4" />
-                {copy.addDeal}
+                <Plus className="mr-2 h-4 w-4" />
+                {copy.newBooking}
               </Link>
             </Button>
-            <Button variant="outline" size="sm" className="border-slate-200 text-slate-700" asChild>
-              <Link to="/crm/services">
-                <Plus className="mr-2 size-4" />
-                {copy.addService}
-              </Link>
-            </Button>
+          </div>
+        }
+      />
+
+      {/* Search Bar */}
+      <div className="flex items-center gap-4">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder={copy.searchPlaceholder}
+            className="w-full rounded-lg border border-input bg-background py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-accent/20"
+          />
+        </div>
+        <Button variant="outline" size="icon">
+          <Filter className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        {statCards.map((stat) => (
+          <Link key={stat.label} to={stat.href}>
+            <Card className={`group relative overflow-hidden border-0 bg-gradient-to-br ${stat.gradient} transition-all hover:shadow-md hover:-translate-y-0.5`}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      {stat.label}
+                    </p>
+                    {isLoading ? (
+                      <div className="mt-1 h-8 w-12 animate-pulse rounded bg-muted" />
+                    ) : (
+                      <p className="mt-1 text-2xl font-bold">{stat.value}</p>
+                    )}
+                  </div>
+                  <div className={`rounded-lg p-2 ${stat.iconBg}`}>
+                    <stat.icon className={`h-5 w-5 ${stat.iconColor}`} />
+                  </div>
+                </div>
+                <ChevronRight className="absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
+      </div>
+
+      {/* Quick Links */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-accent" />
+            <CardTitle className="text-lg">{copy.quickActions}</CardTitle>
           </div>
         </CardHeader>
-        <CardContent className="flex flex-wrap items-center gap-3">
-          <label className="flex min-w-[240px] flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 shadow-xs">
-            <Search className="size-4 text-slate-400" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={copy.searchPlaceholder}
-              className="w-full bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none"
-            />
-          </label>
-          <Button variant="outline" size="sm" className="border-slate-200 text-slate-700" onClick={() => setStageFilter([])}>
-            {copy.viewAll}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-slate-600 hover:text-rose-600"
-            onClick={() => setSettingsOpen((v) => !v)}
-          >
-            <Settings className="size-4" />
-            <span className="sr-only">{copy.settings}</span>
-          </Button>
-          <ActionMenu
-            label={copy.quickActions}
-            actions={[
-              {
-                label: copy.resetFilters,
-                onSelect: () => {
-                  setSearch("")
-                  setStageFilter([])
-                  setFiltersOpen(false)
-                  setFeedback({ message: isEs ? "Filtros restablecidos" : "Filters reset" })
-                },
-              },
-              {
-                label: copy.openSettings,
-                onSelect: () => {
-                  setSettingsOpen(true)
-                  setFeedback({ message: isEs ? "Ajustes abiertos" : "Settings opened" })
-                },
-              },
-              {
-                label: compactCards ? copy.compactOff : copy.compactOn,
-                onSelect: () => {
-                  setCompactCards((v) => !v)
-                  setFeedback({
-                    message: compactCards ? copy.compactOffToast : copy.compactOnToast,
-                  })
-                },
-              },
-            ]}
-          />
+        <CardContent>
+          <div className="flex flex-wrap gap-2">
+            {quickLinks.map((link) => (
+              <Button key={link.href} variant="outline" size="sm" asChild>
+                <Link to={link.href} className="gap-2">
+                  <link.icon className="h-4 w-4" />
+                  {link.label}
+                </Link>
+              </Button>
+            ))}
+          </div>
         </CardContent>
       </Card>
 
-      {filtersOpen ? (
-        <Card className="border-slate-200 bg-white shadow-sm">
-          <CardHeader>
-            <CardTitle>{copy.filtersTitle}</CardTitle>
-            <CardDescription>{copy.filtersDesc}</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4 text-sm text-slate-700">
-            <div className="flex flex-wrap gap-3">
-              {baseColumns.map((col) => {
-                const checked = stageFilter.includes(col.key)
-                return (
-                  <label
-                    key={col.key}
-                    className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 ${
-                      checked ? "border-rose-300 bg-rose-50 text-rose-700" : "border-slate-200 bg-white"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      className="accent-rose-600"
-                      checked={checked}
-                      onChange={() =>
-                        setStageFilter((prev) =>
-                          checked ? prev.filter((k) => k !== col.key) : [...prev, col.key],
-                        )
-                      }
-                    />
-                    <span className="text-sm">{isEs ? col.titleEs : col.titleEn}</span>
-                  </label>
-                )
-              })}
+      {/* Main Content Grid */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Lead Pipeline */}
+        <Card className="lg:col-span-2">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-accent" />
+                {copy.pipeline}
+              </CardTitle>
+              <CardDescription>{copy.pipelineDesc}</CardDescription>
             </div>
-            <p className="text-xs text-slate-500">{copy.filtersNote}</p>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {settingsOpen ? (
-        <Card className="border-slate-200 bg-white shadow-sm">
-          <CardHeader>
-            <CardTitle>{copy.settingsTitle}</CardTitle>
-            <CardDescription>{copy.settingsDesc}</CardDescription>
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/crm/leads">
+                {copy.viewAll}
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
           </CardHeader>
-          <CardContent className="flex flex-col gap-3 text-sm text-slate-700">
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                className="accent-rose-600"
-                checked={compactCards}
-                onChange={(e) => setCompactCards(e.target.checked)}
-              />
-              <span>{copy.compactOn}</span>
-            </label>
-            <p className="text-xs text-slate-500">{copy.settingsHint}</p>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
-        {columns.map((column) => (
-          <div key={column.key} className="rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-              <div>
-                <p className="text-sm font-semibold text-slate-900">
-                  {isEs ? column.titleEs : column.titleEn}
-                </p>
-                <p className="text-xs text-slate-500">
-                  {column.deals.length} {copy.totalDeals}
-                </p>
+          <CardContent>
+            {isLoading ? (
+              <div className="grid grid-cols-5 gap-3">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="h-48 animate-pulse rounded-lg bg-muted" />
+                ))}
               </div>
-              <ActionMenu
-                label={copy.columnActions}
-                actions={[
-                  {
-                    label: copy.filterStage,
-                    onSelect: () => {
-                      setStageFilter([column.key])
-                      setFiltersOpen(false)
-                      setFeedback({
-                        message: isEs
-                          ? `Filtrando por ${column.titleEs}`
-                          : `Filtering to ${column.titleEn}`,
-                      })
-                    },
-                  },
-                  {
-                    label: copy.copyColumn,
-                    onSelect: () => {
-                      const text = isEs ? column.titleEs : column.titleEn
-                      navigator.clipboard
-                        ?.writeText(text)
-                        .then(() => setFeedback({ message: copy.copied }))
-                        .catch(() => setFeedback({ message: copy.copyFailed, variant: "error" }))
-                    },
-                  },
-                ]}
-              />
-            </div>
-            <div className="space-y-3 p-3">
-              {column.deals.map((deal) => (
-                <div
-                  key={deal.title}
-                  className={`rounded-lg border border-slate-200 bg-slate-50 p-3 shadow-xs hover:border-rose-200 hover:bg-rose-50 ${
-                    compactCards ? "text-xs" : "text-sm"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="font-semibold text-slate-900">{deal.title}</p>
-                      <p className="text-xs text-slate-500">{deal.company}</p>
+            ) : leads.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <UserPlus className="h-12 w-12 text-muted-foreground/50" />
+                <p className="mt-4 text-sm text-muted-foreground">{copy.noLeads}</p>
+                <Button className="mt-4" variant="outline" size="sm" asChild>
+                  <Link to="/crm/leads">
+                    <Plus className="mr-2 h-4 w-4" />
+                    {isEs ? "Agregar Lead" : "Add Lead"}
+                  </Link>
+                </Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-5 gap-3">
+                {pipelineStages.map((stage) => {
+                  const config = stageConfig[stage];
+                  const stageLeads = leadsByStage[stage] || [];
+                  return (
+                    <div key={stage} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className={`text-xs font-semibold ${config.color}`}>
+                          {isEs ? config.labelEs : config.labelEn}
+                        </span>
+                        <Badge variant="secondary" className="text-xs">
+                          {stageLeads.length}
+                        </Badge>
+                      </div>
+                      <div className="min-h-[160px] space-y-2 rounded-lg border border-dashed border-border/50 bg-muted/30 p-2">
+                        {stageLeads.slice(0, 3).map((lead) => (
+                          <div
+                            key={lead.id}
+                            className="rounded-md border bg-card p-2 text-xs shadow-sm transition-shadow hover:shadow-md"
+                          >
+                            <p className="font-medium truncate">{lead.name}</p>
+                            {lead.source && (
+                              <p className="text-muted-foreground truncate">{lead.source}</p>
+                            )}
+                          </div>
+                        ))}
+                        {stageLeads.length > 3 && (
+                          <p className="text-center text-xs text-muted-foreground">
+                            +{stageLeads.length - 3} {isEs ? "más" : "more"}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <Badge className={`${badgeTone[deal.status]} flex items-center gap-1`}>
-                      <span className="size-2 rounded-full bg-current" />
-                    </Badge>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Recent Activity */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-accent" />
+              {copy.recentActivity}
+            </CardTitle>
+            <CardDescription>{copy.recentActivityDesc}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="space-y-3">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="h-14 animate-pulse rounded-lg bg-muted" />
+                ))}
+              </div>
+            ) : recentActivity.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <Clock className="h-10 w-10 text-muted-foreground/50" />
+                <p className="mt-3 text-sm text-muted-foreground">{copy.noActivity}</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {recentActivity.map((activity) => (
+                  <div
+                    key={activity.id}
+                    className="flex items-start gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50"
+                  >
+                    <div className={`rounded-full p-2 ${
+                      activity.type === "booking" 
+                        ? "bg-emerald-100 text-emerald-600"
+                        : activity.type === "customer"
+                        ? "bg-blue-100 text-blue-600"
+                        : activity.type === "lead"
+                        ? "bg-purple-100 text-purple-600"
+                        : "bg-amber-100 text-amber-600"
+                    }`}>
+                      {activity.type === "booking" ? (
+                        <Calendar className="h-4 w-4" />
+                      ) : activity.type === "customer" ? (
+                        <User className="h-4 w-4" />
+                      ) : activity.type === "lead" ? (
+                        <UserPlus className="h-4 w-4" />
+                      ) : (
+                        <MessageSquare className="h-4 w-4" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{activity.title}</p>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span>{activity.subtitle}</span>
+                        {activity.status && (
+                          <Badge variant="secondary" className="text-xs">
+                            {activity.status}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      {formatTime(activity.time)}
+                    </span>
                   </div>
-                  <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
-                    <span>{deal.value}</span>
-                    <span className="text-slate-400">$0</span>
-                  </div>
-                </div>
-              ))}
-              {column.deals.length === 0 ? (
-                <p className="rounded-lg border border-dashed border-slate-200 bg-white p-3 text-center text-xs text-slate-500">
-                  {copy.emptyColumn}
-                </p>
-              ) : null}
-            </div>
-          </div>
-        ))}
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
-  )
+  );
 }
-
