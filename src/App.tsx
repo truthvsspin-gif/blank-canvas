@@ -28,9 +28,6 @@ function App() {
       <LanguageProvider>
         <AuthProvider>
           <Routes>
-            {/* Public routes */}
-            <Route path="/" element={<Index />} />
-            
             {/* Auth routes */}
             <Route element={<AuthLayout />}>
               <Route path="/login" element={<Login />} />
@@ -39,7 +36,7 @@ function App() {
             
             {/* Protected app routes */}
             <Route element={<AppLayout />}>
-              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/" element={<Dashboard />} />
               <Route path="/crm" element={<CRM />} />
               <Route path="/crm/customers" element={<Customers />} />
               <Route path="/crm/customers/new" element={<CustomerNew />} />
