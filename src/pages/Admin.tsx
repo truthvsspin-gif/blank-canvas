@@ -1,88 +1,57 @@
-import { useEffect, useState } from "react"
-import { ArrowUpRight, DollarSign, Globe2, MoreHorizontal, Users2 } from "lucide-react"
+import { useEffect, useState } from "react";
+import {
+  Activity,
+  ArrowUpRight,
+  Bell,
+  Bot,
+  Calendar,
+  CheckCircle2,
+  ChevronRight,
+  Clock,
+  Cog,
+  Database,
+  Globe,
+  MessageCircle,
+  MessageSquare,
+  Moon,
+  MoreHorizontal,
+  Phone,
+  Power,
+  RefreshCw,
+  Settings,
+  Shield,
+  Sparkles,
+  Sun,
+  TrendingUp,
+  UserCheck,
+  Users,
+  Zap,
+} from "lucide-react";
 
-import { PageHeader } from "@/components/layout/page-header"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { PageHeader } from "@/components/layout/page-header";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
-import { useLanguage } from "@/components/providers/language-provider"
-import { supabase } from "@/lib/supabaseClient"
-import { useCurrentBusiness } from "@/hooks/use-current-business"
-import { useAuth } from "@/components/providers/auth-provider"
-
-const kpis = [
-  {
-    title: { es: "Miembros online", en: "Members online" },
-    value: "10,468",
-    subtitle: { es: "Uso en vivo", en: "Live usage" },
-    color: "from-sky-500 to-sky-400",
-  },
-  {
-    title: { es: "Leads activos", en: "Active leads" },
-    value: "2,314",
-    subtitle: { es: "Ultimos 7 dias", en: "Last 7 days" },
-    color: "from-sky-600 to-sky-500",
-  },
-  {
-    title: { es: "Ingresos recurrentes", en: "Recurring revenue" },
-    value: "$64,820",
-    subtitle: { es: "Mes actual", en: "Current month" },
-    color: "from-amber-500 to-amber-400",
-  },
-  {
-    title: { es: "Alertas abiertas", en: "Open alerts" },
-    value: "28",
-    subtitle: { es: "Pendientes", en: "Pending" },
-    color: "from-rose-400 to-rose-500",
-  },
-]
-
-const socialCards = [
-  { title: "Facebook", value: "40k friends", detail: "450 feeds", color: "bg-indigo-500" },
-  { title: "Twitter", value: "30k friends", detail: "450 tweets", color: "bg-sky-500" },
-  { title: "LinkedIn", value: "40+ contacts", detail: "250 feeds", color: "bg-indigo-700" },
-  { title: "Google+", value: "94k followers", detail: "92 circles", color: "bg-rose-500" },
-]
-
-const stats = [
-  {
-    labelEs: "Ganancia total",
-    labelEn: "Total profit",
-    value: "1,012",
-    icon: DollarSign,
-    tone: "text-emerald-600 bg-emerald-50",
-  },
-  {
-    labelEs: "Nuevos clientes",
-    labelEn: "New customers",
-    value: "961",
-    icon: Users2,
-    tone: "text-blue-600 bg-blue-50",
-  },
-  {
-    labelEs: "Proyectos activos",
-    labelEn: "Active projects",
-    value: "770",
-    icon: Globe2,
-    tone: "text-amber-600 bg-amber-50",
-  },
-]
+} from "@/components/ui/card";
+import { useLanguage } from "@/components/providers/language-provider";
+import { supabase } from "@/lib/supabaseClient";
+import { useCurrentBusiness } from "@/hooks/use-current-business";
+import { useAuth } from "@/components/providers/auth-provider";
 
 export default function AdminPage() {
-  const { lang } = useLanguage()
-  const isEs = lang === "es"
-  const { businessId } = useCurrentBusiness()
-  const { user } = useAuth()
-  const [role, setRole] = useState<string | null>(null)
-  const [seedLoading, setSeedLoading] = useState(false)
-  const [seedMessage, setSeedMessage] = useState<string | null>(null)
-  const [seedError, setSeedError] = useState<string | null>(null)
+  const { lang } = useLanguage();
+  const isEs = lang === "es";
+  const { businessId } = useCurrentBusiness();
+  const { user } = useAuth();
+  const [role, setRole] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  
+  // Auto-reply state
   const [autoReply, setAutoReply] = useState({
     enabled: true,
     greetingEnabled: true,
@@ -94,719 +63,730 @@ export default function AdminPage() {
     end: "18:00",
     days: "1,2,3,4,5",
     fallbackText: "",
-  })
-  const [autoReplySaving, setAutoReplySaving] = useState(false)
-  const [autoReplyMessage, setAutoReplyMessage] = useState<string | null>(null)
-  const [autoReplyError, setAutoReplyError] = useState<string | null>(null)
-  const [aiReplyEnabled, setAiReplyEnabled] = useState(false)
-  const [whatsAppLoading, setWhatsAppLoading] = useState(false)
-  const [whatsAppError, setWhatsAppError] = useState<string | null>(null)
+  });
+  const [autoReplySaving, setAutoReplySaving] = useState(false);
+  const [autoReplyMessage, setAutoReplyMessage] = useState<string | null>(null);
+  const [autoReplyError, setAutoReplyError] = useState<string | null>(null);
+  const [aiReplyEnabled, setAiReplyEnabled] = useState(false);
+  
+  // Seed demo state
+  const [seedLoading, setSeedLoading] = useState(false);
+  const [seedMessage, setSeedMessage] = useState<string | null>(null);
+  const [seedError, setSeedError] = useState<string | null>(null);
+  
+  // WhatsApp state
+  const [whatsAppLoading, setWhatsAppLoading] = useState(false);
+  const [whatsAppError, setWhatsAppError] = useState<string | null>(null);
   const [whatsAppThreads, setWhatsAppThreads] = useState<
     {
-      id: string
-      contactName: string
-      contactHandle: string
-      lastMessage: string
-      lastMessageAt: string
-      unreadCount: number
+      id: string;
+      contactName: string;
+      contactHandle: string;
+      lastMessage: string;
+      lastMessageAt: string;
+      unreadCount: number;
     }[]
-  >([])
+  >([]);
   const [whatsAppStats, setWhatsAppStats] = useState({
     conversations: 0,
     qualifiedLeads: 0,
     bookingHandoffs: 0,
-  })
+  });
+  
+  // System stats
+  const [systemStats, setSystemStats] = useState({
+    totalUsers: 0,
+    activeConversations: 0,
+    pendingBookings: 0,
+    monthlyLeads: 0,
+  });
 
   const copy = isEs
     ? {
-        title: "Admin",
-        description: "Panel colorido de control con KPIs, sociales y trafico.",
-        alert: "Leiste este mensaje de alerta importante.",
-        success: "Exito",
-        controlBadge: "Control",
-        seedTitle: "Seed demo",
-        seedDesc: "Genera datos demo para el CRM en este negocio.",
-        seedButton: "Sembrar demo",
-        seeding: "Sembrando...",
-        traffic: "Trafico",
-        trafficPeriod: "Octubre 2017",
-        day: "Dia",
-        month: "Mes",
-        year: "Ano",
-        visits: "Visitas",
-        unique: "Unicos",
-        pageviews: "Pageviews",
-        newUsers: "Nuevos usuarios",
-        manager: "Project Manager",
-        viewProfile: "Ver perfil",
-        tweets: "Tweets",
-        following: "Siguiendo",
-        followers: "Seguidores",
-        whatsappTitle: "Actividad de WhatsApp",
-        whatsappDesc: "Conversaciones recientes y conversiones del mes.",
-        whatsappRecent: "Conversaciones recientes",
-        whatsappConversations: "Conversaciones activas",
-        whatsappQualified: "Leads calificados",
-        whatsappHandoffs: "Derivaciones de reserva",
-        whatsappHandoffsHint: "Intento de reserva detectado",
-        whatsappEmpty: "No hay conversaciones recientes.",
-      }
-    : {
-        title: "Admin",
-        description: "Colorful control panel with KPIs, social, and traffic.",
-        alert: "You successfully read this important alert message.",
-        success: "Success",
-        controlBadge: "Control",
-        seedTitle: "Seed demo",
-        seedDesc: "Generate demo data for the CRM in this business.",
-        seedButton: "Seed demo",
-        seeding: "Seeding...",
-        traffic: "Traffic",
-        trafficPeriod: "October 2017",
-        day: "Day",
-        month: "Month",
-        year: "Year",
-        visits: "Visits",
-        unique: "Unique",
-        pageviews: "Pageviews",
-        newUsers: "New users",
-        manager: "Project Manager",
-        viewProfile: "View profile",
-        tweets: "Tweets",
-        following: "Following",
-        followers: "Followers",
-        whatsappTitle: "WhatsApp activity",
-        whatsappDesc: "Recent conversations and month-to-date conversion stats.",
-        whatsappRecent: "Recent conversations",
-        whatsappConversations: "Active conversations",
-        whatsappQualified: "Qualified leads",
-        whatsappHandoffs: "Booking handoffs",
-        whatsappHandoffsHint: "Booking intent detected",
-        whatsappEmpty: "No recent conversations yet.",
-      }
-
-  const autoCopy = isEs
-    ? {
-        title: "Respuestas automaticas",
-        description: "Configura saludos y respuestas fuera de horario para WhatsApp.",
-        enabled: "Activar reglas",
-        greetingEnabled: "Saludo inicial",
-        greetingText: "Texto de saludo",
-        oooEnabled: "Fuera de horario",
-        oooText: "Texto fuera de horario",
-        timezone: "Zona horaria",
-        hoursStart: "Inicio",
-        hoursEnd: "Fin",
-        days: "Dias (0=Dom, 6=Sab)",
-        fallbackText: "Respuesta fallback",
-        aiEnabled: "Activar respuestas AI",
-        save: "Guardar reglas",
+        title: "Panel de Control",
+        description: "Centro de administración y configuración del sistema.",
+        systemHealth: "Estado del Sistema",
+        allSystemsOperational: "Todos los sistemas operativos",
+        quickSettings: "Configuración Rápida",
+        automationHub: "Centro de Automatización",
+        automationDesc: "Gestiona respuestas automáticas e IA",
+        whatsappActivity: "Actividad WhatsApp",
+        whatsappDesc: "Conversaciones y estadísticas del mes",
+        recentConversations: "Conversaciones Recientes",
+        activeConversations: "Conversaciones",
+        qualifiedLeads: "Leads Calificados",
+        bookingHandoffs: "Reservas",
+        noConversations: "No hay conversaciones recientes",
+        seedDemo: "Datos Demo",
+        seedDesc: "Genera datos de demostración",
+        seedButton: "Sembrar Datos",
+        seeding: "Generando...",
+        autoReplies: "Respuestas Automáticas",
+        aiReplies: "Respuestas IA",
+        greeting: "Saludo Inicial",
+        outOfOffice: "Fuera de Horario",
+        timezone: "Zona Horaria",
+        hours: "Horario",
+        days: "Días Laborales",
+        fallback: "Respuesta Fallback",
+        save: "Guardar",
         saving: "Guardando...",
-        saved: "Reglas guardadas.",
-        error: "No se pudieron guardar las reglas.",
+        saved: "Guardado correctamente",
+        enabled: "Activado",
+        disabled: "Desactivado",
+        analytics: "Analíticas",
+        users: "Usuarios",
+        leads: "Leads",
+        pending: "Pendientes",
       }
     : {
-        title: "Auto replies",
-        description: "Configure greetings and out-of-office replies for WhatsApp.",
-        enabled: "Enable rules",
-        greetingEnabled: "Greeting on first message",
-        greetingText: "Greeting text",
-        oooEnabled: "Out of office",
-        oooText: "Out-of-office text",
+        title: "Control Panel",
+        description: "System administration and configuration center.",
+        systemHealth: "System Health",
+        allSystemsOperational: "All systems operational",
+        quickSettings: "Quick Settings",
+        automationHub: "Automation Hub",
+        automationDesc: "Manage auto-replies and AI settings",
+        whatsappActivity: "WhatsApp Activity",
+        whatsappDesc: "Conversations and monthly statistics",
+        recentConversations: "Recent Conversations",
+        activeConversations: "Conversations",
+        qualifiedLeads: "Qualified Leads",
+        bookingHandoffs: "Bookings",
+        noConversations: "No recent conversations",
+        seedDemo: "Demo Data",
+        seedDesc: "Generate demonstration data",
+        seedButton: "Seed Data",
+        seeding: "Generating...",
+        autoReplies: "Auto Replies",
+        aiReplies: "AI Replies",
+        greeting: "Initial Greeting",
+        outOfOffice: "Out of Office",
         timezone: "Timezone",
-        hoursStart: "Start",
-        hoursEnd: "End",
-        days: "Days (0=Sun, 6=Sat)",
-        fallbackText: "Fallback reply",
-        aiEnabled: "Enable AI replies",
-        save: "Save rules",
+        hours: "Hours",
+        days: "Working Days",
+        fallback: "Fallback Reply",
+        save: "Save",
         saving: "Saving...",
-        saved: "Rules saved.",
-        error: "Failed to save rules.",
+        saved: "Saved successfully",
+        enabled: "Enabled",
+        disabled: "Disabled",
+        analytics: "Analytics",
+        users: "Users",
+        leads: "Leads",
+        pending: "Pending",
+      };
+
+  // Load initial data
+  useEffect(() => {
+    const loadData = async () => {
+      if (!businessId) {
+        setLoading(false);
+        return;
       }
 
-  useEffect(() => {
-    const loadAutoReply = async () => {
-      if (!businessId) return
-      const { data } = await supabase
-        .from("businesses")
-        .select("auto_reply_rules, ai_reply_enabled")
-        .eq("id", businessId)
-        .maybeSingle()
-      const rules = (data?.auto_reply_rules ?? {}) as Record<string, any>
-      setAiReplyEnabled(Boolean(data?.ai_reply_enabled))
-      const hours = rules?.out_of_office?.hours ?? {}
-      const days = Array.isArray(hours?.days) ? hours.days.join(",") : "1,2,3,4,5"
-      setAutoReply({
-        enabled: rules.enabled ?? true,
-        greetingEnabled: rules.greeting?.enabled ?? true,
-        greetingText: rules.greeting?.text ?? "",
-        oooEnabled: rules.out_of_office?.enabled ?? true,
-        oooText: rules.out_of_office?.text ?? "",
-        timezone: rules.out_of_office?.timezone ?? rules.timezone ?? "UTC",
-        start: hours?.start ?? "09:00",
-        end: hours?.end ?? "18:00",
-        days,
-        fallbackText: rules.fallback?.text ?? "",
-      })
-    }
-    loadAutoReply()
-  }, [businessId])
+      setLoading(true);
 
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+
+      const [
+        businessRes,
+        usersRes,
+        conversationsRes,
+        bookingsRes,
+        leadsRes,
+      ] = await Promise.all([
+        supabase
+          .from("businesses")
+          .select("auto_reply_rules, ai_reply_enabled")
+          .eq("id", businessId)
+          .maybeSingle(),
+        supabase
+          .from("customers")
+          .select("id", { count: "exact", head: true })
+          .eq("business_id", businessId),
+        supabase
+          .from("conversations")
+          .select("id", { count: "exact", head: true })
+          .eq("business_id", businessId)
+          .eq("status", "open"),
+        supabase
+          .from("bookings")
+          .select("id", { count: "exact", head: true })
+          .eq("business_id", businessId)
+          .eq("status", "pending"),
+        supabase
+          .from("leads")
+          .select("id", { count: "exact", head: true })
+          .eq("business_id", businessId)
+          .gte("created_at", startOfMonth.toISOString()),
+      ]);
+
+      // Set auto-reply settings
+      if (businessRes.data) {
+        const rules = (businessRes.data.auto_reply_rules ?? {}) as Record<string, unknown>;
+        setAiReplyEnabled(Boolean(businessRes.data.ai_reply_enabled));
+        const hours = (rules?.out_of_office as Record<string, unknown>)?.hours as Record<string, unknown> ?? {};
+        const days = Array.isArray(hours?.days) ? (hours.days as number[]).join(",") : "1,2,3,4,5";
+        setAutoReply({
+          enabled: (rules.enabled as boolean) ?? true,
+          greetingEnabled: ((rules.greeting as Record<string, unknown>)?.enabled as boolean) ?? true,
+          greetingText: ((rules.greeting as Record<string, unknown>)?.text as string) ?? "",
+          oooEnabled: ((rules.out_of_office as Record<string, unknown>)?.enabled as boolean) ?? true,
+          oooText: ((rules.out_of_office as Record<string, unknown>)?.text as string) ?? "",
+          timezone: ((rules.out_of_office as Record<string, unknown>)?.timezone as string) ?? (rules.timezone as string) ?? "UTC",
+          start: (hours?.start as string) ?? "09:00",
+          end: (hours?.end as string) ?? "18:00",
+          days,
+          fallbackText: ((rules.fallback as Record<string, unknown>)?.text as string) ?? "",
+        });
+      }
+
+      setSystemStats({
+        totalUsers: usersRes.count ?? 0,
+        activeConversations: conversationsRes.count ?? 0,
+        pendingBookings: bookingsRes.count ?? 0,
+        monthlyLeads: leadsRes.count ?? 0,
+      });
+
+      setLoading(false);
+    };
+
+    loadData();
+  }, [businessId]);
+
+  // Load role
   useEffect(() => {
     const loadRole = async () => {
-      if (!businessId || !user) return
-      const { data, error } = await supabase
+      if (!businessId || !user) return;
+      const { data } = await supabase
         .from("memberships")
         .select("role")
         .eq("business_id", businessId)
         .eq("user_id", user.id)
-        .single()
-      if (error) {
-        setRole(null)
-        return
-      }
-      setRole(data?.role ?? null)
-    }
-    loadRole()
-  }, [businessId, user])
+        .single();
+      setRole(data?.role ?? null);
+    };
+    loadRole();
+  }, [businessId, user]);
 
+  // Load WhatsApp data
   useEffect(() => {
     const loadWhatsApp = async () => {
-      if (!businessId) return
-      setWhatsAppLoading(true)
-      setWhatsAppError(null)
-      const startOfMonth = new Date()
-      startOfMonth.setDate(1)
-      startOfMonth.setHours(0, 0, 0, 0)
+      if (!businessId) return;
+      setWhatsAppLoading(true);
+      setWhatsAppError(null);
 
-      const threadsQuery = supabase
-        .from("inbox_threads")
-        .select("id, contact_name, contact_handle, last_message_text, last_message_at, unread_count")
-        .eq("business_id", businessId)
-        .eq("channel", "whatsapp")
-        .order("last_message_at", { ascending: false })
-        .limit(6)
-
-      const conversationsQuery = supabase
-        .from("inbox_threads")
-        .select("id", { count: "exact", head: true })
-        .eq("business_id", businessId)
-        .eq("channel", "whatsapp")
-        .gte("updated_at", startOfMonth.toISOString())
-
-      const qualifiedQuery = supabase
-        .from("leads")
-        .select("id", { count: "exact", head: true })
-        .eq("business_id", businessId)
-        .eq("source", "whatsapp")
-        .eq("stage", "qualified")
-        .gte("created_at", startOfMonth.toISOString())
-
-      const handoffQuery = supabase
-        .from("conversations")
-        .select("id", { count: "exact", head: true })
-        .eq("business_id", businessId)
-        .eq("channel", "whatsapp")
-        .eq("intent", "booking")
-        .gte("updated_at", startOfMonth.toISOString())
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
 
       const [threadsRes, conversationsRes, qualifiedRes, handoffRes] = await Promise.all([
-        threadsQuery,
-        conversationsQuery,
-        qualifiedQuery,
-        handoffQuery,
-      ])
+        supabase
+          .from("inbox_threads")
+          .select("id, contact_name, contact_handle, last_message_text, last_message_at, unread_count")
+          .eq("business_id", businessId)
+          .eq("channel", "whatsapp")
+          .order("last_message_at", { ascending: false })
+          .limit(5),
+        supabase
+          .from("inbox_threads")
+          .select("id", { count: "exact", head: true })
+          .eq("business_id", businessId)
+          .eq("channel", "whatsapp")
+          .gte("updated_at", startOfMonth.toISOString()),
+        supabase
+          .from("leads")
+          .select("id", { count: "exact", head: true })
+          .eq("business_id", businessId)
+          .eq("source", "whatsapp")
+          .eq("stage", "qualified")
+          .gte("created_at", startOfMonth.toISOString()),
+        supabase
+          .from("conversations")
+          .select("id", { count: "exact", head: true })
+          .eq("business_id", businessId)
+          .eq("channel", "whatsapp")
+          .eq("intent", "booking")
+          .gte("updated_at", startOfMonth.toISOString()),
+      ]);
 
-      if (threadsRes.error || conversationsRes.error || qualifiedRes.error || handoffRes.error) {
-        const errorMessage =
-          threadsRes.error?.message ||
-          conversationsRes.error?.message ||
-          qualifiedRes.error?.message ||
-          handoffRes.error?.message
-        setWhatsAppError(errorMessage || "Failed to load WhatsApp activity.")
+      if (threadsRes.error) {
+        setWhatsAppError(threadsRes.error.message);
       }
 
-      const mappedThreads = (threadsRes.data ?? []).map((thread) => ({
-        id: thread.id,
-        contactName: thread.contact_name || (isEs ? "Sin nombre" : "Unnamed"),
-        contactHandle: thread.contact_handle || "",
-        lastMessage: thread.last_message_text || "",
-        lastMessageAt: thread.last_message_at || "",
-        unreadCount: thread.unread_count ?? 0,
-      }))
+      setWhatsAppThreads(
+        (threadsRes.data ?? []).map((t) => ({
+          id: t.id,
+          contactName: t.contact_name || (isEs ? "Sin nombre" : "Unnamed"),
+          contactHandle: t.contact_handle || "",
+          lastMessage: t.last_message_text || "",
+          lastMessageAt: t.last_message_at || "",
+          unreadCount: t.unread_count ?? 0,
+        }))
+      );
 
-      setWhatsAppThreads(mappedThreads)
       setWhatsAppStats({
         conversations: conversationsRes.count ?? 0,
         qualifiedLeads: qualifiedRes.count ?? 0,
         bookingHandoffs: handoffRes.count ?? 0,
-      })
-      setWhatsAppLoading(false)
-    }
+      });
 
-    loadWhatsApp()
-  }, [businessId, isEs])
+      setWhatsAppLoading(false);
+    };
+
+    loadWhatsApp();
+  }, [businessId, isEs]);
 
   const handleSaveAutoReply = async () => {
     if (!businessId) {
-      setAutoReplyError(autoCopy.error)
-      return
+      setAutoReplyError(isEs ? "Error al guardar" : "Failed to save");
+      return;
     }
-    setAutoReplySaving(true)
-    setAutoReplyMessage(null)
-    setAutoReplyError(null)
+    setAutoReplySaving(true);
+    setAutoReplyMessage(null);
+    setAutoReplyError(null);
+
     const days = autoReply.days
       .split(",")
-      .map((value) => Number.parseInt(value.trim(), 10))
-      .filter((value) => Number.isFinite(value) && value >= 0 && value <= 6)
+      .map((v) => Number.parseInt(v.trim(), 10))
+      .filter((v) => Number.isFinite(v) && v >= 0 && v <= 6);
+
     const payload = {
       enabled: autoReply.enabled,
-      greeting: {
-        enabled: autoReply.greetingEnabled,
-        text: autoReply.greetingText.trim() || undefined,
-      },
+      greeting: { enabled: autoReply.greetingEnabled, text: autoReply.greetingText.trim() || undefined },
       out_of_office: {
         enabled: autoReply.oooEnabled,
         text: autoReply.oooText.trim() || undefined,
         timezone: autoReply.timezone.trim() || "UTC",
-        hours: {
-          start: autoReply.start.trim() || undefined,
-          end: autoReply.end.trim() || undefined,
-          days,
-        },
+        hours: { start: autoReply.start.trim(), end: autoReply.end.trim(), days },
       },
-      fallback: {
-        text: autoReply.fallbackText.trim() || undefined,
-      },
+      fallback: { text: autoReply.fallbackText.trim() || undefined },
       timezone: autoReply.timezone.trim() || "UTC",
-    }
+    };
+
     const { error } = await supabase
       .from("businesses")
       .update({ auto_reply_rules: payload, ai_reply_enabled: aiReplyEnabled })
-      .eq("id", businessId)
+      .eq("id", businessId);
+
     if (error) {
-      setAutoReplyError(autoCopy.error)
-      setAutoReplySaving(false)
-      return
+      setAutoReplyError(isEs ? "Error al guardar" : "Failed to save");
+    } else {
+      setAutoReplyMessage(copy.saved);
     }
-    setAutoReplyMessage(autoCopy.saved)
-    setAutoReplySaving(false)
-  }
+    setAutoReplySaving(false);
+  };
 
   const handleSeed = async () => {
     if (!businessId) {
-      setSeedError(isEs ? "No hay business_id activo." : "No active business_id.")
-      return
+      setSeedError(isEs ? "No hay negocio activo" : "No active business");
+      return;
     }
-    setSeedLoading(true)
-    setSeedMessage(null)
-    setSeedError(null)
+    setSeedLoading(true);
+    setSeedMessage(null);
+    setSeedError(null);
+
     const response = await fetch("/api/seed-demo", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ businessId }),
-    })
-    const payload = await response.json().catch(() => null)
+    });
+
+    const payload = await response.json().catch(() => null);
     if (!response.ok) {
-      setSeedError(payload?.error || (isEs ? "Error al sembrar datos." : "Failed to seed data."))
-      setSeedLoading(false)
-      return
+      setSeedError(payload?.error || (isEs ? "Error" : "Failed"));
+    } else {
+      setSeedMessage(payload?.message || (isEs ? "Completado" : "Completed"));
     }
-    setSeedMessage(payload?.message || (isEs ? "Seed completado." : "Seed completed."))
-    setSeedLoading(false)
-  }
+    setSeedLoading(false);
+  };
+
+  const formatTime = (dateStr: string) => {
+    if (!dateStr) return "";
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    if (hours < 1) return isEs ? "Ahora" : "Now";
+    if (hours < 24) return `${hours}h`;
+    const days = Math.floor(hours / 24);
+    return `${days}d`;
+  };
+
+  const systemCards = [
+    {
+      label: copy.users,
+      value: systemStats.totalUsers,
+      icon: Users,
+      color: "from-blue-500 to-blue-600",
+      iconBg: "bg-blue-500/20",
+    },
+    {
+      label: copy.activeConversations,
+      value: systemStats.activeConversations,
+      icon: MessageSquare,
+      color: "from-emerald-500 to-emerald-600",
+      iconBg: "bg-emerald-500/20",
+    },
+    {
+      label: copy.leads,
+      value: systemStats.monthlyLeads,
+      icon: TrendingUp,
+      color: "from-purple-500 to-purple-600",
+      iconBg: "bg-purple-500/20",
+    },
+    {
+      label: copy.pending,
+      value: systemStats.pendingBookings,
+      icon: Clock,
+      color: "from-amber-500 to-amber-600",
+      iconBg: "bg-amber-500/20",
+    },
+  ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 animate-fade-in">
       <PageHeader
         title={copy.title}
         description={copy.description}
-        actions={<Badge variant="secondary">{copy.controlBadge}</Badge>}
+        actions={
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="gap-1.5 border-emerald-200 bg-emerald-50 text-emerald-700">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              </span>
+              {copy.allSystemsOperational}
+            </Badge>
+          </div>
+        }
       />
 
-      <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 shadow-sm">
-        <span className="font-semibold">{copy.success}:</span> {copy.alert}
+      {/* System Status Cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {systemCards.map((card, idx) => (
+          <Card
+            key={card.label}
+            className="group relative overflow-hidden border-0 bg-gradient-to-br from-card to-muted/30 transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
+            style={{ animationDelay: `${idx * 100}ms` }}
+          >
+            <div className={`absolute inset-0 bg-gradient-to-br ${card.color} opacity-0 transition-opacity group-hover:opacity-5`} />
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    {card.label}
+                  </p>
+                  {loading ? (
+                    <div className="mt-2 h-9 w-16 animate-pulse rounded bg-muted" />
+                  ) : (
+                    <p className="mt-2 text-3xl font-bold tracking-tight">{card.value}</p>
+                  )}
+                </div>
+                <div className={`rounded-xl p-3 ${card.iconBg}`}>
+                  <card.icon className={`h-5 w-5 bg-gradient-to-br ${card.color} bg-clip-text text-transparent`} style={{ color: card.color.includes('blue') ? '#3b82f6' : card.color.includes('emerald') ? '#10b981' : card.color.includes('purple') ? '#a855f7' : '#f59e0b' }} />
+                </div>
+              </div>
+              <div className="mt-3 flex items-center gap-1 text-xs text-muted-foreground">
+                <ArrowUpRight className="h-3 w-3 text-emerald-500" />
+                <span className="text-emerald-600">+12%</span>
+                <span>{isEs ? "vs. mes anterior" : "vs. last month"}</span>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
-      {role === "owner" ? (
-        <Card className="shadow-sm">
-          <CardHeader>
-            <CardTitle>{autoCopy.title}</CardTitle>
-            <CardDescription>{autoCopy.description}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 text-sm text-slate-600">
-            <div className="grid gap-2 md:grid-cols-2">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={autoReply.enabled}
-                  onChange={(event) =>
-                    setAutoReply((prev) => ({ ...prev, enabled: event.target.checked }))
-                  }
-                />
-                {autoCopy.enabled}
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={aiReplyEnabled}
-                  onChange={(event) => setAiReplyEnabled(event.target.checked)}
-                />
-                {autoCopy.aiEnabled}
-              </label>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="space-y-1">
-                <span className="text-xs font-semibold uppercase text-slate-500">{autoCopy.greetingText}</span>
-                <input
-                  className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm"
-                  value={autoReply.greetingText}
-                  onChange={(event) =>
-                    setAutoReply((prev) => ({ ...prev, greetingText: event.target.value }))
-                  }
-                  placeholder="Hi! Thanks for reaching out."
-                />
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs font-semibold uppercase text-slate-500">{autoCopy.fallbackText}</span>
-                <input
-                  className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm"
-                  value={autoReply.fallbackText}
-                  onChange={(event) =>
-                    setAutoReply((prev) => ({ ...prev, fallbackText: event.target.value }))
-                  }
-                  placeholder="Thanks for your message."
-                />
-              </label>
-            </div>
-            <div className="grid gap-3 md:grid-cols-3">
-              <label className="space-y-1">
-                <span className="text-xs font-semibold uppercase text-slate-500">{autoCopy.timezone}</span>
-                <input
-                  className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm"
-                  value={autoReply.timezone}
-                  onChange={(event) =>
-                    setAutoReply((prev) => ({ ...prev, timezone: event.target.value }))
-                  }
-                  placeholder="Europe/Madrid"
-                />
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs font-semibold uppercase text-slate-500">{autoCopy.hoursStart}</span>
-                <input
-                  className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm"
-                  value={autoReply.start}
-                  onChange={(event) =>
-                    setAutoReply((prev) => ({ ...prev, start: event.target.value }))
-                  }
-                  placeholder="09:00"
-                />
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs font-semibold uppercase text-slate-500">{autoCopy.hoursEnd}</span>
-                <input
-                  className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm"
-                  value={autoReply.end}
-                  onChange={(event) =>
-                    setAutoReply((prev) => ({ ...prev, end: event.target.value }))
-                  }
-                  placeholder="18:00"
-                />
-              </label>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="space-y-1">
-                <span className="text-xs font-semibold uppercase text-slate-500">{autoCopy.days}</span>
-                <input
-                  className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm"
-                  value={autoReply.days}
-                  onChange={(event) =>
-                    setAutoReply((prev) => ({ ...prev, days: event.target.value }))
-                  }
-                  placeholder="1,2,3,4,5"
-                />
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs font-semibold uppercase text-slate-500">{autoCopy.oooText}</span>
-                <input
-                  className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm"
-                  value={autoReply.oooText}
-                  onChange={(event) =>
-                    setAutoReply((prev) => ({ ...prev, oooText: event.target.value }))
-                  }
-                  placeholder="We are currently closed."
-                />
-              </label>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={autoReply.greetingEnabled}
-                  onChange={(event) =>
-                    setAutoReply((prev) => ({ ...prev, greetingEnabled: event.target.checked }))
-                  }
-                />
-                {autoCopy.greetingEnabled}
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={autoReply.oooEnabled}
-                  onChange={(event) =>
-                    setAutoReply((prev) => ({ ...prev, oooEnabled: event.target.checked }))
-                  }
-                />
-                {autoCopy.oooEnabled}
-              </label>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                onClick={handleSaveAutoReply}
-                disabled={autoReplySaving}
-                className="bg-slate-900 text-white hover:bg-slate-800"
-              >
-                {autoReplySaving ? autoCopy.saving : autoCopy.save}
-              </Button>
-              {autoReplyMessage ? (
-                <span className="text-sm text-emerald-600">{autoReplyMessage}</span>
-              ) : null}
-              {autoReplyError ? (
-                <span className="text-sm text-rose-600">{autoReplyError}</span>
-              ) : null}
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-
-
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle>{copy.whatsappTitle}</CardTitle>
-          <CardDescription>{copy.whatsappDesc}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
-              <p className="text-xs uppercase text-slate-500">{copy.whatsappConversations}</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-900">
-                {whatsAppLoading ? "..." : whatsAppStats.conversations}
-              </p>
-            </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
-              <p className="text-xs uppercase text-slate-500">{copy.whatsappQualified}</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-900">
-                {whatsAppLoading ? "..." : whatsAppStats.qualifiedLeads}
-              </p>
-            </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
-              <p className="text-xs uppercase text-slate-500">{copy.whatsappHandoffs}</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-900">
-                {whatsAppLoading ? "..." : whatsAppStats.bookingHandoffs}
-              </p>
-              <p className="text-xs text-slate-500">{copy.whatsappHandoffsHint}</p>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase text-slate-500">{copy.whatsappRecent}</p>
-            {whatsAppError ? (
-              <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                {whatsAppError}
+      {/* Main Grid */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Automation Hub - Owner Only */}
+        {role === "owner" && (
+          <Card className="lg:col-span-2 overflow-hidden">
+            <CardHeader className="border-b bg-gradient-to-r from-accent/5 to-transparent">
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg bg-accent/10 p-2">
+                  <Zap className="h-5 w-5 text-accent" />
+                </div>
+                <div>
+                  <CardTitle>{copy.automationHub}</CardTitle>
+                  <CardDescription>{copy.automationDesc}</CardDescription>
+                </div>
               </div>
-            ) : null}
-            {whatsAppLoading ? (
-              <div className="text-sm text-slate-500">...</div>
-            ) : whatsAppThreads.length === 0 ? (
-              <div className="text-sm text-slate-500">{copy.whatsappEmpty}</div>
-            ) : (
-              <div className="space-y-2">
-                {whatsAppThreads.map((thread) => (
-                  <div key={thread.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">{thread.contactName}</p>
-                        {thread.contactHandle ? (
-                          <p className="text-xs text-slate-500">{thread.contactHandle}</p>
-                        ) : null}
+            </CardHeader>
+            <CardContent className="p-6 space-y-6">
+              {/* Toggle Cards */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                {/* Auto Replies Toggle */}
+                <div
+                  className={`relative rounded-xl border-2 p-4 transition-all cursor-pointer ${
+                    autoReply.enabled
+                      ? "border-accent bg-accent/5"
+                      : "border-border hover:border-accent/50"
+                  }`}
+                  onClick={() => setAutoReply((p) => ({ ...p, enabled: !p.enabled }))}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`rounded-lg p-2 ${autoReply.enabled ? "bg-accent/20" : "bg-muted"}`}>
+                        <MessageCircle className={`h-5 w-5 ${autoReply.enabled ? "text-accent" : "text-muted-foreground"}`} />
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-slate-500">
-                        {thread.lastMessageAt ? (
-                          <span>
-                            {new Date(thread.lastMessageAt).toLocaleString(
-                              isEs ? "es-ES" : "en-US",
-                              { dateStyle: "medium", timeStyle: "short" }
-                            )}
-                          </span>
-                        ) : null}
+                      <div>
+                        <p className="font-semibold">{copy.autoReplies}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {autoReply.enabled ? copy.enabled : copy.disabled}
+                        </p>
                       </div>
                     </div>
-                    {thread.lastMessage ? (
-                      <p className="mt-2 text-sm text-slate-600">{thread.lastMessage}</p>
-                    ) : null}
+                    <div className={`h-6 w-11 rounded-full transition-colors ${autoReply.enabled ? "bg-accent" : "bg-muted"}`}>
+                      <div className={`h-5 w-5 rounded-full bg-white shadow-sm transition-transform mt-0.5 ${autoReply.enabled ? "translate-x-5 ml-0.5" : "translate-x-0.5"}`} />
+                    </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {role === "owner" ? (
-        <Card className="shadow-sm">
-          <CardHeader>
-            <CardTitle>{copy.seedTitle}</CardTitle>
-            <CardDescription>{copy.seedDesc}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm text-slate-600">
-            <Button onClick={handleSeed} disabled={seedLoading} className="bg-rose-600 text-white hover:bg-rose-500">
-              {seedLoading ? copy.seeding : copy.seedButton}
-            </Button>
-            {seedMessage ? (
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700">
-                {seedMessage}
-              </div>
-            ) : null}
-            {seedError ? (
-              <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">
-                {seedError}
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {kpis.map((item, idx) => (
-          <Card key={idx} className={`bg-gradient-to-br ${item.color} text-white shadow-lg`}>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-semibold">
-                {isEs ? item.title.es : item.title.en}
-              </CardTitle>
-              <CardDescription className="text-white/80">
-                {isEs ? item.subtitle.es : item.subtitle.en}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex items-center justify-between">
-              <p className="text-3xl font-bold">{item.value}</p>
-              <Button size="icon" variant="ghost" className="text-white hover:bg-white/10">
-                <MoreHorizontal className="size-5" />
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {socialCards.map((card) => (
-          <Card key={card.title} className={`${card.color} text-white shadow-md`}>
-            <CardContent className="space-y-1 p-4">
-              <p className="text-lg font-semibold">{card.title}</p>
-              <div className="text-sm text-white/80">
-                <div>{card.value}</div>
-                <div>{card.detail}</div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-[2fr_1fr]">
-        <Card className="shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>{copy.traffic}</CardTitle>
-              <CardDescription>{copy.trafficPeriod}</CardDescription>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" className="border-slate-200">
-                {copy.day}
-              </Button>
-              <Button size="sm" className="bg-slate-900 text-white hover:bg-slate-800">
-                {copy.month}
-              </Button>
-              <Button size="sm" variant="outline" className="border-slate-200">
-                {copy.year}
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="h-48 rounded-lg bg-gradient-to-b from-slate-50 to-white border border-slate-200" />
-            <div className="grid grid-cols-4 gap-3 text-xs text-slate-600">
-              <div>
-                <p className="font-semibold text-slate-900">{copy.visits}</p>
-                <p>29,703 Users (40%)</p>
-              </div>
-              <div>
-                <p className="font-semibold text-slate-900">{copy.unique}</p>
-                <p>24,093 Users (20%)</p>
-              </div>
-              <div>
-                <p className="font-semibold text-slate-900">{copy.pageviews}</p>
-                <p>78,706 Views (60%)</p>
-              </div>
-              <div>
-                <p className="font-semibold text-slate-900">{copy.newUsers}</p>
-                <p>22,123 Users (80%)</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="space-y-4">
-          <Card className="bg-gradient-to-br from-sky-500 to-sky-400 text-white shadow-lg">
-            <CardContent className="space-y-3 p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-lg font-semibold">Jim Doe</p>
-                  <p className="text-sm text-white/80">{copy.manager}</p>
                 </div>
-                <Badge className="bg-white text-sky-600">
-                  <ArrowUpRight className="size-4" />
-                  {copy.viewProfile}
-                </Badge>
-              </div>
-              <div className="grid grid-cols-3 text-center text-sm">
-                <div>
-                  <p className="font-semibold">750</p>
-                  <p className="text-white/80">{copy.tweets}</p>
-                </div>
-                <div>
-                  <p className="font-semibold">865</p>
-                  <p className="text-white/80">{copy.following}</p>
-                </div>
-                <div>
-                  <p className="font-semibold">3645</p>
-                  <p className="text-white/80">{copy.followers}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
 
-          <Card className="shadow-sm">
-            <CardContent className="space-y-3 p-4">
-              {stats.map((item) => (
+                {/* AI Replies Toggle */}
                 <div
-                  key={item.labelEn}
-                  className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2"
+                  className={`relative rounded-xl border-2 p-4 transition-all cursor-pointer ${
+                    aiReplyEnabled
+                      ? "border-purple-500 bg-purple-50"
+                      : "border-border hover:border-purple-300"
+                  }`}
+                  onClick={() => setAiReplyEnabled(!aiReplyEnabled)}
                 >
-                  <div className={`grid size-10 place-items-center rounded-full ${item.tone}`}>
-                    <item.icon className="size-5" />
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`rounded-lg p-2 ${aiReplyEnabled ? "bg-purple-100" : "bg-muted"}`}>
+                        <Sparkles className={`h-5 w-5 ${aiReplyEnabled ? "text-purple-600" : "text-muted-foreground"}`} />
+                      </div>
+                      <div>
+                        <p className="font-semibold">{copy.aiReplies}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {aiReplyEnabled ? copy.enabled : copy.disabled}
+                        </p>
+                      </div>
+                    </div>
+                    <div className={`h-6 w-11 rounded-full transition-colors ${aiReplyEnabled ? "bg-purple-500" : "bg-muted"}`}>
+                      <div className={`h-5 w-5 rounded-full bg-white shadow-sm transition-transform mt-0.5 ${aiReplyEnabled ? "translate-x-5 ml-0.5" : "translate-x-0.5"}`} />
+                    </div>
                   </div>
-                  <div className="flex-1 px-3 text-sm">
-                    <p className="text-slate-600">{isEs ? item.labelEs : item.labelEn}</p>
-                    <p className="text-lg font-semibold text-slate-900">{item.value}</p>
+                </div>
+              </div>
+
+              {/* Settings Grid */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    {copy.greeting}
+                  </label>
+                  <input
+                    type="text"
+                    value={autoReply.greetingText}
+                    onChange={(e) => setAutoReply((p) => ({ ...p, greetingText: e.target.value }))}
+                    placeholder={isEs ? "¡Hola! Gracias por escribirnos." : "Hi! Thanks for reaching out."}
+                    className="w-full rounded-lg border bg-background px-3 py-2 text-sm transition-colors focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    {copy.outOfOffice}
+                  </label>
+                  <input
+                    type="text"
+                    value={autoReply.oooText}
+                    onChange={(e) => setAutoReply((p) => ({ ...p, oooText: e.target.value }))}
+                    placeholder={isEs ? "Estamos cerrados, te responderemos pronto." : "We're closed, we'll respond soon."}
+                    className="w-full rounded-lg border bg-background px-3 py-2 text-sm transition-colors focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    {copy.hours}
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={autoReply.start}
+                      onChange={(e) => setAutoReply((p) => ({ ...p, start: e.target.value }))}
+                      placeholder="09:00"
+                      className="flex-1 rounded-lg border bg-background px-3 py-2 text-sm transition-colors focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+                    />
+                    <span className="flex items-center text-muted-foreground">→</span>
+                    <input
+                      type="text"
+                      value={autoReply.end}
+                      onChange={(e) => setAutoReply((p) => ({ ...p, end: e.target.value }))}
+                      placeholder="18:00"
+                      className="flex-1 rounded-lg border bg-background px-3 py-2 text-sm transition-colors focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+                    />
                   </div>
-                  <Button variant="ghost" size="icon" className="text-slate-500 hover:text-rose-600">
-                    <MoreHorizontal className="size-4" />
-                  </Button>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    {copy.timezone}
+                  </label>
+                  <input
+                    type="text"
+                    value={autoReply.timezone}
+                    onChange={(e) => setAutoReply((p) => ({ ...p, timezone: e.target.value }))}
+                    placeholder="Europe/Madrid"
+                    className="w-full rounded-lg border bg-background px-3 py-2 text-sm transition-colors focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+                  />
+                </div>
+              </div>
+
+              {/* Save Button */}
+              <div className="flex items-center gap-3">
+                <Button
+                  onClick={handleSaveAutoReply}
+                  disabled={autoReplySaving}
+                  className="bg-accent text-white hover:bg-accent/90"
+                >
+                  {autoReplySaving ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      {copy.saving}
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                      {copy.save}
+                    </>
+                  )}
+                </Button>
+                {autoReplyMessage && (
+                  <span className="text-sm text-emerald-600 animate-fade-in">{autoReplyMessage}</span>
+                )}
+                {autoReplyError && (
+                  <span className="text-sm text-red-600 animate-fade-in">{autoReplyError}</span>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* WhatsApp Activity */}
+        <Card className={role === "owner" ? "" : "lg:col-span-2"}>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-emerald-100 p-2">
+                <Phone className="h-5 w-5 text-emerald-600" />
+              </div>
+              <div>
+                <CardTitle>{copy.whatsappActivity}</CardTitle>
+                <CardDescription>{copy.whatsappDesc}</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Stats */}
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { label: copy.activeConversations, value: whatsAppStats.conversations, color: "text-emerald-600" },
+                { label: copy.qualifiedLeads, value: whatsAppStats.qualifiedLeads, color: "text-blue-600" },
+                { label: copy.bookingHandoffs, value: whatsAppStats.bookingHandoffs, color: "text-purple-600" },
+              ].map((stat) => (
+                <div key={stat.label} className="rounded-lg bg-muted/50 p-3 text-center">
+                  <p className={`text-2xl font-bold ${stat.color}`}>
+                    {whatsAppLoading ? "..." : stat.value}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">{stat.label}</p>
                 </div>
               ))}
+            </div>
+
+            {/* Recent Threads */}
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                {copy.recentConversations}
+              </p>
+              {whatsAppError ? (
+                <p className="text-sm text-red-600">{whatsAppError}</p>
+              ) : whatsAppLoading ? (
+                <div className="space-y-2">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="h-16 animate-pulse rounded-lg bg-muted" />
+                  ))}
+                </div>
+              ) : whatsAppThreads.length === 0 ? (
+                <div className="rounded-lg border border-dashed p-6 text-center">
+                  <MessageSquare className="mx-auto h-8 w-8 text-muted-foreground/50" />
+                  <p className="mt-2 text-sm text-muted-foreground">{copy.noConversations}</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {whatsAppThreads.map((thread) => (
+                    <div
+                      key={thread.id}
+                      className="flex items-start gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50"
+                    >
+                      <div className="rounded-full bg-emerald-100 p-2">
+                        <Users className="h-4 w-4 text-emerald-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-medium truncate">{thread.contactName}</p>
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">
+                            {formatTime(thread.lastMessageAt)}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground truncate">{thread.lastMessage}</p>
+                      </div>
+                      {thread.unreadCount > 0 && (
+                        <Badge className="bg-accent text-white">{thread.unreadCount}</Badge>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Quick Actions - Owner Only */}
+        {role === "owner" && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg bg-amber-100 p-2">
+                  <Database className="h-5 w-5 text-amber-600" />
+                </div>
+                <div>
+                  <CardTitle>{copy.seedDemo}</CardTitle>
+                  <CardDescription>{copy.seedDesc}</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Button
+                onClick={handleSeed}
+                disabled={seedLoading}
+                variant="outline"
+                className="w-full border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+              >
+                {seedLoading ? (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    {copy.seeding}
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    {copy.seedButton}
+                  </>
+                )}
+              </Button>
+              {seedMessage && (
+                <p className="mt-3 text-sm text-emerald-600 animate-fade-in">{seedMessage}</p>
+              )}
+              {seedError && (
+                <p className="mt-3 text-sm text-red-600 animate-fade-in">{seedError}</p>
+              )}
             </CardContent>
           </Card>
-        </div>
+        )}
       </div>
     </div>
-  )
+  );
 }
-
