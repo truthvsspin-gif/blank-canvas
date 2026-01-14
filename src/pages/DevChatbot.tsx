@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bot,
   ChevronDown,
+  Instagram,
   Loader2,
   MessageSquare,
-  Mic,
-  Paperclip,
+  Phone,
   RefreshCw,
   Send,
   Sparkles,
@@ -60,6 +60,7 @@ export default function DevChatbotPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
+  const [selectedChannel, setSelectedChannel] = useState<"whatsapp" | "instagram">("whatsapp");
 
   const copy = useMemo(
     () =>
@@ -79,6 +80,9 @@ export default function DevChatbotPage() {
             noMessages: "Inicia una conversación",
             noMessagesDesc: "Envía un mensaje o usa una de las sugerencias rápidas",
             poweredBy: "Impulsado por IA",
+            selectChannel: "Canal de prueba",
+            whatsapp: "WhatsApp",
+            instagram: "Instagram",
           }
         : {
             title: "Chatbot Simulator",
@@ -95,6 +99,9 @@ export default function DevChatbotPage() {
             noMessages: "Start a conversation",
             noMessagesDesc: "Send a message or use one of the quick prompts",
             poweredBy: "Powered by AI",
+            selectChannel: "Test Channel",
+            whatsapp: "WhatsApp",
+            instagram: "Instagram",
           },
     [isEs]
   );
@@ -133,7 +140,7 @@ export default function DevChatbotPage() {
         const res = await fetch("/api/dev/chatbot-simulate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ businessId, message: trimmed }),
+          body: JSON.stringify({ businessId, message: trimmed, channel: selectedChannel }),
         });
         const data = await res.json().catch(() => null);
 
@@ -158,7 +165,7 @@ export default function DevChatbotPage() {
         setIsTyping(false);
       }
     },
-    [input, loading, businessId, copy]
+    [input, loading, businessId, copy, selectedChannel]
   );
 
   const handleClearChat = () => {
@@ -237,18 +244,42 @@ export default function DevChatbotPage() {
 
         {/* Chat Window */}
         <Card className="lg:col-span-3 flex flex-col overflow-hidden">
-          <CardHeader className="border-b bg-gradient-to-r from-accent/5 to-transparent">
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <div className="h-10 w-10 rounded-full bg-accent/20 flex items-center justify-center">
-                  <Bot className="h-5 w-5 text-accent" />
+          <CardHeader className={`border-b ${
+            selectedChannel === "whatsapp" 
+              ? "bg-gradient-to-r from-emerald-500/10 to-transparent" 
+              : "bg-gradient-to-r from-pink-500/10 to-transparent"
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
+                    selectedChannel === "whatsapp"
+                      ? "bg-emerald-500/20 text-emerald-500"
+                      : "bg-pink-500/20 text-pink-500"
+                  }`}>
+                    {selectedChannel === "whatsapp" ? (
+                      <Phone className="h-5 w-5" />
+                    ) : (
+                      <Instagram className="h-5 w-5" />
+                    )}
+                  </div>
+                  <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-500 border-2 border-background" />
                 </div>
-                <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-500 border-2 border-background" />
+                <div>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    AI Assistant
+                    <Badge className={`text-[10px] ${
+                      selectedChannel === "whatsapp"
+                        ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                        : "bg-pink-500/10 text-pink-500 border-pink-500/20"
+                    }`}>
+                      {selectedChannel === "whatsapp" ? "WhatsApp" : "Instagram"}
+                    </Badge>
+                  </CardTitle>
+                  <CardDescription className="text-xs">{copy.hint}</CardDescription>
+                </div>
               </div>
-              <div>
-                <CardTitle className="text-base">AI Assistant</CardTitle>
-                <CardDescription className="text-xs">{copy.hint}</CardDescription>
-              </div>
+              <Bot className="h-5 w-5 text-muted-foreground" />
             </div>
           </CardHeader>
 
