@@ -18,6 +18,7 @@ import Leads from "./pages/crm/Leads";
 import Inbox from "./pages/crm/Inbox";
 import Services from "./pages/crm/Services";
 import Chatbot from "./pages/Chatbot";
+import DevChatbot from "./pages/DevChatbot";
 import Profile from "./pages/Profile";
 import Admin from "./pages/Admin";
 import AppLayout from "./layouts/AppLayout";
@@ -58,6 +59,7 @@ function App() {
               <Route path="/crm/inbox" element={<Inbox />} />
               <Route path="/crm/services" element={<Services />} />
               <Route path="/chatbot" element={<Chatbot />} />
+              <Route path="/dev-chatbot" element={<DevChatbot />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/admin" element={<Admin />} />
             </Route>
