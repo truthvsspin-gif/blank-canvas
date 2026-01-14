@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./components/providers/auth-provider";
 import { LanguageProvider } from "./components/providers/language-provider";
+import { ProtectedRoute } from "./components/auth/protected-route";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
@@ -38,7 +39,13 @@ function App() {
             <Route path="/" element={<Index />} />
             
             {/* Protected app routes */}
-            <Route element={<AppLayout />}>
+            <Route
+              element={
+                <ProtectedRoute>
+                  <AppLayout />
+                </ProtectedRoute>
+              }
+            >
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/crm" element={<CRM />} />
               <Route path="/crm/customers" element={<Customers />} />
