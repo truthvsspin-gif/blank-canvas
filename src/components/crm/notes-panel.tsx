@@ -1,4 +1,4 @@
-﻿"use client"
+
 
 import { FormEvent, useEffect, useState } from "react"
 import { Loader2, MessageSquarePlus } from "lucide-react"
