@@ -1,5 +1,6 @@
 import * as React from "react"
 import { Link } from "react-router-dom"
+import Image from "next/image"
 import { ArrowRight, Check, Menu, Shield, Zap } from "lucide-react"
 
 import { appSections } from "@/config/navigation"
@@ -40,7 +41,7 @@ const metrics = {
   ],
 }
 
-export default function Index() {
+export default function Home() {
   const { lang, toggleLang } = useLanguage()
   const isEs = lang === "es"
   const [mounted, setMounted] = React.useState(false)
@@ -132,186 +133,201 @@ export default function Index() {
       }
 
   return (
-    <div className="relative min-h-screen bg-background text-foreground">
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-          {/* Logo */}
+    <div className="min-h-screen bg-gradient-to-b from-white via-slate-50 to-white text-slate-900">
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur-xl">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-6 py-4">
           <Link to="/" className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-primary">
-              <Zap className="h-5 w-5 text-primary" />
+            <div className="grid size-11 place-items-center overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <Image
+                src="/4.png"
+                alt="Detapro logo"
+                width={44}
+                height={44}
+                className="h-auto w-auto max-h-11 max-w-11 object-contain"
+                priority
+              />
             </div>
-            <div className="flex flex-col">
-              <span className="text-sm font-semibold tracking-tight">Detapro</span>
-              <span className="text-xs text-muted-foreground">{copy.brandSubtitle}</span>
+            <div className="space-y-0.5">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Detapro</p>
+              <p className="text-sm font-semibold text-slate-900">{copy.brandSubtitle}</p>
             </div>
           </Link>
 
-          {/* Desktop Nav */}
-          <nav className="hidden items-center gap-1 md:flex">
-            <Link to="/dashboard" className="px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
-              {copy.dash}
-            </Link>
-            <Link to="/admin" className="px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
-              {copy.admin}
-            </Link>
-            <Button variant="outline" size="sm" className="ml-2" onClick={toggleLang}>
-              {copy.langLabel}
-            </Button>
-          </nav>
-
-          {/* Mobile Nav */}
-          <div className="flex items-center gap-2 md:hidden">
-            <Button variant="outline" size="sm" onClick={toggleLang}>
-              {copy.langLabel}
-            </Button>
-            <div className="relative">
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={copy.menuLabel}
-                onClick={() => setMenuOpen((prev) => !prev)}
-              >
-                <Menu className="h-5 w-5" />
+          <div className="flex items-center gap-2">
+            <div className="hidden items-center gap-2 sm:flex">
+              <Button variant="ghost" size="sm" asChild className="text-slate-700 hover:text-black">
+                <Link to="/dashboard">{copy.dash}</Link>
               </Button>
-              {menuOpen ? (
-                <div className="absolute right-0 top-full mt-2 flex w-40 flex-col rounded-md border border-border bg-background p-2 shadow-lg">
-                  <Link
-                    to="/dashboard"
-                    className="rounded px-3 py-2 text-sm hover:bg-muted"
-                    onClick={() => setMenuOpen(false)}
-                  >
-                    {copy.dash}
-                  </Link>
-                  <Link
-                    to="/admin"
-                    className="rounded px-3 py-2 text-sm hover:bg-muted"
-                    onClick={() => setMenuOpen(false)}
-                  >
-                    {copy.admin}
-                  </Link>
-                </div>
-              ) : null}
+              <Button variant="ghost" size="sm" asChild className="text-slate-700 hover:text-black">
+                <Link to="/admin">{copy.admin}</Link>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-slate-300 text-slate-800 hover:bg-slate-100"
+                onClick={toggleLang}
+                aria-label={copy.langAlt}
+              >
+                {copy.langLabel}
+              </Button>
+            </div>
+            <div className="flex items-center gap-2 sm:hidden">
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-slate-300 text-slate-800 hover:bg-slate-100"
+                onClick={toggleLang}
+                aria-label={copy.langAlt}
+              >
+                {copy.langLabel}
+              </Button>
+              <div className="relative">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="border border-slate-200 text-slate-800"
+                  aria-label={copy.menuLabel}
+                  onClick={() => setMenuOpen((prev) => !prev)}
+                >
+                  <Menu className="size-5" />
+                </Button>
+                {menuOpen ? (
+                  <div className="absolute right-0 mt-2 w-40 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+                    <Link
+                      href="/dashboard"
+                      className="flex w-full items-center rounded-lg px-3 py-2 text-sm text-slate-800 hover:bg-slate-100"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      {copy.dash}
+                    </Link>
+                    <Link
+                      href="/admin"
+                      className="flex w-full items-center rounded-lg px-3 py-2 text-sm text-slate-800 hover:bg-slate-100"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      {copy.admin}
+                    </Link>
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Hero Section */}
-      <main className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-24">
-        <div className="grid gap-12 lg:grid-cols-2 lg:gap-16">
-          {/* Left Column */}
-          <div className="flex flex-col justify-center">
-            <div className="mb-6 flex items-center gap-3">
-              <Badge variant="secondary">{copy.badge}</Badge>
-              <span className="text-sm text-muted-foreground">{copy.eyebrow}</span>
+      <main className="mx-auto flex w-full max-w-6xl flex-col gap-14 px-6 py-14">
+        <section className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+          <div className="space-y-6">
+            <div className="flex items-center gap-3">
+              <Badge className="border-slate-200 bg-slate-100 text-slate-900">{copy.badge}</Badge>
+              <span className="text-sm text-slate-600">{copy.eyebrow}</span>
             </div>
-
-            <div className="mb-8">
-              <h1 className="mb-4 text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl">
+            <div className="space-y-4">
+              <h1 className="text-4xl font-semibold leading-tight tracking-tight text-slate-900 sm:text-5xl">
                 {copy.heroTitle}
               </h1>
-              <p className="text-lg text-muted-foreground">{copy.heroCopy}</p>
+              <p className="max-w-2xl text-lg text-slate-600">{copy.heroCopy}</p>
             </div>
-
-            <div className="mb-10 flex flex-wrap gap-3">
-              <Button asChild size="lg">
-                <Link to="/dashboard">
+            <div className="flex flex-wrap gap-3">
+              <Button size="lg" className="bg-black text-white hover:bg-slate-900">
+                <Link to="/dashboard" className="flex items-center gap-2">
                   {copy.ctaPrimary}
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                  <ArrowRight className="size-4" />
                 </Link>
               </Button>
-              <Button variant="outline" size="lg" asChild>
+              <Button size="lg" variant="outline" className="border-slate-300 text-slate-800 hover:bg-slate-100">
                 <Link to="/admin">{copy.ctaSecondary}</Link>
               </Button>
             </div>
-
-            <div className="space-y-4">
+            <div className="flex flex-wrap gap-4">
               {highlights[lang].map((item) => (
-                <div key={item.title} className="flex items-start gap-3 rounded-lg border border-border bg-card p-4">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
-                    <Check className="h-4 w-4 text-foreground" />
+                <div
+                  key={item.title}
+                  className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm"
+                >
+                  <div className="grid size-9 place-items-center rounded-full bg-slate-100 text-slate-900">
+                    <Check className="size-4" />
                   </div>
-                  <div>
-                    <p className="font-medium">{item.title}</p>
-                    <p className="text-sm text-muted-foreground">{item.copy}</p>
+                  <div className="text-sm">
+                    <p className="font-semibold text-slate-900">{item.title}</p>
+                    <p className="text-slate-600">{item.copy}</p>
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Right Column - Stats Card */}
-          <Card className="self-start">
-            <CardHeader className="flex flex-row items-center justify-between">
+          <Card className="border-slate-200 bg-white text-slate-900 shadow-lg shadow-slate-100">
+            <CardHeader className="flex flex-row items-start justify-between">
               <div>
                 <CardTitle>{copy.cardTitle}</CardTitle>
-                <CardDescription>{copy.cardDesc}</CardDescription>
+                <CardDescription className="text-slate-600">{copy.cardDesc}</CardDescription>
               </div>
-              <Badge variant="outline" className="flex items-center gap-1">
-                <Zap className="h-3 w-3" />
+              <Badge className="border-slate-200 bg-slate-100 text-slate-900">
+                <Zap className="mr-1 size-3" />
                 Live
               </Badge>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-3 gap-4">
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-3">
                 {metrics[lang].map((metric) => (
-                  <div key={metric.label} className="rounded-lg border border-border p-3 text-center">
-                    <p className="text-xs uppercase text-muted-foreground">{metric.label}</p>
-                    <p className="text-2xl font-bold">{metric.value}</p>
-                    <p className="text-xs text-muted-foreground">{metric.delta}</p>
+                  <div
+                    key={metric.label}
+                    className="rounded-xl border border-slate-200 bg-white p-3 text-slate-900"
+                  >
+                    <p className="text-xs uppercase tracking-[0.14em] text-slate-500">{metric.label}</p>
+                    <p className="text-2xl font-semibold text-slate-900">{metric.value}</p>
+                    <p className="text-sm text-slate-700">{metric.delta}</p>
                   </div>
                 ))}
               </div>
-
-              <div className="rounded-lg border border-border p-4">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
-                    <Shield className="h-5 w-5 text-foreground" />
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="flex items-center gap-3">
+                  <div className="grid size-10 place-items-center rounded-full bg-slate-100 text-slate-900">
+                    <Shield className="size-5" />
                   </div>
                   <div>
-                    <p className="font-medium">{copy.cardSecurityTitle}</p>
-                    <p className="text-sm text-muted-foreground">{copy.cardSecurityDesc}</p>
+                    <p className="text-sm font-semibold text-slate-900">{copy.cardSecurityTitle}</p>
+                    <p className="text-sm text-slate-600">{copy.cardSecurityDesc}</p>
                   </div>
                 </div>
               </div>
             </CardContent>
           </Card>
-        </div>
+        </section>
 
-        {/* Modules Section */}
-        <section className="mt-24">
-          <div className="mb-10 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-            <div>
-              <p className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
-                {copy.modulesEyebrow}
-              </p>
-              <h2 className="text-2xl font-bold sm:text-3xl">{copy.modulesTitle}</h2>
+        <section className="space-y-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="space-y-1">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{copy.modulesEyebrow}</p>
+              <h2 className="text-2xl font-semibold tracking-tight text-slate-900">{copy.modulesTitle}</h2>
             </div>
-            <Button variant="outline" asChild>
+            <Button variant="ghost" size="sm" asChild className="text-slate-800 hover:bg-slate-100">
               <Link to="/dashboard">{copy.modulesCta}</Link>
             </Button>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2">
             {appSections.map((section) => (
-              <Card key={section.href} className="group transition-shadow hover:shadow-md">
-                <CardHeader className="pb-2">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <CardTitle className="text-base">{section.name[lang]}</CardTitle>
-                      <CardDescription className="text-sm">{section.summary[lang]}</CardDescription>
-                    </div>
-                    {section.badge ? (
-                      <Badge variant="secondary">{section.badge[lang]}</Badge>
-                    ) : null}
+              <Card
+                key={section.href}
+                className="group relative overflow-hidden border-slate-200 bg-white text-slate-900 shadow-sm shadow-slate-100"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-slate-50/0 via-slate-50 to-slate-50/0 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                <CardHeader className="relative flex flex-row items-start justify-between gap-2">
+                  <div className="space-y-2">
+                    <CardTitle>{section.name[lang]}</CardTitle>
+                    <CardDescription className="text-slate-600">{section.summary[lang]}</CardDescription>
                   </div>
+                  {section.badge ? (
+                    <Badge className="border-slate-200 bg-slate-100 text-slate-900">{section.badge[lang]}</Badge>
+                  ) : null}
                 </CardHeader>
-                <CardContent>
-                  <p className="mb-3 text-xs text-muted-foreground">{copy.modulesFootnote}</p>
-                  <Button variant="ghost" size="sm" asChild className="p-0 h-auto font-medium">
+                <CardContent className="relative flex items-center justify-between text-sm text-slate-700">
+                  <span>{copy.modulesFootnote}</span>
+                  <Button variant="ghost" size="sm" asChild className="text-slate-900 hover:bg-slate-100">
                     <Link to={section.href}>
-                      {copy.modulesOpen} <ArrowRight className="ml-1 h-3 w-3" />
+                      {copy.modulesOpen} <ArrowRight className="size-4" />
                     </Link>
                   </Button>
                 </CardContent>
@@ -321,92 +337,85 @@ export default function Index() {
         </section>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-border bg-muted/30">
-        <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
-          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-5">
-            {/* Brand Column */}
-            <div className="lg:col-span-2">
-              <div className="mb-4 flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-primary">
-                  <Zap className="h-5 w-5 text-primary" />
+      <footer className="mt-16 border-t border-slate-200 bg-white text-slate-700">
+        <div className="mx-auto w-full max-w-6xl px-6 py-10">
+          <div className="grid gap-10 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="grid size-11 place-items-center overflow-hidden rounded-2xl bg-slate-100 p-2">
+                  <Image src="/4.png" alt="Detapro logo" width={44} height={44} className="h-11 w-11 object-contain" />
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-sm font-semibold tracking-tight">Detapro</span>
-                  <span className="text-xs text-muted-foreground">{copy.brandSubtitle}</span>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Detapro</p>
+                  <p className="text-base font-semibold text-slate-900">{copy.brandSubtitle}</p>
                 </div>
               </div>
-              <p className="mb-4 text-sm text-muted-foreground">{copy.footerBlurb}</p>
-              <div className="flex flex-wrap gap-3">
-                <Badge variant="outline" className="text-xs">
-                  <span className="mr-1">ƒ-Z</span>
-                  {copy.footerHunt}
-                </Badge>
-                <Badge variant="outline" className="text-xs">
-                  <span className="mr-1 inline-block h-2 w-2 rounded-full bg-green-500" />
-                  {copy.footerStatus}
-                </Badge>
+              <p className="text-sm text-slate-600">{copy.footerBlurb}</p>
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                  <span className="text-lg text-slate-800">�-Z</span>
+                  <span className="font-semibold text-slate-900">{copy.footerHunt}</span>
+                </div>
+                <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800">
+                  <span className="size-2 rounded-full bg-emerald-500" />
+                  <span className="font-semibold text-slate-900">{copy.footerStatus}</span>
+                </div>
               </div>
             </div>
 
-            {/* General Links */}
-            <div>
-              <p className="mb-3 text-sm font-semibold">{copy.footerGeneral}</p>
-              <ul className="space-y-2">
+            <div className="space-y-3">
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-600">{copy.footerGeneral}</p>
+              <div className="flex flex-col gap-2 text-sm text-slate-600">
                 {copy.footerLinksGeneral.map((label) => (
-                  <li key={label}>
-                    <Link to="#" className="text-sm text-muted-foreground hover:text-foreground">
-                      {label}
-                    </Link>
-                  </li>
+                  <Link key={label} href="#" className="hover:text-slate-900">
+                    {label}
+                  </Link>
                 ))}
-              </ul>
+              </div>
             </div>
 
-            {/* Resources Links */}
-            <div>
-              <p className="mb-3 text-sm font-semibold">{copy.footerResources}</p>
-              <ul className="space-y-2">
+            <div className="space-y-3">
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-600">{copy.footerResources}</p>
+              <div className="flex flex-col gap-2 text-sm text-slate-600">
                 {copy.footerLinksResources.map((label) => (
-                  <li key={label}>
-                    <Link to="#" className="text-sm text-muted-foreground hover:text-foreground">
-                      {label}
-                    </Link>
-                  </li>
+                  <Link key={label} href="#" className="hover:text-slate-900">
+                    {label}
+                  </Link>
                 ))}
-              </ul>
+              </div>
             </div>
 
-            {/* Follow Links */}
-            <div>
-              <p className="mb-3 text-sm font-semibold">{copy.footerFollow}</p>
-              <ul className="space-y-2">
+            <div className="space-y-3">
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-600">{copy.footerFollow}</p>
+              <div className="flex flex-col gap-2 text-sm text-slate-600">
                 {copy.footerLinksFollow.map((label) => (
-                  <li key={label}>
-                    <Link to="#" className="text-sm text-muted-foreground hover:text-foreground">
-                      {label}
-                    </Link>
-                  </li>
+                  <Link key={label} href="#" className="hover:text-slate-900">
+                    {label}
+                  </Link>
                 ))}
-              </ul>
+              </div>
             </div>
           </div>
 
-          {/* Footer Bottom */}
-          <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-border pt-6 sm:flex-row">
-            <p className="text-xs text-muted-foreground">
-              © {new Date().getFullYear()} Detapro. {copy.footerRights}
+          <div className="mt-8 flex flex-col gap-3 border-t border-slate-200 pt-6 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+            <p>
+              (c) {new Date().getFullYear()} Detapro. {copy.footerRights}
             </p>
-            <div className="flex gap-4">
-              <Link to="#" className="text-xs text-muted-foreground hover:text-foreground">
+            <div className="flex flex-wrap items-center gap-4">
+              <Link to="#" className="hover:text-slate-900">
                 {copy.footerTerms}
               </Link>
-              <Link to="#" className="text-xs text-muted-foreground hover:text-foreground">
+              <Link to="#" className="hover:text-slate-900">
                 {copy.footerPrivacy}
               </Link>
-              <button onClick={toggleLang} className="text-xs text-muted-foreground hover:text-foreground">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-slate-700 hover:text-slate-900"
+                onClick={toggleLang}
+              >
                 {copy.footerLang}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -414,3 +423,4 @@ export default function Index() {
     </div>
   )
 }
+

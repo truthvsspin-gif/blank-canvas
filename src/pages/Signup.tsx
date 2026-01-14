@@ -1,98 +1,126 @@
-import { Link, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { ArrowRight, Eye, EyeOff, Lock, Mail, User } from "lucide-react";
+import { Link } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
+import { Suspense, useEffect, useState } from "react"
+import { ArrowRight, Lock, Mail, User } from "lucide-react"
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Toast } from "@/components/ui/toast";
-import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/lib/supabaseClient";
-import { useLanguage } from "@/components/providers/language-provider";
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { supabase } from "@/lib/supabaseClient"
+import { useAuth } from "@/hooks/useAuth"
+import { Toast } from "@/components/ui/toast"
+import { useLanguage } from "@/components/providers/language-provider"
 
-type ToastState = { message: string; variant: "success" | "error" } | null;
+export default function SignupPage() {
+  const { lang } = useLanguage()
+  const isEs = lang === "es"
 
-export default function Signup() {
-  const navigate = useNavigate();
-  const { session, loading: authLoading } = useAuth();
-  const { lang } = useLanguage();
-  const isEs = lang === "es";
+  return (
+    <Suspense fallback={<div className="text-sm text-muted-foreground">{isEs ? "Cargando..." : "Loading..."}</div>}>
+      <SignupForm />
+    </Suspense>
+  )
+}
+
+function SignupForm() {
+  const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const [fullName, setFullName] = useState("")
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ message: string; variant: "success" | "error" } | null>(null)
+  const { session, loading: authLoading } = useAuth()
+  const { lang } = useLanguage()
+  const isEs = lang === "es"
 
   const copy = isEs
     ? {
         badge: "Registro",
-        title: "Crear cuenta",
-        subtitle: "Unete a Detapro y comienza a gestionar tu negocio.",
-        name: "Nombre completo",
+        title: "Crea tu cuenta",
+        subtitle: "Desbloquea el panel Detapro con una cuenta compartida o individual.",
+        fullName: "Nombre completo",
         email: "Correo electronico",
         password: "Contrasena",
-        submit: "Registrarse",
-        submitting: "Registrando...",
+        confirmPassword: "Confirmar contrasena",
+        mismatch: "Las contrasenas no coinciden.",
+        submit: "Crear cuenta",
+        submitting: "Creando...",
+        toastConfirm: "Cuenta creada. Revisa tu correo para confirmar.",
         toastSuccess: "Cuenta creada, redirigiendo...",
-        hasAccount: "Ya tienes cuenta?",
-        signIn: "Iniciar sesion",
-        toastError: "Error al crear cuenta.",
+        haveAccount: "Ya tienes cuenta?",
+        login: "Iniciar sesion",
       }
     : {
-        badge: "Sign Up",
-        title: "Create account",
-        subtitle: "Join Detapro and start managing your business.",
-        name: "Full name",
+        badge: "Sign up",
+        title: "Create your account",
+        subtitle: "Unlock the Detapro console with a shared or individual account.",
+        fullName: "Full name",
         email: "Email",
         password: "Password",
-        submit: "Sign up",
-        submitting: "Signing up...",
+        confirmPassword: "Confirm password",
+        mismatch: "Passwords do not match.",
+        submit: "Create account",
+        submitting: "Creating...",
+        toastConfirm: "Account created. Check your email to confirm.",
         toastSuccess: "Account created, redirecting...",
-        hasAccount: "Already have an account?",
-        signIn: "Sign in",
-        toastError: "Unable to create account.",
-      };
+        haveAccount: "Already have an account?",
+        login: "Sign in",
+      }
 
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<ToastState>(null);
+  const redirect = params.get("redirect") ?? "/dashboard"
 
   useEffect(() => {
-    if (!toast) return;
-    const timer = setTimeout(() => setToast(null), 3500);
-    return () => clearTimeout(timer);
-  }, [toast]);
+    if (!toast) return
+    const timer = setTimeout(() => setToast(null), 3500)
+    return () => clearTimeout(timer)
+  }, [toast])
 
   useEffect(() => {
     if (!authLoading && session) {
-      navigate("/dashboard", { replace: true });
+      navigate(redirect)
     }
-  }, [authLoading, navigate, session]);
+  }, [authLoading, redirect, router, session])
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setError(null);
-    setSubmitting(true);
+    event.preventDefault()
+    setError(null)
 
-    const { error: signUpError } = await supabase.auth.signUp({
+    if (password !== confirmPassword) {
+      setError(copy.mismatch)
+      return
+    }
+
+    setSubmitting(true)
+    const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { full_name: name },
+        data: { full_name: fullName },
       },
-    });
+    })
 
     if (signUpError) {
-      setError(signUpError.message);
-      setToast({ variant: "error", message: signUpError.message || copy.toastError });
-      setSubmitting(false);
-      return;
+      setError(signUpError.message)
+      setToast({ variant: "error", message: signUpError.message })
+      setSubmitting(false)
+      return
     }
 
-    setToast({ variant: "success", message: copy.toastSuccess });
+    if (!data.session) {
+      setToast({ variant: "success", message: copy.toastConfirm })
+      navigate("/login")
+      setSubmitting(false)
+      return
+    }
 
-    await supabase.auth.getSession();
-    navigate("/dashboard", { replace: true });
-    setSubmitting(false);
-  };
+    setToast({ variant: "success", message: copy.toastSuccess })
+
+    await supabase.auth.getSession()
+    navigate(redirect)
+        setSubmitting(false)
+  }
 
   return (
     <div className="space-y-6">
@@ -104,16 +132,16 @@ export default function Signup() {
 
       <form className="space-y-4" onSubmit={handleSubmit}>
         <label className="flex flex-col gap-1 text-sm font-medium text-foreground">
-          {copy.name}
+          {copy.fullName}
           <div className="flex items-center gap-2 rounded-lg border border-input bg-white px-3 py-2 shadow-xs focus-within:ring-2 focus-within:ring-rose-200">
             <User className="size-4 text-muted-foreground" />
             <input
               type="text"
               required
-              placeholder="John Doe"
+              placeholder={isEs ? "Nombre y apellido" : "First and last name"}
               className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
+              value={fullName}
+              onChange={(event) => setFullName(event.target.value)}
             />
           </div>
         </label>
@@ -138,20 +166,28 @@ export default function Signup() {
           <div className="flex items-center gap-2 rounded-lg border border-input bg-white px-3 py-2 shadow-xs focus-within:ring-2 focus-within:ring-rose-200">
             <Lock className="size-4 text-muted-foreground" />
             <input
-              type={showPassword ? "text" : "password"}
+              type="password"
               required
               placeholder="********"
               className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
             />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-            </button>
+          </div>
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm font-medium text-foreground">
+          {copy.confirmPassword}
+          <div className="flex items-center gap-2 rounded-lg border border-input bg-white px-3 py-2 shadow-xs focus-within:ring-2 focus-within:ring-rose-200">
+            <Lock className="size-4 text-muted-foreground" />
+            <input
+              type="password"
+              required
+              placeholder="********"
+              className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+            />
           </div>
         </label>
 
@@ -167,14 +203,15 @@ export default function Signup() {
         </Button>
       </form>
 
-      <div className="rounded-lg border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-        {copy.hasAccount}{" "}
+      <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+        {copy.haveAccount} {" "}
         <Link to="/login" className="font-semibold underline">
-          {copy.signIn}
+          {copy.login}
         </Link>
       </div>
 
       {toast ? <Toast message={toast.message} variant={toast.variant} onClose={() => setToast(null)} /> : null}
     </div>
-  );
+  )
 }
+

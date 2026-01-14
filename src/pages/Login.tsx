@@ -1,23 +1,34 @@
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { ArrowRight, Eye, EyeOff, Lock, Mail } from "lucide-react";
+import { Link } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
+import { Suspense, useEffect, useState } from "react"
+import { ArrowRight, Lock, Mail } from "lucide-react"
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Toast } from "@/components/ui/toast";
-import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/lib/supabaseClient";
-import { useLanguage } from "@/components/providers/language-provider";
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Toast } from "@/components/ui/toast"
+import { useAuth } from "@/hooks/useAuth"
+import { supabase } from "@/lib/supabaseClient"
+import { useLanguage } from "@/components/providers/language-provider"
 
-type ToastState = { message: string; variant: "success" | "error" } | null;
+type ToastState = { message: string; variant: "success" | "error" } | null
 
-export default function Login() {
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const { session, loading: authLoading } = useAuth();
-  const { lang } = useLanguage();
-  const isEs = lang === "es";
+export default function LoginPage() {
+  const { lang } = useLanguage()
+  const isEs = lang === "es"
 
+  return (
+    <Suspense fallback={<div className="text-sm text-muted-foreground">{isEs ? "Cargando..." : "Loading..."}</div>}>
+      <LoginForm />
+    </Suspense>
+  )
+}
+
+function LoginForm() {
+  const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const { session, loading: authLoading } = useAuth()
+  const { lang } = useLanguage()
+  const isEs = lang === "es"
   const copy = isEs
     ? {
         badge: "Acceso",
@@ -48,49 +59,48 @@ export default function Login() {
         noAccount: "No account yet?",
         createAccount: "Create account",
         toastError: "Unable to sign in.",
-      };
+      }
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<ToastState>(null);
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [toast, setToast] = useState<ToastState>(null)
 
-  const redirect = searchParams.get("redirect") ?? "/dashboard";
+  const redirect = params.get("redirect") ?? "/dashboard"
 
   useEffect(() => {
-    if (!toast) return;
-    const timer = setTimeout(() => setToast(null), 3500);
-    return () => clearTimeout(timer);
-  }, [toast]);
+    if (!toast) return
+    const timer = setTimeout(() => setToast(null), 3500)
+    return () => clearTimeout(timer)
+  }, [toast])
 
   useEffect(() => {
     if (!authLoading && session) {
-      navigate(redirect, { replace: true });
+      navigate(redirect)
     }
-  }, [authLoading, redirect, navigate, session]);
+  }, [authLoading, redirect, router, session])
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setError(null);
-    setSubmitting(true);
+    event.preventDefault()
+    setError(null)
+    setSubmitting(true)
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
 
     if (signInError) {
-      setError(signInError.message);
-      setToast({ variant: "error", message: signInError.message || copy.toastError });
-      setSubmitting(false);
-      return;
+      setError(signInError.message)
+      setToast({ variant: "error", message: signInError.message || copy.toastError })
+      setSubmitting(false)
+      return
     }
 
-    setToast({ variant: "success", message: copy.toastSuccess });
+    setToast({ variant: "success", message: copy.toastSuccess })
 
-    await supabase.auth.getSession();
-    navigate(redirect, { replace: true });
-    setSubmitting(false);
-  };
+    await supabase.auth.getSession()
+    navigate(redirect)
+        setSubmitting(false)
+  }
 
   return (
     <div className="space-y-6">
@@ -121,20 +131,13 @@ export default function Login() {
           <div className="flex items-center gap-2 rounded-lg border border-input bg-white px-3 py-2 shadow-xs focus-within:ring-2 focus-within:ring-rose-200">
             <Lock className="size-4 text-muted-foreground" />
             <input
-              type={showPassword ? "text" : "password"}
+              type="password"
               required
               placeholder="********"
               className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
             />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-            </button>
           </div>
         </label>
 
@@ -161,7 +164,7 @@ export default function Login() {
       </form>
 
       <div className="rounded-lg border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-        {copy.noAccount}{" "}
+        {copy.noAccount} {" "}
         <Link to="/signup" className="font-semibold underline">
           {copy.createAccount}
         </Link>
@@ -169,5 +172,6 @@ export default function Login() {
 
       {toast ? <Toast message={toast.message} variant={toast.variant} onClose={() => setToast(null)} /> : null}
     </div>
-  );
+  )
 }
+
