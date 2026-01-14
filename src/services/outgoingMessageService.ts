@@ -1,7 +1,14 @@
-import { env } from "@/config/env"
-import { getSupabaseAdmin } from "@/lib/supabaseAdmin"
-import { recordOutboundMessage } from "@/services/inboxService"
-import type { NormalizedMessage } from "@/services/messageIngest"
+// Server-side credentials - these should come from edge function env, not frontend
+const serverEnv = {
+  whatsappAccessToken: undefined as string | undefined,
+  whatsappPhoneNumberId: undefined as string | undefined,
+  instagramAccessToken: undefined as string | undefined,
+  instagramBusinessId: undefined as string | undefined,
+};
+
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { recordOutboundMessage } from "@/services/inboxService";
+import type { NormalizedMessage } from "@/services/messageIngest";
 
 type SendResult = {
   sent: boolean
@@ -103,8 +110,8 @@ async function sendWhatsApp(
   text: string,
   config: IntegrationConfig
 ) {
-  const token = config.whatsappAccessToken ?? env.whatsappAccessToken
-  const phoneNumberId = config.whatsappPhoneNumberId ?? env.whatsappPhoneNumberId
+  const token = config.whatsappAccessToken ?? serverEnv.whatsappAccessToken;
+  const phoneNumberId = config.whatsappPhoneNumberId ?? serverEnv.whatsappPhoneNumberId;
   if (!token || !phoneNumberId) {
     throw new Error("Missing WhatsApp credentials.")
   }
@@ -145,8 +152,8 @@ async function sendInstagram(
   text: string,
   config: IntegrationConfig
 ) {
-  const token = config.instagramAccessToken ?? env.instagramAccessToken
-  const businessId = config.instagramBusinessId ?? env.instagramBusinessId
+  const token = config.instagramAccessToken ?? serverEnv.instagramAccessToken;
+  const businessId = config.instagramBusinessId ?? serverEnv.instagramBusinessId;
   if (!token || !businessId) {
     throw new Error("Missing Instagram credentials.")
   }
