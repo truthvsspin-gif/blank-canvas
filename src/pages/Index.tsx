@@ -4,71 +4,27 @@ import {
   ArrowRight, 
   Check, 
   Menu, 
-  Shield, 
-  Zap, 
+  X,
   Sparkles, 
   BarChart3, 
   Users, 
   MessageSquare,
   Bot,
   Calendar,
-  TrendingUp,
-  Globe,
-  Lock
+  ChevronRight,
+  Play,
+  Star,
+  Zap,
+  Shield,
+  Clock,
+  Phone,
+  Instagram
 } from "lucide-react"
 
 import { appSections } from "@/config/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 import { useLanguage } from "@/components/providers/language-provider"
-
-const highlights = {
-  es: [
-    { title: "Listo para lanzar", copy: "Flujo base de dashboard y admin en minutos.", icon: Zap },
-    { title: "Multi-tenant real", copy: "Rutas, middleware y RLS preparados.", icon: Users },
-    { title: "Branding flexible", copy: "Tema monocromo alineado a todo el panel.", icon: Sparkles },
-  ],
-  en: [
-    { title: "Launch ready", copy: "Base dashboard and admin flow in minutes.", icon: Zap },
-    { title: "Real multi-tenant", copy: "Routes, middleware, and RLS prepped.", icon: Users },
-    { title: "Flexible branding", copy: "Monochrome theme aligned to the whole panel.", icon: Sparkles },
-  ],
-}
-
-const metrics = {
-  es: [
-    { label: "Workspaces", value: "32", delta: "+12% mes", icon: Globe },
-    { label: "Automatizaciones", value: "146", delta: "4m mediana", icon: Bot },
-    { label: "Disponibilidad", value: "99.99%", delta: "observado", icon: TrendingUp },
-  ],
-  en: [
-    { label: "Workspaces", value: "32", delta: "+12% month", icon: Globe },
-    { label: "Automations", value: "146", delta: "4m median", icon: Bot },
-    { label: "Uptime", value: "99.99%", delta: "observed", icon: TrendingUp },
-  ],
-}
-
-const features = {
-  es: [
-    { icon: BarChart3, title: "Analytics en tiempo real", desc: "Métricas instantáneas de tu negocio" },
-    { icon: MessageSquare, title: "Mensajería unificada", desc: "WhatsApp e Instagram en un solo lugar" },
-    { icon: Calendar, title: "Agenda inteligente", desc: "Reservas automáticas con IA" },
-    { icon: Lock, title: "Seguridad enterprise", desc: "RLS y cifrado de extremo a extremo" },
-  ],
-  en: [
-    { icon: BarChart3, title: "Real-time analytics", desc: "Instant business metrics" },
-    { icon: MessageSquare, title: "Unified messaging", desc: "WhatsApp & Instagram in one place" },
-    { icon: Calendar, title: "Smart scheduling", desc: "AI-powered automatic bookings" },
-    { icon: Lock, title: "Enterprise security", desc: "RLS and end-to-end encryption" },
-  ],
-}
 
 export default function Home() {
   const { lang, toggleLang } = useLanguage()
@@ -86,417 +42,405 @@ export default function Home() {
 
   const copy = isEs
     ? {
-        brandSubtitle: "Panel de producto",
-        dash: "Dashboard",
-        admin: "Admin",
-        badge: "SaaS listo",
-        eyebrow: "Dashboard + Admin coherentes",
-        heroTitle: "El futuro de tu negocio,",
-        heroTitleHighlight: "automatizado.",
-        heroCopy:
-          "Detapro une CRM, mensajería y automatización con IA en una plataforma elegante. Gestiona clientes, leads y reservas sin esfuerzo.",
-        ctaPrimary: "Comenzar ahora",
-        ctaSecondary: "Ver demo",
-        cardTitle: "Vista unificada",
-        cardDesc: "Mismo look and feel que el dashboard.",
-        cardSecurityTitle: "Protección multi-tenant",
-        cardSecurityDesc: "Middleware + políticas de acceso listas.",
-        featuresTitle: "Todo lo que necesitas",
-        featuresSubtitle: "Herramientas potentes para escalar tu negocio",
-        modulesEyebrow: "Módulos",
-        modulesTitle: "Explora las secciones",
-        modulesCta: "Ver consola",
-        modulesFootnote: "Rutas, layout y estados listos para datos reales.",
-        modulesOpen: "Abrir",
-        footerBlurb:
-          "Panel y admin listos para tu SaaS multi-tenant. Un solo lenguaje visual monocromo.",
-        footerHunt: "Listo para Product Hunt",
-        footerStatus: "Todo operativo",
-        footerGeneral: "General",
-        footerResources: "Recursos",
-        footerFollow: "Síguenos",
-        footerLinksGeneral: ["Roadmap", "Changelog", "Pricing", "Programa de referidos"],
-        footerLinksResources: ["Documentación", "Tutoriales", "Comunidad", "Blog", "Estado"],
-        footerLinksFollow: ["Twitter", "LinkedIn", "Discord", "Instagram"],
-        footerTerms: "Términos",
-        footerPrivacy: "Privacidad",
-        footerLang: "Español",
-        footerRights: "Todos los derechos reservados.",
-        langLabel: "ES",
-        langAlt: "Cambiar a inglés",
-        menuLabel: "Abrir menú",
+        nav: { dashboard: "Dashboard", admin: "Admin", login: "Iniciar sesión" },
+        hero: {
+          badge: "Nuevo: IA Conversacional",
+          title: "Automatiza tu negocio",
+          titleHighlight: "con inteligencia",
+          subtitle: "CRM, mensajería y reservas unificados en una plataforma elegante. Gestiona WhatsApp e Instagram desde un solo lugar.",
+          cta: "Comenzar gratis",
+          ctaSecondary: "Ver demo",
+          trust: "Más de 500+ negocios confían en nosotros"
+        },
+        stats: [
+          { value: "99.9%", label: "Uptime garantizado" },
+          { value: "50K+", label: "Mensajes procesados" },
+          { value: "24/7", label: "Soporte disponible" },
+          { value: "2min", label: "Tiempo de respuesta" }
+        ],
+        features: {
+          title: "Todo lo que necesitas",
+          subtitle: "Herramientas potentes para escalar tu negocio",
+          items: [
+            { icon: MessageSquare, title: "Inbox Unificado", desc: "WhatsApp e Instagram en un solo lugar", color: "emerald" },
+            { icon: Bot, title: "Chatbot IA", desc: "Respuestas automáticas inteligentes", color: "violet" },
+            { icon: Calendar, title: "Reservas Smart", desc: "Agenda automática con confirmaciones", color: "blue" },
+            { icon: BarChart3, title: "Analytics", desc: "Métricas en tiempo real", color: "orange" },
+            { icon: Users, title: "CRM Completo", desc: "Gestiona leads y clientes", color: "pink" },
+            { icon: Shield, title: "Seguridad", desc: "Datos protegidos y encriptados", color: "slate" }
+          ]
+        },
+        modules: {
+          title: "Explora los módulos",
+          subtitle: "Cada sección diseñada para maximizar tu productividad"
+        },
+        cta: {
+          title: "¿Listo para automatizar?",
+          subtitle: "Únete a cientos de negocios que ya confían en Detapro",
+          button: "Comenzar ahora"
+        },
+        footer: {
+          brand: "Detapro",
+          tagline: "Automatización inteligente para tu negocio",
+          rights: "Todos los derechos reservados",
+          links: ["Términos", "Privacidad", "Contacto"]
+        }
       }
     : {
-        brandSubtitle: "Product console",
-        dash: "Dashboard",
-        admin: "Admin",
-        badge: "SaaS ready",
-        eyebrow: "Dashboard + Admin in sync",
-        heroTitle: "The future of your business,",
-        heroTitleHighlight: "automated.",
-        heroCopy:
-          "Detapro unifies CRM, messaging, and AI automation in one elegant platform. Manage customers, leads, and bookings effortlessly.",
-        ctaPrimary: "Get started",
-        ctaSecondary: "View demo",
-        cardTitle: "Unified view",
-        cardDesc: "Same look and feel as the dashboard.",
-        cardSecurityTitle: "Multi-tenant protection",
-        cardSecurityDesc: "Middleware + access policies ready.",
-        featuresTitle: "Everything you need",
-        featuresSubtitle: "Powerful tools to scale your business",
-        modulesEyebrow: "Modules",
-        modulesTitle: "Explore sections",
-        modulesCta: "View console",
-        modulesFootnote: "Routes, layout, and states ready for real data.",
-        modulesOpen: "Open",
-        footerBlurb: "Dashboard and admin ready for your multi-tenant SaaS. One monochrome visual language.",
-        footerHunt: "Product Hunt ready",
-        footerStatus: "All systems operational",
-        footerGeneral: "General",
-        footerResources: "Resources",
-        footerFollow: "Follow us",
-        footerLinksGeneral: ["Roadmap", "Changelog", "Pricing", "Referral program"],
-        footerLinksResources: ["Documentation", "Tutorials", "Community", "Blog", "Status"],
-        footerLinksFollow: ["Twitter", "LinkedIn", "Discord", "Instagram"],
-        footerTerms: "Terms",
-        footerPrivacy: "Privacy",
-        footerLang: "English",
-        footerRights: "All rights reserved.",
-        langLabel: "EN",
-        langAlt: "Switch to Spanish",
-        menuLabel: "Open menu",
+        nav: { dashboard: "Dashboard", admin: "Admin", login: "Sign in" },
+        hero: {
+          badge: "New: Conversational AI",
+          title: "Automate your business",
+          titleHighlight: "with intelligence",
+          subtitle: "CRM, messaging and bookings unified in one elegant platform. Manage WhatsApp and Instagram from a single place.",
+          cta: "Start free",
+          ctaSecondary: "Watch demo",
+          trust: "Trusted by 500+ businesses"
+        },
+        stats: [
+          { value: "99.9%", label: "Guaranteed uptime" },
+          { value: "50K+", label: "Messages processed" },
+          { value: "24/7", label: "Support available" },
+          { value: "2min", label: "Response time" }
+        ],
+        features: {
+          title: "Everything you need",
+          subtitle: "Powerful tools to scale your business",
+          items: [
+            { icon: MessageSquare, title: "Unified Inbox", desc: "WhatsApp & Instagram in one place", color: "emerald" },
+            { icon: Bot, title: "AI Chatbot", desc: "Smart automatic responses", color: "violet" },
+            { icon: Calendar, title: "Smart Booking", desc: "Automatic scheduling with confirmations", color: "blue" },
+            { icon: BarChart3, title: "Analytics", desc: "Real-time metrics", color: "orange" },
+            { icon: Users, title: "Full CRM", desc: "Manage leads & customers", color: "pink" },
+            { icon: Shield, title: "Security", desc: "Protected & encrypted data", color: "slate" }
+          ]
+        },
+        modules: {
+          title: "Explore modules",
+          subtitle: "Each section designed to maximize your productivity"
+        },
+        cta: {
+          title: "Ready to automate?",
+          subtitle: "Join hundreds of businesses that already trust Detapro",
+          button: "Get started now"
+        },
+        footer: {
+          brand: "Detapro",
+          tagline: "Intelligent automation for your business",
+          rights: "All rights reserved",
+          links: ["Terms", "Privacy", "Contact"]
+        }
       }
 
+  const getColorClasses = (color: string) => {
+    const colors: Record<string, { bg: string; text: string; border: string }> = {
+      emerald: { bg: "bg-emerald-500/10", text: "text-emerald-500", border: "border-emerald-500/20" },
+      violet: { bg: "bg-violet-500/10", text: "text-violet-500", border: "border-violet-500/20" },
+      blue: { bg: "bg-blue-500/10", text: "text-blue-500", border: "border-blue-500/20" },
+      orange: { bg: "bg-orange-500/10", text: "text-orange-500", border: "border-orange-500/20" },
+      pink: { bg: "bg-pink-500/10", text: "text-pink-500", border: "border-pink-500/20" },
+      slate: { bg: "bg-slate-500/10", text: "text-slate-500", border: "border-slate-500/20" }
+    }
+    return colors[color] || colors.slate
+  }
+
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {/* Animated background */}
-      <div className="fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-gradient-to-br from-primary/10 to-transparent blur-3xl animate-pulse" />
-        <div className="absolute top-1/2 -left-40 h-96 w-96 rounded-full bg-gradient-to-tr from-accent/10 to-transparent blur-3xl animate-pulse" style={{ animationDelay: "1s" }} />
-        <div className="absolute bottom-0 right-1/4 h-64 w-64 rounded-full bg-gradient-to-t from-muted/20 to-transparent blur-3xl animate-pulse" style={{ animationDelay: "2s" }} />
+    <div className="min-h-screen bg-[#0A0A0B] text-white overflow-x-hidden">
+      {/* Gradient Background */}
+      <div className="fixed inset-0 -z-10">
+        <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-violet-600/20 rounded-full blur-[120px]" />
+        <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-emerald-600/15 rounded-full blur-[100px]" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-blue-600/10 rounded-full blur-[120px]" />
       </div>
 
       {/* Header */}
-      <header className="sticky top-0 z-40 border-b border-border/50 bg-background/80 backdrop-blur-xl">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-6 py-4">
-          <Link to="/" className="group flex items-center gap-3">
-            <div className="grid size-11 place-items-center overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition-all duration-300 group-hover:shadow-lg group-hover:scale-105">
-              <img
-                src="/4.png"
-                alt="Detapro logo"
-                className="h-auto w-auto max-h-11 max-w-11 object-contain"
-              />
-            </div>
-            <div className="space-y-0.5">
-              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Detapro</p>
-              <p className="text-sm font-semibold text-foreground">{copy.brandSubtitle}</p>
-            </div>
-          </Link>
+      <header className="fixed top-0 left-0 right-0 z-50">
+        <div className="mx-auto max-w-7xl px-6 py-4">
+          <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl px-6 py-3">
+            <Link to="/" className="flex items-center gap-3">
+              <div className="size-10 rounded-xl bg-gradient-to-br from-violet-500 to-emerald-500 p-0.5">
+                <div className="size-full rounded-[10px] bg-[#0A0A0B] flex items-center justify-center">
+                  <img src="/4.png" alt="Logo" className="size-6 object-contain" />
+                </div>
+              </div>
+              <span className="font-bold text-lg tracking-tight">Detapro</span>
+            </Link>
 
-          <div className="flex items-center gap-2">
-            <div className="hidden items-center gap-2 sm:flex">
-              <Button variant="ghost" size="sm" asChild className="text-muted-foreground hover:text-foreground transition-colors">
-                <Link to="/dashboard">{copy.dash}</Link>
-              </Button>
-              <Button variant="ghost" size="sm" asChild className="text-muted-foreground hover:text-foreground transition-colors">
-                <Link to="/admin">{copy.admin}</Link>
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-border text-foreground hover:bg-accent transition-colors"
-                onClick={toggleLang}
-                aria-label={copy.langAlt}
-              >
-                {copy.langLabel}
-              </Button>
-            </div>
-            <div className="flex items-center gap-2 sm:hidden">
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-border text-foreground hover:bg-accent"
-                onClick={toggleLang}
-                aria-label={copy.langAlt}
-              >
-                {copy.langLabel}
-              </Button>
-              <div className="relative">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="border border-border text-foreground"
-                  aria-label={copy.menuLabel}
-                  onClick={() => setMenuOpen((prev) => !prev)}
+            <nav className="hidden md:flex items-center gap-1">
+              {appSections.slice(0, 4).map((section) => (
+                <Link
+                  key={section.href}
+                  to={section.href}
+                  className="px-4 py-2 text-sm text-white/70 hover:text-white transition-colors rounded-lg hover:bg-white/5"
                 >
-                  <Menu className="size-5" />
-                </Button>
-                {menuOpen && (
-                  <div className="absolute right-0 mt-2 w-40 rounded-xl border border-border bg-card p-2 shadow-lg animate-fade-in">
-                    <Link
-                      to="/dashboard"
-                      className="flex w-full items-center rounded-lg px-3 py-2 text-sm text-foreground hover:bg-accent transition-colors"
-                      onClick={() => setMenuOpen(false)}
-                    >
-                      {copy.dash}
-                    </Link>
-                    <Link
-                      to="/admin"
-                      className="flex w-full items-center rounded-lg px-3 py-2 text-sm text-foreground hover:bg-accent transition-colors"
-                      onClick={() => setMenuOpen(false)}
-                    >
-                      {copy.admin}
-                    </Link>
+                  {section.name[lang]}
+                </Link>
+              ))}
+            </nav>
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={toggleLang}
+                className="hidden sm:flex size-9 items-center justify-center rounded-lg border border-white/10 text-sm font-medium text-white/70 hover:text-white hover:bg-white/5 transition-all"
+              >
+                {lang.toUpperCase()}
+              </button>
+              <Link
+                to="/dashboard"
+                className="hidden sm:flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-black hover:bg-white/90 transition-all"
+              >
+                {copy.nav.dashboard}
+                <ArrowRight className="size-4" />
+              </Link>
+              <button
+                onClick={() => setMenuOpen(!menuOpen)}
+                className="md:hidden size-10 flex items-center justify-center rounded-lg border border-white/10 hover:bg-white/5"
+              >
+                {menuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile Menu */}
+        {menuOpen && (
+          <div className="md:hidden mx-6 mt-2 rounded-2xl border border-white/10 bg-[#0A0A0B]/95 backdrop-blur-xl p-4 animate-fade-in">
+            {appSections.map((section) => (
+              <Link
+                key={section.href}
+                to={section.href}
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center justify-between px-4 py-3 text-white/80 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+              >
+                {section.name[lang]}
+                <ChevronRight className="size-4" />
+              </Link>
+            ))}
+            <div className="mt-4 pt-4 border-t border-white/10 flex gap-2">
+              <button onClick={toggleLang} className="flex-1 py-2.5 rounded-lg border border-white/10 text-sm">
+                {lang === "es" ? "English" : "Español"}
+              </button>
+              <Link to="/dashboard" className="flex-1 py-2.5 rounded-lg bg-white text-black text-sm font-semibold text-center">
+                {copy.nav.dashboard}
+              </Link>
+            </div>
+          </div>
+        )}
+      </header>
+
+      {/* Hero Section */}
+      <section className="pt-32 pb-20 px-6">
+        <div className="mx-auto max-w-7xl">
+          <div className="flex flex-col items-center text-center max-w-4xl mx-auto">
+            {/* Badge */}
+            <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-4 py-1.5 text-sm text-violet-300 mb-8 animate-fade-in">
+              <Sparkles className="size-4" />
+              {copy.hero.badge}
+            </div>
+
+            {/* Title */}
+            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.1] mb-6 animate-fade-in" style={{ animationDelay: "100ms" }}>
+              {copy.hero.title}
+              <br />
+              <span className="bg-gradient-to-r from-violet-400 via-emerald-400 to-blue-400 bg-clip-text text-transparent">
+                {copy.hero.titleHighlight}
+              </span>
+            </h1>
+
+            {/* Subtitle */}
+            <p className="text-lg sm:text-xl text-white/60 max-w-2xl mb-10 leading-relaxed animate-fade-in" style={{ animationDelay: "200ms" }}>
+              {copy.hero.subtitle}
+            </p>
+
+            {/* CTAs */}
+            <div className="flex flex-col sm:flex-row gap-4 mb-12 animate-fade-in" style={{ animationDelay: "300ms" }}>
+              <Link
+                to="/dashboard"
+                className="group inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-emerald-600 px-8 py-4 text-base font-semibold text-white shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 transition-all hover:scale-105"
+              >
+                {copy.hero.cta}
+                <ArrowRight className="size-5 transition-transform group-hover:translate-x-1" />
+              </Link>
+              <button className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/5 px-8 py-4 text-base font-medium text-white hover:bg-white/10 transition-all">
+                <Play className="size-5" />
+                {copy.hero.ctaSecondary}
+              </button>
+            </div>
+
+            {/* Trust */}
+            <div className="flex items-center gap-2 text-sm text-white/50 animate-fade-in" style={{ animationDelay: "400ms" }}>
+              <div className="flex -space-x-2">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="size-8 rounded-full bg-gradient-to-br from-violet-500 to-emerald-500 border-2 border-[#0A0A0B]" />
+                ))}
+              </div>
+              <div className="flex items-center gap-1 ml-2">
+                {[...Array(5)].map((_, i) => (
+                  <Star key={i} className="size-4 fill-yellow-500 text-yellow-500" />
+                ))}
+              </div>
+              <span className="ml-2">{copy.hero.trust}</span>
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
+            {copy.stats.map((stat, i) => (
+              <div
+                key={stat.label}
+                className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm p-6 text-center hover:bg-white/10 transition-all animate-fade-in"
+                style={{ animationDelay: `${500 + i * 100}ms` }}
+              >
+                <p className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">
+                  {stat.value}
+                </p>
+                <p className="text-sm text-white/50 mt-1">{stat.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Features Section */}
+      <section className="py-24 px-6">
+        <div className="mx-auto max-w-7xl">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4">{copy.features.title}</h2>
+            <p className="text-lg text-white/50">{copy.features.subtitle}</p>
+          </div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {copy.features.items.map((feature, i) => {
+              const colors = getColorClasses(feature.color)
+              return (
+                <div
+                  key={feature.title}
+                  className={`group relative rounded-2xl border ${colors.border} bg-white/[0.02] p-6 hover:bg-white/[0.05] transition-all duration-300 animate-fade-in`}
+                  style={{ animationDelay: `${i * 100}ms` }}
+                >
+                  <div className={`inline-flex size-12 items-center justify-center rounded-xl ${colors.bg} ${colors.text} mb-4 transition-transform group-hover:scale-110`}>
+                    <feature.icon className="size-6" />
                   </div>
-                )}
+                  <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
+                  <p className="text-white/50 text-sm">{feature.desc}</p>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* Integrations */}
+      <section className="py-16 px-6 border-y border-white/10">
+        <div className="mx-auto max-w-7xl">
+          <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16">
+            <p className="text-white/40 text-sm uppercase tracking-wider">{isEs ? "Integraciones" : "Integrations"}</p>
+            <div className="flex items-center gap-8">
+              <div className="flex items-center gap-3 text-white/60">
+                <Phone className="size-6" />
+                <span className="font-medium">WhatsApp</span>
+              </div>
+              <div className="w-px h-6 bg-white/20" />
+              <div className="flex items-center gap-3 text-white/60">
+                <Instagram className="size-6" />
+                <span className="font-medium">Instagram</span>
+              </div>
+              <div className="w-px h-6 bg-white/20" />
+              <div className="flex items-center gap-3 text-white/60">
+                <Zap className="size-6" />
+                <span className="font-medium">API</span>
               </div>
             </div>
           </div>
         </div>
-      </header>
+      </section>
 
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-20 px-6 py-16">
-        {/* Hero Section */}
-        <section className="grid gap-12 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
-          <div className="space-y-8 animate-fade-in">
-            <div className="flex items-center gap-3">
-              <Badge className="border-primary/20 bg-primary/10 text-primary">
-                <Sparkles className="mr-1 size-3" />
-                {copy.badge}
-              </Badge>
-              <span className="text-sm text-muted-foreground">{copy.eyebrow}</span>
-            </div>
-            <div className="space-y-4">
-              <h1 className="text-4xl font-bold leading-tight tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-                {copy.heroTitle}
-                <br />
-                <span className="bg-gradient-to-r from-primary via-primary to-accent bg-clip-text text-transparent">
-                  {copy.heroTitleHighlight}
-                </span>
-              </h1>
-              <p className="max-w-xl text-lg text-muted-foreground leading-relaxed">{copy.heroCopy}</p>
-            </div>
-            <div className="flex flex-wrap gap-4">
-              <Button size="lg" className="bg-foreground text-background hover:bg-foreground/90 shadow-lg hover:shadow-xl transition-all duration-300 group">
-                <Link to="/dashboard" className="flex items-center gap-2">
-                  {copy.ctaPrimary}
-                  <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
-                </Link>
-              </Button>
-              <Button size="lg" variant="outline" className="border-border text-foreground hover:bg-accent transition-all duration-300">
-                <Link to="/admin">{copy.ctaSecondary}</Link>
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-4">
-              {highlights[lang].map((item, index) => (
-                <div
-                  key={item.title}
-                  className="group flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1 animate-fade-in"
-                  style={{ animationDelay: `${index * 100}ms` }}
-                >
-                  <div className="grid size-10 place-items-center rounded-full bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
-                    <item.icon className="size-5" />
-                  </div>
-                  <div className="text-sm">
-                    <p className="font-semibold text-foreground">{item.title}</p>
-                    <p className="text-muted-foreground">{item.copy}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+      {/* Modules Section */}
+      <section className="py-24 px-6">
+        <div className="mx-auto max-w-7xl">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4">{copy.modules.title}</h2>
+            <p className="text-lg text-white/50">{copy.modules.subtitle}</p>
           </div>
 
-          {/* Stats Card */}
-          <Card className="border-border bg-card/50 backdrop-blur-sm shadow-xl animate-fade-in" style={{ animationDelay: "200ms" }}>
-            <CardHeader className="flex flex-row items-start justify-between">
-              <div>
-                <CardTitle className="text-foreground">{copy.cardTitle}</CardTitle>
-                <CardDescription className="text-muted-foreground">{copy.cardDesc}</CardDescription>
-              </div>
-              <Badge className="border-primary/20 bg-primary/10 text-primary animate-pulse">
-                <Zap className="mr-1 size-3" />
-                Live
-              </Badge>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-3">
-                {metrics[lang].map((metric, index) => (
-                  <div
-                    key={metric.label}
-                    className="group rounded-xl border border-border bg-card p-4 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 animate-fade-in"
-                    style={{ animationDelay: `${(index + 3) * 100}ms` }}
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <metric.icon className="size-4 text-primary" />
-                      <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">{metric.label}</p>
-                    </div>
-                    <p className="text-3xl font-bold text-foreground">{metric.value}</p>
-                    <p className="text-sm text-primary font-medium">{metric.delta}</p>
-                  </div>
-                ))}
-              </div>
-              <div className="rounded-2xl border border-border bg-gradient-to-r from-card to-accent/5 p-4">
-                <div className="flex items-center gap-3">
-                  <div className="grid size-12 place-items-center rounded-full bg-primary/10 text-primary">
-                    <Shield className="size-6" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-foreground">{copy.cardSecurityTitle}</p>
-                    <p className="text-sm text-muted-foreground">{copy.cardSecurityDesc}</p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </section>
-
-        {/* Features Grid */}
-        <section className="space-y-8">
-          <div className="text-center space-y-2">
-            <h2 className="text-3xl font-bold tracking-tight text-foreground">{copy.featuresTitle}</h2>
-            <p className="text-muted-foreground">{copy.featuresSubtitle}</p>
-          </div>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {features[lang].map((feature, index) => (
-              <Card 
-                key={feature.title} 
-                className="group border-border bg-card/50 backdrop-blur-sm hover:bg-card transition-all duration-300 hover:shadow-xl hover:-translate-y-2 animate-fade-in"
-                style={{ animationDelay: `${index * 100}ms` }}
-              >
-                <CardContent className="pt-6 text-center space-y-4">
-                  <div className="mx-auto grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-primary/10 to-accent/10 text-primary transition-all duration-300 group-hover:scale-110 group-hover:from-primary group-hover:to-accent group-hover:text-primary-foreground">
-                    <feature.icon className="size-7" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-foreground">{feature.title}</h3>
-                    <p className="text-sm text-muted-foreground mt-1">{feature.desc}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </section>
-
-        {/* Modules Section */}
-        <section className="space-y-6">
-          <div className="flex items-center justify-between gap-2">
-            <div className="space-y-1">
-              <p className="text-xs uppercase tracking-[0.18em] text-primary font-medium">{copy.modulesEyebrow}</p>
-              <h2 className="text-2xl font-bold tracking-tight text-foreground">{copy.modulesTitle}</h2>
-            </div>
-            <Button variant="ghost" size="sm" asChild className="text-muted-foreground hover:text-foreground transition-colors">
-              <Link to="/dashboard">{copy.modulesCta}</Link>
-            </Button>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            {appSections.map((section, index) => (
-              <Card
+          <div className="grid sm:grid-cols-2 gap-4">
+            {appSections.map((section, i) => (
+              <Link
                 key={section.href}
-                className="group relative overflow-hidden border-border bg-card/50 backdrop-blur-sm shadow-sm transition-all duration-300 hover:shadow-xl hover:-translate-y-1 animate-fade-in"
-                style={{ animationDelay: `${index * 100}ms` }}
+                to={section.href}
+                className="group relative rounded-2xl border border-white/10 bg-white/[0.02] p-6 hover:bg-white/[0.05] hover:border-white/20 transition-all duration-300 animate-fade-in"
+                style={{ animationDelay: `${i * 100}ms` }}
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary/5 to-primary/0 opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
-                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-accent/10 to-transparent rounded-bl-full opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                <CardHeader className="relative flex flex-row items-start justify-between gap-2">
-                  <div className="space-y-2">
-                    <CardTitle className="text-foreground group-hover:text-primary transition-colors">{section.name[lang]}</CardTitle>
-                    <CardDescription className="text-muted-foreground">{section.summary[lang]}</CardDescription>
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="text-lg font-semibold">{section.name[lang]}</h3>
+                      {section.badge && (
+                        <Badge className="bg-violet-500/10 text-violet-400 border-violet-500/20 text-xs">
+                          {section.badge[lang]}
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-white/50 text-sm">{section.summary[lang]}</p>
                   </div>
-                  {section.badge && (
-                    <Badge className="border-primary/20 bg-primary/10 text-primary">{section.badge[lang]}</Badge>
-                  )}
-                </CardHeader>
-                <CardContent className="relative flex items-center justify-between text-sm text-muted-foreground">
-                  <span>{copy.modulesFootnote}</span>
-                  <Button variant="ghost" size="sm" asChild className="text-foreground hover:bg-accent transition-colors group/btn">
-                    <Link to={section.href} className="flex items-center gap-2">
-                      {copy.modulesOpen} 
-                      <ArrowRight className="size-4 transition-transform group-hover/btn:translate-x-1" />
-                    </Link>
-                  </Button>
-                </CardContent>
-              </Card>
+                  <div className="size-10 rounded-xl bg-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors">
+                    <ArrowRight className="size-5 text-white/50 group-hover:text-white transition-colors group-hover:translate-x-0.5" />
+                  </div>
+                </div>
+              </Link>
             ))}
           </div>
-        </section>
-      </main>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="py-24 px-6">
+        <div className="mx-auto max-w-4xl">
+          <div className="relative rounded-3xl border border-white/10 bg-gradient-to-br from-violet-600/20 via-transparent to-emerald-600/20 p-12 text-center overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(139,92,246,0.15),transparent_70%)]" />
+            <div className="relative">
+              <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4">{copy.cta.title}</h2>
+              <p className="text-lg text-white/60 mb-8 max-w-xl mx-auto">{copy.cta.subtitle}</p>
+              <Link
+                to="/dashboard"
+                className="inline-flex items-center gap-2 rounded-xl bg-white px-8 py-4 text-base font-semibold text-black hover:bg-white/90 transition-all hover:scale-105"
+              >
+                {copy.cta.button}
+                <ArrowRight className="size-5" />
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Footer */}
-      <footer className="mt-16 border-t border-border bg-card/50 backdrop-blur-sm text-muted-foreground">
-        <div className="mx-auto w-full max-w-6xl px-6 py-12">
-          <div className="grid gap-10 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
-            <div className="space-y-6">
-              <div className="flex items-center gap-3">
-                <div className="grid size-12 place-items-center overflow-hidden rounded-2xl bg-card border border-border p-2 shadow-sm">
-                  <img src="/4.png" alt="Detapro logo" className="h-12 w-12 object-contain" />
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Detapro</p>
-                  <p className="text-base font-semibold text-foreground">{copy.brandSubtitle}</p>
+      <footer className="border-t border-white/10 py-12 px-6">
+        <div className="mx-auto max-w-7xl">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-3">
+              <div className="size-10 rounded-xl bg-gradient-to-br from-violet-500 to-emerald-500 p-0.5">
+                <div className="size-full rounded-[10px] bg-[#0A0A0B] flex items-center justify-center">
+                  <img src="/4.png" alt="Logo" className="size-6 object-contain" />
                 </div>
               </div>
-              <p className="text-sm text-muted-foreground leading-relaxed">{copy.footerBlurb}</p>
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm transition-all duration-300 hover:shadow-md">
-                  <span className="text-lg">🚀</span>
-                  <span className="font-semibold text-foreground">{copy.footerHunt}</span>
-                </div>
-                <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm transition-all duration-300 hover:shadow-md">
-                  <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="font-semibold text-foreground">{copy.footerStatus}</span>
-                </div>
+              <div>
+                <p className="font-semibold">{copy.footer.brand}</p>
+                <p className="text-sm text-white/40">{copy.footer.tagline}</p>
               </div>
             </div>
-
-            <div className="space-y-4">
-              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-foreground">{copy.footerGeneral}</p>
-              <div className="flex flex-col gap-2 text-sm">
-                {copy.footerLinksGeneral.map((label) => (
-                  <Link key={label} to="#" className="text-muted-foreground hover:text-foreground transition-colors">
-                    {label}
-                  </Link>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-foreground">{copy.footerResources}</p>
-              <div className="flex flex-col gap-2 text-sm">
-                {copy.footerLinksResources.map((label) => (
-                  <Link key={label} to="#" className="text-muted-foreground hover:text-foreground transition-colors">
-                    {label}
-                  </Link>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-foreground">{copy.footerFollow}</p>
-              <div className="flex flex-col gap-2 text-sm">
-                {copy.footerLinksFollow.map((label) => (
-                  <Link key={label} to="#" className="text-muted-foreground hover:text-foreground transition-colors">
-                    {label}
-                  </Link>
-                ))}
-              </div>
+            <div className="flex items-center gap-6 text-sm text-white/50">
+              {copy.footer.links.map((link) => (
+                <a key={link} href="#" className="hover:text-white transition-colors">
+                  {link}
+                </a>
+              ))}
+              <button onClick={toggleLang} className="hover:text-white transition-colors">
+                {lang === "es" ? "English" : "Español"}
+              </button>
             </div>
           </div>
-
-          <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-border pt-6 sm:flex-row">
-            <p className="text-sm text-muted-foreground">© 2024 Detapro. {copy.footerRights}</p>
-            <div className="flex items-center gap-6 text-sm">
-              <Link to="#" className="text-muted-foreground hover:text-foreground transition-colors">{copy.footerTerms}</Link>
-              <Link to="#" className="text-muted-foreground hover:text-foreground transition-colors">{copy.footerPrivacy}</Link>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={toggleLang}
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              >
-                {copy.footerLang}
-              </Button>
-            </div>
+          <div className="mt-8 pt-8 border-t border-white/10 text-center text-sm text-white/30">
+            © 2024 Detapro. {copy.footer.rights}
           </div>
         </div>
       </footer>
