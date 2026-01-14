@@ -1,19 +1,17 @@
-"use client"
+import { Link, useLocation } from "react-router-dom";
 
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-
-import { appSections } from "@/config/navigation"
-import { cn } from "@/lib/utils"
-import { useLanguage } from "@/components/providers/language-provider"
+import { appSections } from "@/config/navigation";
+import { cn } from "@/lib/utils";
+import { useLanguage } from "@/components/providers/language-provider";
 
 type MainNavProps = {
-  className?: string
-}
+  className?: string;
+};
 
 export function MainNav({ className }: MainNavProps) {
-  const pathname = usePathname()
-  const { lang } = useLanguage()
+  const location = useLocation();
+  const pathname = location.pathname;
+  const { lang } = useLanguage();
 
   return (
     <nav
@@ -24,12 +22,12 @@ export function MainNav({ className }: MainNavProps) {
     >
       {appSections.map((item) => {
         const isActive =
-          pathname === item.href || pathname.startsWith(`${item.href}/`)
+          pathname === item.href || pathname.startsWith(`${item.href}/`);
 
         return (
           <Link
             key={item.href}
-            href={item.href}
+            to={item.href}
             className={cn(
               "rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
               isActive
@@ -39,8 +37,8 @@ export function MainNav({ className }: MainNavProps) {
           >
             {item.name[lang]}
           </Link>
-        )
+        );
       })}
     </nav>
-  )
+  );
 }
