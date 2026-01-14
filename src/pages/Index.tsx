@@ -256,7 +256,7 @@ export default function Home() {
             <div className="flex flex-col sm:flex-row gap-4 mb-12 animate-fade-in" style={{ animationDelay: "300ms" }}>
               <Link
                 to="/dashboard"
-                className="group inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-emerald-600 px-8 py-4 text-base font-semibold text-white shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 transition-all hover:scale-105"
+                className="group inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-8 py-4 text-base font-semibold text-white shadow-lg shadow-slate-900/25 hover:bg-slate-800 hover:shadow-slate-900/40 transition-all hover:scale-105"
               >
                 {copy.hero.cta}
                 <ArrowRight className="size-5 transition-transform group-hover:translate-x-1" />
