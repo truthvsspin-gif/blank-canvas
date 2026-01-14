@@ -34,9 +34,12 @@ function App() {
               <Route path="/signup" element={<Signup />} />
             </Route>
             
+            {/* Public landing page */}
+            <Route path="/" element={<Index />} />
+            
             {/* Protected app routes */}
             <Route element={<AppLayout />}>
-              <Route path="/" element={<Dashboard />} />
+              <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/crm" element={<CRM />} />
               <Route path="/crm/customers" element={<Customers />} />
               <Route path="/crm/customers/new" element={<CustomerNew />} />
