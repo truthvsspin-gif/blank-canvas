@@ -36,13 +36,6 @@ export default function AppLayout() {
     menuLabel: isSpanish ? "Abrir menu" : "Open menu",
   };
 
-  useEffect(() => {
-    if (!loading && !session) {
-      const redirectTo = location.pathname || "/dashboard";
-      navigate(`/login?redirect=${encodeURIComponent(redirectTo)}`, { replace: true });
-    }
-  }, [loading, location.pathname, navigate, session]);
-
   const handleSendChat = async () => {
     const trimmed = chatInput.trim();
     if (!trimmed || chatLoading) return;
@@ -71,7 +64,7 @@ export default function AppLayout() {
     }
   };
 
-  if (loading || !session) {
+  if (loading) {
     return (
       <div className="grid min-h-screen place-items-center bg-background text-muted-foreground">
         {copy.sessionCheck}
