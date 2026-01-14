@@ -1,7 +1,5 @@
-"use client"
-
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useNavigate } from "react-router-dom"
 import type { Session, User } from "@supabase/supabase-js"
 
 import { supabase } from "@/lib/supabaseClient"
@@ -19,7 +17,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-  const router = useRouter()
+  const navigate = useNavigate()
 
   useEffect(() => {
     let isMounted = true
@@ -42,16 +40,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(nextSession)
       setUser(nextSession?.user ?? null)
       setLoading(false)
-      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "TOKEN_REFRESHED") {
-        router.refresh()
-      }
     })
 
     return () => {
       isMounted = false
       listener.subscription.unsubscribe()
     }
-  }, [router])
+  }, [])
 
   const signOut = useCallback(async () => {
     setLoading(true)
@@ -62,8 +57,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSession(null)
     setUser(null)
     setLoading(false)
-    router.refresh()
-  }, [router])
+    navigate("/login")
+  }, [navigate])
 
   const value = useMemo<AuthContextValue>(
     () => ({
