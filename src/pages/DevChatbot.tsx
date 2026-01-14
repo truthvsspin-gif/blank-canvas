@@ -207,44 +207,38 @@ export default function DevChatbotPage() {
         }
       />
 
-      <div className="grid gap-6 lg:grid-cols-4">
-        {/* Sidebar */}
-        <Card className="lg:col-span-1 h-fit">
-          {/* Channel Selector */}
-          <CardHeader className="pb-3 border-b border-border">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <MessageSquare className="h-4 w-4 text-primary" />
-              {copy.selectChannel}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-4 pb-4 border-b border-border">
-            <div className="flex gap-2">
-              <button
-                onClick={() => setSelectedChannel("whatsapp")}
-                className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-3 px-3 text-sm font-medium transition-all duration-200 ${
-                  selectedChannel === "whatsapp"
-                    ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/25"
-                    : "bg-card border border-border text-muted-foreground hover:border-emerald-500/50 hover:text-emerald-500"
-                }`}
-              >
-                <Phone className="h-4 w-4" />
-                {copy.whatsapp}
-              </button>
-              <button
-                onClick={() => setSelectedChannel("instagram")}
-                className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-3 px-3 text-sm font-medium transition-all duration-200 ${
-                  selectedChannel === "instagram"
-                    ? "bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 text-white shadow-lg shadow-pink-500/25"
-                    : "bg-card border border-border text-muted-foreground hover:border-pink-500/50 hover:text-pink-500"
-                }`}
-              >
-                <Instagram className="h-4 w-4" />
-                {copy.instagram}
-              </button>
-            </div>
-          </CardContent>
+      {/* Channel Selector - Below header */}
+      <div className="flex items-center gap-3">
+        <span className="text-sm font-medium text-muted-foreground">{copy.selectChannel}:</span>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setSelectedChannel("whatsapp")}
+            className={`flex items-center gap-2 rounded-full py-2 px-4 text-sm font-medium transition-all duration-200 ${
+              selectedChannel === "whatsapp"
+                ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/25"
+                : "bg-card border border-border text-muted-foreground hover:border-emerald-500/50 hover:text-emerald-500"
+            }`}
+          >
+            <Phone className="h-4 w-4" />
+            {copy.whatsapp}
+          </button>
+          <button
+            onClick={() => setSelectedChannel("instagram")}
+            className={`flex items-center gap-2 rounded-full py-2 px-4 text-sm font-medium transition-all duration-200 ${
+              selectedChannel === "instagram"
+                ? "bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 text-white shadow-lg shadow-pink-500/25"
+                : "bg-card border border-border text-muted-foreground hover:border-pink-500/50 hover:text-pink-500"
+            }`}
+          >
+            <Instagram className="h-4 w-4" />
+            {copy.instagram}
+          </button>
+        </div>
+      </div>
 
-          {/* Quick Prompts */}
+      <div className="grid gap-6 lg:grid-cols-4">
+        {/* Sidebar - Quick Prompts */}
+        <Card className="lg:col-span-1 h-fit">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
               <Zap className="h-4 w-4 text-accent" />
