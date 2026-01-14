@@ -1,8 +1,5 @@
-﻿"use client"
-
-import Link from "next/link"
-import { usePathname } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
+import { Link, useLocation } from "react-router-dom"
 
 import { appSections } from "@/config/navigation"
 import { cn } from "@/lib/utils"
@@ -10,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { useLanguage } from "@/components/providers/language-provider"
 
 export function SidebarNav({ className }: { className?: string }) {
-  const pathname = usePathname()
+  const { pathname } = useLocation()
   const { lang } = useLanguage()
   const isEs = lang === "es"
   const copy = {
@@ -49,7 +46,7 @@ export function SidebarNav({ className }: { className?: string }) {
           return (
             <Link
               key={item.href}
-              href={item.href}
+              to={item.href}
               className={cn(
                 "group flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors",
                 isActive
