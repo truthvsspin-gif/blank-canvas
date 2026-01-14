@@ -45,9 +45,9 @@ export default function Home() {
         nav: { dashboard: "Dashboard", admin: "Admin", login: "Iniciar sesión" },
         hero: {
           badge: "Nuevo: IA Conversacional",
-          title: "Automatiza tu negocio",
-          titleHighlight: "con inteligencia",
-          subtitle: "CRM, mensajería y reservas unificados en una plataforma elegante. Gestiona WhatsApp e Instagram desde un solo lugar.",
+          title: "Más reservas. Más ventas. Menos caos.",
+          titleHighlight: "Hecho para Negocios de Detailing.",
+          subtitle: "Automatiza tu negocio de detailing y car wash con inteligencia artificial. IA Conversacional + CRM + agendamiento, todo en una plataforma.",
           cta: "Comenzar gratis",
           ctaSecondary: "Ver demo",
           trust: "Más de 500+ negocios confían en nosotros"
@@ -90,9 +90,9 @@ export default function Home() {
         nav: { dashboard: "Dashboard", admin: "Admin", login: "Sign in" },
         hero: {
           badge: "New: Conversational AI",
-          title: "Automate your business",
-          titleHighlight: "with intelligence",
-          subtitle: "CRM, messaging and bookings unified in one elegant platform. Manage WhatsApp and Instagram from a single place.",
+          title: "More bookings. More sales. Less chaos.",
+          titleHighlight: "Built for Detailing Businesses.",
+          subtitle: "Automate your detailing and car wash business with artificial intelligence. Conversational AI + CRM + scheduling, all in one platform.",
           cta: "Start free",
           ctaSecondary: "Watch demo",
           trust: "Trusted by 500+ businesses"
