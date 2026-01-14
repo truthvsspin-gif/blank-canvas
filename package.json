@@ -19,6 +19,7 @@
     "clsx": "^2.1.1",
     "inherits": "^2.0.4",
     "lie": "^3.3.0",
+    "lovable-tagger": "^1.1.13",
     "lucide-react": "^0.559.0",
     "mammoth": "^1.11.0",
     "next": "16.0.8",
