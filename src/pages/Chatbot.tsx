@@ -1,264 +1,236 @@
-import { Save } from "lucide-react"
-import { useEffect, useState } from "react"
+import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import {
+  ArrowRight,
+  Bot,
+  BookOpen,
+  CheckCircle2,
+  ChevronRight,
+  Database,
+  ExternalLink,
+  FileText,
+  Globe,
+  Instagram,
+  Link2,
+  Loader2,
+  MessageCircle,
+  MessageSquare,
+  Phone,
+  Play,
+  RefreshCw,
+  Save,
+  Settings,
+  Sparkles,
+  TestTube,
+  ToggleLeft,
+  ToggleRight,
+  Upload,
+  Zap,
+} from "lucide-react";
 
-import { PageHeader } from "@/components/layout/page-header"
-import { Button } from "@/components/ui/button"
+import { PageHeader } from "@/components/layout/page-header";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
-import { useLanguage } from "@/components/providers/language-provider"
-import { supabase } from "@/lib/supabaseClient"
-import { useCurrentBusiness } from "@/hooks/use-current-business"
+} from "@/components/ui/card";
+import { useLanguage } from "@/components/providers/language-provider";
+import { supabase } from "@/lib/supabaseClient";
+import { useCurrentBusiness } from "@/hooks/use-current-business";
 
 export default function ChatbotPage() {
-  const { lang } = useLanguage()
-  const isEs = lang === "es"
-  const { businessId } = useCurrentBusiness()
-  const [chatbotEnabled, setChatbotEnabled] = useState(true)
-  const [chatbotLanguage, setChatbotLanguage] = useState<"en" | "es">("en")
-  const [greetingMessage, setGreetingMessage] = useState("")
+  const { lang } = useLanguage();
+  const isEs = lang === "es";
+  const { businessId } = useCurrentBusiness();
+
+  // Settings state
+  const [chatbotEnabled, setChatbotEnabled] = useState(true);
+  const [chatbotLanguage, setChatbotLanguage] = useState<"en" | "es">("en");
+  const [greetingMessage, setGreetingMessage] = useState("");
+  
+  // Integration state
   const [integrationState, setIntegrationState] = useState({
     whatsappAccessToken: "",
     whatsappPhoneNumberId: "",
     instagramAccessToken: "",
     instagramBusinessId: "",
-  })
-  const [kbSourceType, setKbSourceType] = useState<"url" | "text" | "document">("url")
-  const [kbUrl, setKbUrl] = useState("")
-  const [kbText, setKbText] = useState("")
-  const [kbTitle, setKbTitle] = useState("")
-  const [kbFileName, setKbFileName] = useState("")
-  const [kbFile, setKbFile] = useState<File | null>(null)
-  const [kbLoading, setKbLoading] = useState(false)
-  const [kbMessage, setKbMessage] = useState<string | null>(null)
-  const [kbError, setKbError] = useState<string | null>(null)
-  const [saveLoading, setSaveLoading] = useState(false)
-  const [saveMessage, setSaveMessage] = useState<string | null>(null)
-  const [saveError, setSaveError] = useState<string | null>(null)
-  const [integrationsLoading, setIntegrationsLoading] = useState(false)
+  });
+  
+  // Knowledge base state
+  const [kbSourceType, setKbSourceType] = useState<"url" | "text" | "document">("url");
+  const [kbUrl, setKbUrl] = useState("");
+  const [kbText, setKbText] = useState("");
+  const [kbTitle, setKbTitle] = useState("");
+  const [kbFile, setKbFile] = useState<File | null>(null);
+  const [kbLoading, setKbLoading] = useState(false);
+  const [kbMessage, setKbMessage] = useState<string | null>(null);
+  const [kbError, setKbError] = useState<string | null>(null);
+  
+  // Save state
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [integrationsLoading, setIntegrationsLoading] = useState(false);
 
   const copy = isEs
     ? {
-        title: "Chatbot",
-        desc: "Configuracion del chatbot y sus integraciones.",
-        guideTitle: "Guia rapida para principiantes",
-        guideDesc: "Sigue estos pasos en orden. Si solo haces uno, empieza por activar el chatbot y guardar.",
-        guideSteps: [
-          "Activa el chatbot.",
-          "Elige el idioma principal.",
-          "Escribe un saludo simple.",
-          "Agrega una descripcion o URL de tu negocio.",
-          "Conecta WhatsApp o Instagram cuando estes listo.",
-          "Prueba el flujo con el simulador.",
+        title: "Centro de Chatbot",
+        desc: "Configura y optimiza tu asistente de IA",
+        quickStart: "Inicio Rápido",
+        quickStartDesc: "Sigue estos pasos para configurar tu chatbot",
+        steps: [
+          { title: "Activa el chatbot", desc: "Habilita respuestas automáticas" },
+          { title: "Configura el idioma", desc: "Elige español o inglés" },
+          { title: "Añade conocimiento", desc: "URL, texto o documentos" },
+          { title: "Prueba el flujo", desc: "Usa el simulador" },
         ],
-        guideNote:
-          "No necesitas completar integraciones para probar respuestas. Con la base de conocimiento ya funciona.",
-        exampleTitle: "Ejemplos de mensajes para probar",
-        exampleDesc: "Copia y pega uno de estos mensajes en el simulador.",
-        examples: [
-          "Hola, quiero saber precios de lavado premium.",
-          "Tienen citas disponibles el viernes?",
-          "Cuanto cuesta el ceramic coating?",
-          "Necesito direccion y horarios.",
-        ],
-        settingsTitle: "Configuracion del chatbot",
-        settingsDesc: "Controla idioma, saludo e integraciones.",
-        testTitle: "Prueba el chatbot",
-        testDesc: "Usa el simulador para probar todo el flujo.",
-        testCta: "Abrir simulador",
-        enabledLabel: "Chatbot activado",
-        enabledDesc: "Activa respuestas automaticas.",
-        languageLabel: "Idioma principal",
-        greetingLabel: "Mensaje de saludo",
-        greetingPlaceholder: "Hola! Gracias por escribirnos.",
-        integrationsTitle: "Integraciones",
-        integrationsDesc: "Guarda tokens por negocio para mensajes salientes.",
-        integrationsHelp:
-          "WhatsApp: Meta Business Dashboard > WhatsApp > API Setup > Temporary access token / Phone number ID. Instagram: Meta Business Dashboard > Instagram Messaging > API Setup > Access token / Business ID.",
-        integrationsLinkLabel: "Acceso a Meta Developers",
-        integrationsLinkDesc:
-          "Abre Meta Developers, crea o selecciona tu app y luego entra a WhatsApp o Instagram Messaging para generar los tokens.",
-        integrationsLinkText: "https://developers.facebook.com/",
-        whatsappToken: "WhatsApp access token",
-        whatsappPhone: "WhatsApp phone number ID",
-        instagramToken: "Instagram access token",
-        instagramTokenHelp:
-          "Meta Business Dashboard > Instagram Messaging > API Setup > Access token.",
-        instagramBusiness: "Instagram business ID",
-        instagramBusinessHelp:
-          "Meta Business Dashboard > Instagram Messaging > API Setup > Business ID.",
-        knowledgeTitle: "Base de conocimiento",
-        knowledgeDesc: "Carga una web o descripcion larga para que el chatbot responda con contexto.",
-        sourceLabel: "Fuente",
-        titleLabel: "Titulo",
-        urlLabel: "URL del sitio",
-        urlPlaceholder: "https://example.com",
-        documentLabel: "Documento (txt, md)",
-        documentHint: "Se extraera texto de PDF o DOCX. TXT y MD se leen directo.",
-        documentPlaceholder: "Contenido del documento.",
-        textLabel: "Descripcion",
-        textPlaceholder:
-          "Escribe informacion de tu negocio, servicios, precios y procesos.",
-        sourceUrl: "Sitio web",
-        sourceText: "Descripcion larga",
+        testSimulator: "Probar Simulador",
+        settings: "Configuración",
+        settingsDesc: "Ajustes principales del chatbot",
+        enabled: "Chatbot Activo",
+        enabledDesc: "Respuestas automáticas activadas",
+        language: "Idioma Principal",
+        greeting: "Mensaje de Saludo",
+        greetingPlaceholder: "¡Hola! Gracias por contactarnos.",
+        integrations: "Integraciones",
+        integrationsDesc: "Conecta WhatsApp e Instagram",
+        whatsappToken: "WhatsApp Access Token",
+        whatsappPhone: "WhatsApp Phone ID",
+        instagramToken: "Instagram Access Token",
+        instagramBusiness: "Instagram Business ID",
+        metaLink: "Obtener credenciales de Meta",
+        knowledge: "Base de Conocimiento",
+        knowledgeDesc: "Añade información para que el chatbot responda mejor",
+        sourceType: "Tipo de Fuente",
+        sourceUrl: "Sitio Web",
+        sourceText: "Texto Largo",
         sourceDocument: "Documento",
-        ingest: "Ingestar contenido",
-        ingestAdd: "Agregar contenido",
-        ingestReplace: "Reemplazar contenido",
-        ingestClear: "Eliminar contenido",
-        ingestHint:
-          "Usa Agregar para sumar informacion nueva, Reemplazar para borrar todo e ingestar de nuevo, o Eliminar para limpiar la base.",
-        ingesting: "Ingestando...",
-        ingested: (count: number) => `Ingestado ${count} chunks.`,
-        cleared: (sources: number, chunks: number) =>
-          `Contenido eliminado (${sources} fuentes, ${chunks} chunks).`,
-        webhooksTitle: "Webhooks y verificacion",
-        webhooksDesc: "Configura los webhooks en Meta para recibir mensajes.",
-        verifyToken: "Token de verificacion",
-        verifyTokenDesc: "Define un token fijo y usalo en Meta.",
-        save: "Guardar ajustes",
+        urlLabel: "URL del Sitio",
+        urlPlaceholder: "https://tusitio.com",
+        textLabel: "Descripción",
+        textPlaceholder: "Información sobre tu negocio, servicios, precios...",
+        titleLabel: "Título",
+        ingestAdd: "Agregar Contenido",
+        ingestReplace: "Reemplazar Todo",
+        ingestClear: "Eliminar Todo",
+        ingesting: "Procesando...",
+        ingested: (n: number) => `${n} fragmentos procesados`,
+        cleared: (s: number, c: number) => `Eliminado: ${s} fuentes, ${c} fragmentos`,
+        webhooks: "Webhooks",
+        webhooksDesc: "Endpoints para Meta",
+        save: "Guardar Cambios",
         saving: "Guardando...",
-        saveSuccess: "Configuracion actualizada.",
-        noBusiness: "No hay negocio activo.",
-        selectDoc: "Selecciona un documento.",
-        ingestFail: "No se pudo ingestar el contenido.",
+        saved: "Guardado correctamente",
+        noBusiness: "No hay negocio activo",
+        ingestFail: "Error al procesar contenido",
+        selectDoc: "Selecciona un documento",
       }
     : {
-        title: "Chatbot",
-        desc: "Chatbot configuration and integrations.",
-        guideTitle: "Beginner quickstart",
-        guideDesc: "Follow these steps in order. If you only do one, enable the chatbot and save.",
-        guideSteps: [
-          "Enable the chatbot.",
-          "Pick the primary language.",
-          "Write a simple greeting.",
-          "Add a business description or URL.",
-          "Connect WhatsApp or Instagram when ready.",
-          "Test the flow with the simulator.",
+        title: "Chatbot Center",
+        desc: "Configure and optimize your AI assistant",
+        quickStart: "Quick Start",
+        quickStartDesc: "Follow these steps to set up your chatbot",
+        steps: [
+          { title: "Enable chatbot", desc: "Turn on automatic replies" },
+          { title: "Set language", desc: "Choose English or Spanish" },
+          { title: "Add knowledge", desc: "URL, text, or documents" },
+          { title: "Test the flow", desc: "Use the simulator" },
         ],
-        guideNote:
-          "You do not need integrations to test replies. The knowledge base is enough to start.",
-        exampleTitle: "Example messages to test",
-        exampleDesc: "Copy and paste one of these in the simulator.",
-        examples: [
-          "Hi, what is the price for a premium wash?",
-          "Do you have availability on Friday?",
-          "How much is ceramic coating?",
-          "What are your hours and address?",
-        ],
-        settingsTitle: "Chatbot settings",
-        settingsDesc: "Control language, greeting, and integrations.",
-        testTitle: "Test the chatbot",
-        testDesc: "Use the simulator to test the full flow.",
-        testCta: "Open simulator",
-        enabledLabel: "Chatbot enabled",
-        enabledDesc: "Enable automated replies.",
-        languageLabel: "Primary language",
-        greetingLabel: "Greeting message",
+        testSimulator: "Test Simulator",
+        settings: "Settings",
+        settingsDesc: "Main chatbot configuration",
+        enabled: "Chatbot Active",
+        enabledDesc: "Automatic replies enabled",
+        language: "Primary Language",
+        greeting: "Greeting Message",
         greetingPlaceholder: "Hi! Thanks for reaching out.",
-        integrationsTitle: "Integrations",
-        integrationsDesc: "Store per-business tokens for outbound messaging.",
-        integrationsHelp:
-          "WhatsApp: Meta Business Dashboard > WhatsApp > API Setup > Temporary access token / Phone number ID. Instagram: Meta Business Dashboard > Instagram Messaging > API Setup > Access token / Business ID.",
-        integrationsLinkLabel: "Meta Developers link",
-        integrationsLinkDesc:
-          "Open Meta Developers, create or pick your app, then go to WhatsApp or Instagram Messaging to generate tokens.",
-        integrationsLinkText: "https://developers.facebook.com/",
-        whatsappToken: "WhatsApp access token",
-        whatsappPhone: "WhatsApp phone number ID",
-        instagramToken: "Instagram access token",
-        instagramTokenHelp:
-          "Meta Business Dashboard > Instagram Messaging > API Setup > Access token.",
-        instagramBusiness: "Instagram business ID",
-        instagramBusinessHelp:
-          "Meta Business Dashboard > Instagram Messaging > API Setup > Business ID.",
-        knowledgeTitle: "Knowledge base",
-        knowledgeDesc: "Ingest a website or long description so the chatbot can answer with context.",
-        sourceLabel: "Source type",
-        titleLabel: "Title",
-        urlLabel: "Website URL",
-        urlPlaceholder: "https://example.com",
-        documentLabel: "Document (txt, md)",
-        documentHint: "Text is extracted from PDF/DOCX. TXT and MD are read directly.",
-        documentPlaceholder: "Document content.",
-        textLabel: "Description",
-        textPlaceholder: "Paste information about your business, services, pricing, and policies.",
-        sourceUrl: "Website URL",
-        sourceText: "Long description",
+        integrations: "Integrations",
+        integrationsDesc: "Connect WhatsApp and Instagram",
+        whatsappToken: "WhatsApp Access Token",
+        whatsappPhone: "WhatsApp Phone ID",
+        instagramToken: "Instagram Access Token",
+        instagramBusiness: "Instagram Business ID",
+        metaLink: "Get Meta credentials",
+        knowledge: "Knowledge Base",
+        knowledgeDesc: "Add information so the chatbot can answer better",
+        sourceType: "Source Type",
+        sourceUrl: "Website",
+        sourceText: "Long Text",
         sourceDocument: "Document",
-        ingest: "Ingest content",
-        ingestAdd: "Add content",
-        ingestReplace: "Replace content",
-        ingestClear: "Delete content",
-        ingestHint:
-          "Use Add to append new info, Replace to clear everything and ingest again, or Delete to wipe the knowledge base.",
-        ingesting: "Ingesting...",
-        ingested: (count: number) => `Ingested ${count} chunks.`,
-        cleared: (sources: number, chunks: number) =>
-          `Content cleared (${sources} sources, ${chunks} chunks).`,
-        webhooksTitle: "Webhooks & verification",
-        webhooksDesc: "Configure Meta webhooks to receive messages.",
-        verifyToken: "Verify token",
-        verifyTokenDesc: "Set a fixed token and use it in Meta.",
-        save: "Save settings",
+        urlLabel: "Website URL",
+        urlPlaceholder: "https://yoursite.com",
+        textLabel: "Description",
+        textPlaceholder: "Information about your business, services, pricing...",
+        titleLabel: "Title",
+        ingestAdd: "Add Content",
+        ingestReplace: "Replace All",
+        ingestClear: "Delete All",
+        ingesting: "Processing...",
+        ingested: (n: number) => `${n} chunks processed`,
+        cleared: (s: number, c: number) => `Deleted: ${s} sources, ${c} chunks`,
+        webhooks: "Webhooks",
+        webhooksDesc: "Endpoints for Meta",
+        save: "Save Changes",
         saving: "Saving...",
-        saveSuccess: "Chatbot settings updated.",
-        noBusiness: "No active business.",
-        selectDoc: "Please select a document.",
-        ingestFail: "Failed to ingest content.",
-      }
+        saved: "Saved successfully",
+        noBusiness: "No active business",
+        ingestFail: "Failed to process content",
+        selectDoc: "Please select a document",
+      };
 
+  // Load settings
   useEffect(() => {
     const loadSettings = async () => {
-      if (!businessId) return
-      setIntegrationsLoading(true)
+      if (!businessId) return;
+      setIntegrationsLoading(true);
+      
       const { data: business } = await supabase
         .from("businesses")
         .select("chatbot_enabled, language_preference, greeting_message")
         .eq("id", businessId)
-        .single()
+        .single();
+        
       if (business) {
-        setChatbotEnabled(business.chatbot_enabled ?? true)
+        setChatbotEnabled(business.chatbot_enabled ?? true);
         setChatbotLanguage(
           business.language_preference === "es" || business.language_preference === "en"
             ? business.language_preference
             : "en"
-        )
-        setGreetingMessage(business.greeting_message ?? "")
+        );
+        setGreetingMessage(business.greeting_message ?? "");
       }
 
       const { data: integrations } = await supabase
         .from("business_integrations")
-        .select(
-          "whatsapp_access_token, whatsapp_phone_number_id, instagram_access_token, instagram_business_id"
-        )
+        .select("whatsapp_access_token, whatsapp_phone_number_id, instagram_access_token, instagram_business_id")
         .eq("business_id", businessId)
-        .maybeSingle()
+        .maybeSingle();
+        
       if (integrations) {
         setIntegrationState({
           whatsappAccessToken: integrations.whatsapp_access_token ?? "",
           whatsappPhoneNumberId: integrations.whatsapp_phone_number_id ?? "",
           instagramAccessToken: integrations.instagram_access_token ?? "",
           instagramBusinessId: integrations.instagram_business_id ?? "",
-        })
+        });
       }
-      setIntegrationsLoading(false)
-    }
-    loadSettings()
-  }, [businessId])
+      setIntegrationsLoading(false);
+    };
+    loadSettings();
+  }, [businessId]);
 
   const handleSave = async () => {
     if (!businessId) {
-      setSaveError(copy.noBusiness)
-      return
+      setSaveError(copy.noBusiness);
+      return;
     }
-    setSaveLoading(true)
-    setSaveMessage(null)
-    setSaveError(null)
+    setSaveLoading(true);
+    setSaveMessage(null);
+    setSaveError(null);
 
     const { error: businessError } = await supabase
       .from("businesses")
@@ -267,19 +239,19 @@ export default function ChatbotPage() {
         language_preference: chatbotLanguage,
         greeting_message: greetingMessage.trim() || null,
       })
-      .eq("id", businessId)
+      .eq("id", businessId);
 
     if (businessError) {
-      setSaveError(businessError.message)
-      setSaveLoading(false)
-      return
+      setSaveError(businessError.message);
+      setSaveLoading(false);
+      return;
     }
 
     const { data: existingIntegration } = await supabase
       .from("business_integrations")
       .select("id")
       .eq("business_id", businessId)
-      .maybeSingle()
+      .maybeSingle();
 
     const integrationPayload = {
       business_id: businessId,
@@ -288,475 +260,487 @@ export default function ChatbotPage() {
       instagram_access_token: integrationState.instagramAccessToken.trim() || null,
       instagram_business_id: integrationState.instagramBusinessId.trim() || null,
       updated_at: new Date().toISOString(),
-    }
+    };
 
     const { error: integrationError } = existingIntegration?.id
-      ? await supabase
-          .from("business_integrations")
-          .update(integrationPayload)
-          .eq("id", existingIntegration.id)
-      : await supabase.from("business_integrations").insert(integrationPayload)
+      ? await supabase.from("business_integrations").update(integrationPayload).eq("id", existingIntegration.id)
+      : await supabase.from("business_integrations").insert(integrationPayload);
 
     if (integrationError) {
-      setSaveError(integrationError.message)
-      setSaveLoading(false)
-      return
+      setSaveError(integrationError.message);
+      setSaveLoading(false);
+      return;
     }
 
-    setSaveMessage(copy.saveSuccess)
-    setSaveLoading(false)
-  }
+    setSaveMessage(copy.saved);
+    setSaveLoading(false);
+  };
 
   const handleClearKnowledge = async () => {
     if (!businessId) {
-      setKbError(copy.noBusiness)
-      return
+      setKbError(copy.noBusiness);
+      return;
     }
-    setKbLoading(true)
-    setKbError(null)
-    setKbMessage(null)
+    setKbLoading(true);
+    setKbError(null);
+    setKbMessage(null);
+    
     const response = await fetch("/api/knowledge/clear", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ businessId }),
-    })
-    const result = await response.json().catch(() => null)
+    });
+    const result = await response.json().catch(() => null);
+    
     if (!response.ok) {
-      setKbError(result?.error || copy.ingestFail)
-      setKbLoading(false)
-      return
+      setKbError(result?.error || copy.ingestFail);
+      setKbLoading(false);
+      return;
     }
-    setKbMessage(copy.cleared(result?.sourceCount ?? 0, result?.chunkCount ?? 0))
-    setKbLoading(false)
-  }
+    setKbMessage(copy.cleared(result?.sourceCount ?? 0, result?.chunkCount ?? 0));
+    setKbLoading(false);
+  };
 
   const handleIngest = async (mode: "add" | "replace" = "add") => {
     if (!businessId) {
-      setKbError(copy.noBusiness)
-      return
+      setKbError(copy.noBusiness);
+      return;
     }
-    setKbLoading(true)
-    setKbError(null)
-    setKbMessage(null)
+    setKbLoading(true);
+    setKbError(null);
+    setKbMessage(null);
+    
     if (mode === "replace") {
       const clearResponse = await fetch("/api/knowledge/clear", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ businessId }),
-      })
-      const clearResult = await clearResponse.json().catch(() => null)
+      });
       if (!clearResponse.ok) {
-        setKbError(clearResult?.error || copy.ingestFail)
-        setKbLoading(false)
-        return
+        const clearResult = await clearResponse.json().catch(() => null);
+        setKbError(clearResult?.error || copy.ingestFail);
+        setKbLoading(false);
+        return;
       }
     }
+    
     if (kbSourceType === "document") {
       if (!kbFile) {
-        setKbError(copy.selectDoc)
-        setKbLoading(false)
-        return
+        setKbError(copy.selectDoc);
+        setKbLoading(false);
+        return;
       }
-      const formData = new FormData()
-      formData.append("businessId", businessId)
-      if (kbTitle.trim()) {
-        formData.append("title", kbTitle.trim())
-      }
-      formData.append("file", kbFile)
-      const response = await fetch("/api/knowledge/ingest-file", {
-        method: "POST",
-        body: formData,
-      })
-      const result = await response.json().catch(() => null)
+      const formData = new FormData();
+      formData.append("businessId", businessId);
+      if (kbTitle.trim()) formData.append("title", kbTitle.trim());
+      formData.append("file", kbFile);
+      
+      const response = await fetch("/api/knowledge/ingest-file", { method: "POST", body: formData });
+      const result = await response.json().catch(() => null);
+      
       if (!response.ok) {
-        setKbError(result?.error || copy.ingestFail)
-        setKbLoading(false)
-        return
+        setKbError(result?.error || copy.ingestFail);
+        setKbLoading(false);
+        return;
       }
-      setKbMessage(copy.ingested(result?.chunkCount ?? 0))
-      setKbLoading(false)
-      return
+      setKbMessage(copy.ingested(result?.chunkCount ?? 0));
+      setKbLoading(false);
+      return;
     }
 
-    const payload =
-      kbSourceType === "url"
-        ? {
-            businessId,
-            sourceType: "url",
-            sourceUrl: kbUrl.trim(),
-            title: kbTitle.trim() || undefined,
-          }
-        : {
-            businessId,
-            sourceType: kbSourceType,
-            content: kbText.trim(),
-            title: kbTitle.trim() || kbFileName || undefined,
-          }
+    const payload = kbSourceType === "url"
+      ? { businessId, sourceType: "url", sourceUrl: kbUrl.trim(), title: kbTitle.trim() || undefined }
+      : { businessId, sourceType: kbSourceType, content: kbText.trim(), title: kbTitle.trim() || undefined };
+      
     const response = await fetch("/api/knowledge/ingest", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-    })
-    const result = await response.json().catch(() => null)
+    });
+    const result = await response.json().catch(() => null);
+    
     if (!response.ok) {
-      setKbError(result?.error || copy.ingestFail)
-      setKbLoading(false)
-      return
+      setKbError(result?.error || copy.ingestFail);
+      setKbLoading(false);
+      return;
     }
-    setKbMessage(copy.ingested(result?.chunkCount ?? 0))
-    setKbLoading(false)
-  }
+    setKbMessage(copy.ingested(result?.chunkCount ?? 0));
+    setKbLoading(false);
+  };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-    setKbFileName(file.name)
-    setKbFile(file)
-    const reader = new FileReader()
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setKbFile(file);
+    const reader = new FileReader();
     reader.onload = () => {
-      const text = typeof reader.result === "string" ? reader.result : ""
-      setKbText(text)
-    }
+      const text = typeof reader.result === "string" ? reader.result : "";
+      setKbText(text);
+    };
     if (file.name.toLowerCase().endsWith(".txt") || file.name.toLowerCase().endsWith(".md")) {
-      reader.readAsText(file)
-    } else {
-      setKbText("")
+      reader.readAsText(file);
     }
-  }
+  };
 
   return (
-    <div className="space-y-8">
-      <PageHeader title={copy.title} description={copy.desc} />
+    <div className="space-y-8 animate-fade-in">
+      <PageHeader
+        title={copy.title}
+        description={copy.desc}
+        actions={
+          <Button asChild className="bg-accent text-white hover:bg-accent/90">
+            <Link to="/dev-chatbot">
+              <Play className="mr-2 h-4 w-4" />
+              {copy.testSimulator}
+            </Link>
+          </Button>
+        }
+      />
 
-      <Card className="shadow-sm">
+      {/* Quick Start Guide */}
+      <Card className="overflow-hidden border-accent/20 bg-gradient-to-br from-accent/5 to-transparent">
         <CardHeader>
-          <CardTitle>{copy.guideTitle}</CardTitle>
-          <CardDescription>{copy.guideDesc}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4 text-sm text-slate-700">
-          <div className="grid gap-3 md:grid-cols-2">
-            <ol className="space-y-2">
-              {copy.guideSteps.map((step) => (
-                <li key={step} className="flex items-start gap-2">
-                  <span className="mt-1 size-1.5 rounded-full bg-slate-900" />
-                  <span>{step}</span>
-                </li>
-              ))}
-            </ol>
-            <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
-              <p className="text-xs uppercase tracking-wide text-slate-500">{copy.exampleTitle}</p>
-              <p className="text-xs text-slate-600">{copy.exampleDesc}</p>
-              <div className="space-y-2 text-sm text-slate-700">
-                {copy.examples.map((example) => (
-                  <div key={example} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-                    {example}
-                  </div>
-                ))}
-              </div>
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-accent/10 p-2">
+              <Zap className="h-5 w-5 text-accent" />
+            </div>
+            <div>
+              <CardTitle>{copy.quickStart}</CardTitle>
+              <CardDescription>{copy.quickStartDesc}</CardDescription>
             </div>
           </div>
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-            {copy.guideNote}
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {copy.steps.map((step, idx) => (
+              <div
+                key={idx}
+                className="group relative flex items-start gap-3 rounded-xl border bg-card p-4 transition-all hover:border-accent hover:shadow-md"
+              >
+                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-accent text-white font-bold text-sm">
+                  {idx + 1}
+                </div>
+                <div>
+                  <p className="font-medium">{step.title}</p>
+                  <p className="text-xs text-muted-foreground">{step.desc}</p>
+                </div>
+                {idx < 3 && (
+                  <ChevronRight className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity lg:block hidden" />
+                )}
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>
 
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle>{copy.settingsTitle}</CardTitle>
-          <CardDescription>{copy.settingsDesc}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5 text-sm text-slate-700">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-            <div>
-              <p className="text-sm font-semibold text-slate-900">{copy.testTitle}</p>
-              <p className="text-xs text-slate-600">{copy.testDesc}</p>
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Main Settings */}
+        <Card className="lg:col-span-2">
+          <CardHeader className="border-b">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-blue-100 p-2">
+                <Settings className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <CardTitle>{copy.settings}</CardTitle>
+                <CardDescription>{copy.settingsDesc}</CardDescription>
+              </div>
             </div>
-            <Button asChild className="bg-rose-600 text-white hover:bg-rose-500">
-              <a href="/dev-chatbot">{copy.testCta}</a>
-            </Button>
-          </div>
-          <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2">
-            <div>
-              <p className="font-medium">{copy.enabledLabel}</p>
-              <p className="text-xs text-slate-500">{copy.enabledDesc}</p>
+          </CardHeader>
+          <CardContent className="p-6 space-y-6">
+            {/* Toggle Card */}
+            <div
+              className={`flex items-center justify-between rounded-xl border-2 p-4 cursor-pointer transition-all ${
+                chatbotEnabled ? "border-accent bg-accent/5" : "border-border"
+              }`}
+              onClick={() => setChatbotEnabled(!chatbotEnabled)}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`rounded-lg p-2 ${chatbotEnabled ? "bg-accent/20" : "bg-muted"}`}>
+                  <Bot className={`h-5 w-5 ${chatbotEnabled ? "text-accent" : "text-muted-foreground"}`} />
+                </div>
+                <div>
+                  <p className="font-semibold">{copy.enabled}</p>
+                  <p className="text-xs text-muted-foreground">{copy.enabledDesc}</p>
+                </div>
+              </div>
+              {chatbotEnabled ? (
+                <ToggleRight className="h-8 w-8 text-accent" />
+              ) : (
+                <ToggleLeft className="h-8 w-8 text-muted-foreground" />
+              )}
             </div>
-            <input
-              type="checkbox"
-              className="size-4 rounded border border-input text-rose-600"
-              checked={chatbotEnabled}
-              onChange={(event) => setChatbotEnabled(event.target.checked)}
-            />
-          </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase text-slate-500">
-                {copy.languageLabel}
-              </label>
-              <select
-                className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm text-slate-900 shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
-                value={chatbotLanguage}
-                onChange={(event) => setChatbotLanguage(event.target.value === "es" ? "es" : "en")}
-              >
-                <option value="en">English</option>
-                <option value="es">Spanish</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase text-slate-500">
-                {copy.greetingLabel}
-              </label>
-              <input
-                className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm text-slate-900 shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
-                value={greetingMessage}
-                onChange={(event) => setGreetingMessage(event.target.value)}
-                placeholder={copy.greetingPlaceholder}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div>
-              <p className="text-sm font-semibold text-slate-900">{copy.integrationsTitle}</p>
-              <p className="text-xs text-slate-500">{copy.integrationsDesc}</p>
-              <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                {copy.integrationsHelp}
-              </div>
-              <div className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-                <p className="font-semibold text-slate-700">{copy.integrationsLinkLabel}</p>
-                <p className="mt-1">{copy.integrationsLinkDesc}</p>
-                <a
-                  href={copy.integrationsLinkText}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-2 inline-flex text-rose-600 underline"
-                >
-                  {copy.integrationsLinkText}
-                </a>
-              </div>
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
+            {/* Language & Greeting */}
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase text-slate-500">
-                  {copy.whatsappToken}
-                </label>
-                <input
-                  className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm text-slate-900 shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
-                  value={integrationState.whatsappAccessToken}
-                  onChange={(event) =>
-                    setIntegrationState((prev) => ({
-                      ...prev,
-                      whatsappAccessToken: event.target.value,
-                    }))
-                  }
-                  placeholder="EAAG..."
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase text-slate-500">
-                  {copy.whatsappPhone}
-                </label>
-                <input
-                  className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm text-slate-900 shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
-                  value={integrationState.whatsappPhoneNumberId}
-                  onChange={(event) =>
-                    setIntegrationState((prev) => ({
-                      ...prev,
-                      whatsappPhoneNumberId: event.target.value,
-                    }))
-                  }
-                  placeholder="1234567890"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase text-slate-500">
-                  {copy.instagramToken}
-                </label>
-                <input
-                  className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm text-slate-900 shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
-                  value={integrationState.instagramAccessToken}
-                  onChange={(event) =>
-                    setIntegrationState((prev) => ({
-                      ...prev,
-                      instagramAccessToken: event.target.value,
-                    }))
-                  }
-                  placeholder="EAAG..."
-                />
-                <p className="text-xs text-slate-500">{copy.instagramTokenHelp}</p>
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase text-slate-500">
-                  {copy.instagramBusiness}
-                </label>
-                <input
-                  className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm text-slate-900 shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
-                  value={integrationState.instagramBusinessId}
-                  onChange={(event) =>
-                    setIntegrationState((prev) => ({
-                      ...prev,
-                      instagramBusinessId: event.target.value,
-                    }))
-                  }
-                  placeholder="1234567890"
-                />
-                <p className="text-xs text-slate-500">{copy.instagramBusinessHelp}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div>
-              <p className="text-sm font-semibold text-slate-900">{copy.knowledgeTitle}</p>
-              <p className="text-xs text-slate-500">{copy.knowledgeDesc}</p>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase text-slate-500">
-                  {copy.sourceLabel}
+                <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {copy.language}
                 </label>
                 <select
-                  className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm text-slate-900 shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
-                  value={kbSourceType}
-                  onChange={(event) =>
-                    setKbSourceType(
-                      event.target.value === "document"
-                        ? "document"
-                        : event.target.value === "text"
-                          ? "text"
-                          : "url"
-                    )
-                  }
+                  className="w-full rounded-lg border bg-background px-4 py-3 text-sm transition-colors focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+                  value={chatbotLanguage}
+                  onChange={(e) => setChatbotLanguage(e.target.value === "es" ? "es" : "en")}
                 >
-                  <option value="url">{copy.sourceUrl}</option>
-                  <option value="text">{copy.sourceText}</option>
-                  <option value="document">{copy.sourceDocument}</option>
+                  <option value="en">English</option>
+                  <option value="es">Español</option>
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase text-slate-500">
-                  {copy.titleLabel}
+                <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {copy.greeting}
                 </label>
                 <input
-                  className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm text-slate-900 shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
-                  value={kbTitle}
-                  onChange={(event) => setKbTitle(event.target.value)}
-                  placeholder={isEs ? "Servicios Detapro" : "Detapro services"}
+                  type="text"
+                  className="w-full rounded-lg border bg-background px-4 py-3 text-sm transition-colors focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+                  value={greetingMessage}
+                  onChange={(e) => setGreetingMessage(e.target.value)}
+                  placeholder={copy.greetingPlaceholder}
                 />
               </div>
             </div>
-            {kbSourceType === "url" ? (
+
+            {/* Save Button */}
+            <div className="flex items-center gap-3 pt-2">
+              <Button
+                onClick={handleSave}
+                disabled={saveLoading || integrationsLoading}
+                className="bg-accent text-white hover:bg-accent/90"
+              >
+                {saveLoading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="mr-2 h-4 w-4" />
+                )}
+                {saveLoading ? copy.saving : copy.save}
+              </Button>
+              {saveMessage && <span className="text-sm text-emerald-600 animate-fade-in">{saveMessage}</span>}
+              {saveError && <span className="text-sm text-red-600 animate-fade-in">{saveError}</span>}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Integrations */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-emerald-100 p-2">
+                <Link2 className="h-5 w-5 text-emerald-600" />
+              </div>
+              <div>
+                <CardTitle>{copy.integrations}</CardTitle>
+                <CardDescription>{copy.integrationsDesc}</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* WhatsApp */}
+            <div className="space-y-3 rounded-xl border bg-emerald-50/50 p-4">
+              <div className="flex items-center gap-2">
+                <Phone className="h-4 w-4 text-emerald-600" />
+                <span className="font-medium text-emerald-700">WhatsApp</span>
+              </div>
+              <input
+                type="text"
+                className="w-full rounded-lg border bg-background px-3 py-2 text-sm transition-colors focus:border-accent focus:outline-none"
+                value={integrationState.whatsappAccessToken}
+                onChange={(e) => setIntegrationState((p) => ({ ...p, whatsappAccessToken: e.target.value }))}
+                placeholder={copy.whatsappToken}
+              />
+              <input
+                type="text"
+                className="w-full rounded-lg border bg-background px-3 py-2 text-sm transition-colors focus:border-accent focus:outline-none"
+                value={integrationState.whatsappPhoneNumberId}
+                onChange={(e) => setIntegrationState((p) => ({ ...p, whatsappPhoneNumberId: e.target.value }))}
+                placeholder={copy.whatsappPhone}
+              />
+            </div>
+
+            {/* Instagram */}
+            <div className="space-y-3 rounded-xl border bg-pink-50/50 p-4">
+              <div className="flex items-center gap-2">
+                <Instagram className="h-4 w-4 text-pink-600" />
+                <span className="font-medium text-pink-700">Instagram</span>
+              </div>
+              <input
+                type="text"
+                className="w-full rounded-lg border bg-background px-3 py-2 text-sm transition-colors focus:border-accent focus:outline-none"
+                value={integrationState.instagramAccessToken}
+                onChange={(e) => setIntegrationState((p) => ({ ...p, instagramAccessToken: e.target.value }))}
+                placeholder={copy.instagramToken}
+              />
+              <input
+                type="text"
+                className="w-full rounded-lg border bg-background px-3 py-2 text-sm transition-colors focus:border-accent focus:outline-none"
+                value={integrationState.instagramBusinessId}
+                onChange={(e) => setIntegrationState((p) => ({ ...p, instagramBusinessId: e.target.value }))}
+                placeholder={copy.instagramBusiness}
+              />
+            </div>
+
+            <a
+              href="https://developers.facebook.com/"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-2 text-sm text-accent hover:underline"
+            >
+              <ExternalLink className="h-3 w-3" />
+              {copy.metaLink}
+            </a>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Knowledge Base */}
+      <Card>
+        <CardHeader className="border-b">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-purple-100 p-2">
+              <Database className="h-5 w-5 text-purple-600" />
+            </div>
+            <div>
+              <CardTitle>{copy.knowledge}</CardTitle>
+              <CardDescription>{copy.knowledgeDesc}</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-6 space-y-6">
+          <div className="grid gap-4 sm:grid-cols-3">
+            {/* Source Type Cards */}
+            {[
+              { type: "url" as const, icon: Globe, label: copy.sourceUrl, color: "blue" },
+              { type: "text" as const, icon: FileText, label: copy.sourceText, color: "emerald" },
+              { type: "document" as const, icon: Upload, label: copy.sourceDocument, color: "purple" },
+            ].map((source) => (
+              <button
+                key={source.type}
+                onClick={() => setKbSourceType(source.type)}
+                className={`flex items-center gap-3 rounded-xl border-2 p-4 text-left transition-all ${
+                  kbSourceType === source.type
+                    ? `border-${source.color}-500 bg-${source.color}-50`
+                    : "border-border hover:border-muted-foreground/30"
+                }`}
+              >
+                <source.icon className={`h-5 w-5 ${kbSourceType === source.type ? `text-${source.color}-600` : "text-muted-foreground"}`} />
+                <span className={kbSourceType === source.type ? "font-medium" : ""}>{source.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Input Fields */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                {copy.titleLabel}
+              </label>
+              <input
+                type="text"
+                className="w-full rounded-lg border bg-background px-4 py-3 text-sm transition-colors focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+                value={kbTitle}
+                onChange={(e) => setKbTitle(e.target.value)}
+                placeholder={isEs ? "Nombre del contenido" : "Content name"}
+              />
+            </div>
+            
+            {kbSourceType === "url" && (
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase text-slate-500">
+                <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   {copy.urlLabel}
                 </label>
                 <input
-                  className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm text-slate-900 shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
+                  type="text"
+                  className="w-full rounded-lg border bg-background px-4 py-3 text-sm transition-colors focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
                   value={kbUrl}
-                  onChange={(event) => setKbUrl(event.target.value)}
+                  onChange={(e) => setKbUrl(e.target.value)}
                   placeholder={copy.urlPlaceholder}
                 />
               </div>
-            ) : kbSourceType === "document" ? (
+            )}
+            
+            {kbSourceType === "document" && (
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase text-slate-500">
-                  {copy.documentLabel}
+                <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {copy.sourceDocument}
                 </label>
                 <input
                   type="file"
                   accept=".txt,.md,.pdf,.doc,.docx"
-                  className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm text-slate-900 shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
+                  className="w-full rounded-lg border bg-background px-4 py-3 text-sm transition-colors focus:border-accent focus:outline-none"
                   onChange={handleFileSelect}
-                />
-                <p className="text-xs text-slate-500">{copy.documentHint}</p>
-                <textarea
-                  className="min-h-[120px] w-full rounded-lg border border-input bg-white px-3 py-2 text-sm text-slate-900 shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
-                  value={kbText}
-                  onChange={(event) => setKbText(event.target.value)}
-                  placeholder={copy.documentPlaceholder}
-                />
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase text-slate-500">
-                  {copy.textLabel}
-                </label>
-                <textarea
-                  className="min-h-[120px] w-full rounded-lg border border-input bg-white px-3 py-2 text-sm text-slate-900 shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
-                  value={kbText}
-                  onChange={(event) => setKbText(event.target.value)}
-                  placeholder={copy.textPlaceholder}
                 />
               </div>
             )}
+          </div>
+
+          {(kbSourceType === "text" || kbSourceType === "document") && (
             <div className="space-y-2">
-              <div className="text-xs text-slate-500">{copy.ingestHint}</div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  onClick={() => handleIngest("add")}
-                  disabled={kbLoading}
-                  className="bg-rose-600 text-white hover:bg-rose-500"
-                >
-                  {kbLoading ? copy.ingesting : copy.ingestAdd}
-                </Button>
-                <Button
-                  onClick={() => handleIngest("replace")}
-                  disabled={kbLoading}
-                  variant="outline"
-                >
-                  {copy.ingestReplace}
-                </Button>
-                <Button
-                  onClick={handleClearKnowledge}
-                  disabled={kbLoading}
-                  variant="ghost"
-                  className="text-rose-600"
-                >
-                  {copy.ingestClear}
-                </Button>
-              </div>
-              {kbMessage ? <span className="text-emerald-700">{kbMessage}</span> : null}
-              {kbError ? <span className="text-rose-600">{kbError}</span> : null}
+              <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                {copy.textLabel}
+              </label>
+              <textarea
+                className="min-h-[150px] w-full rounded-lg border bg-background px-4 py-3 text-sm transition-colors focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+                value={kbText}
+                onChange={(e) => setKbText(e.target.value)}
+                placeholder={copy.textPlaceholder}
+              />
             </div>
-          </div>
+          )}
 
-          <div className="space-y-3">
-            <div>
-              <p className="text-sm font-semibold text-slate-900">{copy.webhooksTitle}</p>
-              <p className="text-xs text-slate-500">{copy.webhooksDesc}</p>
-            </div>
-            <div className="space-y-2 text-xs text-slate-600">
-              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-                <p className="font-semibold text-slate-700">WhatsApp webhook</p>
-                <p>/api/webhooks/whatsapp</p>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-                <p className="font-semibold text-slate-700">Instagram webhook</p>
-                <p>/api/webhooks/instagram</p>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-                <p className="font-semibold text-slate-700">{copy.verifyToken}</p>
-                <p>{copy.verifyTokenDesc}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
+          {/* Action Buttons */}
+          <div className="flex flex-wrap items-center gap-3">
             <Button
-              onClick={handleSave}
-              disabled={saveLoading || integrationsLoading}
-              className="bg-slate-900 text-white hover:bg-slate-800"
+              onClick={() => handleIngest("add")}
+              disabled={kbLoading}
+              className="bg-accent text-white hover:bg-accent/90"
             >
-              <Save className="mr-2 size-4" />
-              {saveLoading ? copy.saving : copy.save}
+              {kbLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+              {kbLoading ? copy.ingesting : copy.ingestAdd}
             </Button>
-            {saveMessage ? <span className="text-emerald-700">{saveMessage}</span> : null}
-            {saveError ? <span className="text-rose-600">{saveError}</span> : null}
+            <Button onClick={() => handleIngest("replace")} disabled={kbLoading} variant="outline">
+              <RefreshCw className="mr-2 h-4 w-4" />
+              {copy.ingestReplace}
+            </Button>
+            <Button onClick={handleClearKnowledge} disabled={kbLoading} variant="ghost" className="text-destructive hover:text-destructive">
+              {copy.ingestClear}
+            </Button>
+            {kbMessage && <span className="text-sm text-emerald-600 animate-fade-in">{kbMessage}</span>}
+            {kbError && <span className="text-sm text-red-600 animate-fade-in">{kbError}</span>}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Webhooks Info */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-amber-100 p-2">
+              <Globe className="h-5 w-5 text-amber-600" />
+            </div>
+            <div>
+              <CardTitle>{copy.webhooks}</CardTitle>
+              <CardDescription>{copy.webhooksDesc}</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded-lg border bg-muted/30 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Phone className="h-4 w-4 text-emerald-600" />
+                <span className="font-medium">WhatsApp Webhook</span>
+              </div>
+              <code className="text-xs text-muted-foreground break-all">/api/webhooks/whatsapp</code>
+            </div>
+            <div className="rounded-lg border bg-muted/30 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Instagram className="h-4 w-4 text-pink-600" />
+                <span className="font-medium">Instagram Webhook</span>
+              </div>
+              <code className="text-xs text-muted-foreground break-all">/api/webhooks/instagram</code>
+            </div>
           </div>
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
-

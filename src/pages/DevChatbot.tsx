@@ -1,8 +1,21 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Send } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Bot,
+  ChevronDown,
+  Loader2,
+  MessageSquare,
+  Mic,
+  Paperclip,
+  RefreshCw,
+  Send,
+  Sparkles,
+  User,
+  Zap,
+} from "lucide-react";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -17,167 +30,354 @@ type Message = {
   id: string;
   role: "user" | "bot";
   text: string;
+  timestamp: Date;
+};
+
+const quickPrompts = {
+  es: [
+    "¿Cuáles son sus precios?",
+    "¿Tienen disponibilidad hoy?",
+    "Quiero reservar una cita",
+    "¿Cuál es su horario?",
+  ],
+  en: [
+    "What are your prices?",
+    "Do you have availability today?",
+    "I want to book an appointment",
+    "What are your hours?",
+  ],
 };
 
 export default function DevChatbotPage() {
   const { lang } = useLanguage();
   const isEs = lang === "es";
   const { businessId, loading: bizLoading } = useCurrentBusiness();
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isTyping, setIsTyping] = useState(false);
 
   const copy = useMemo(
     () =>
       isEs
         ? {
             title: "Simulador de Chatbot",
-            desc: "Prueba el flujo de respuestas del chatbot en tiempo real.",
+            desc: "Prueba las respuestas del chatbot en tiempo real",
             placeholder: "Escribe un mensaje...",
             send: "Enviar",
             sending: "Enviando...",
             noBusiness: "No hay negocio activo.",
             errorFetch: "Error al enviar el mensaje.",
-            hint: "Los mensajes se procesan con la misma logica que WhatsApp/Instagram.",
+            hint: "Las respuestas usan la misma lógica que WhatsApp e Instagram",
+            quickPrompts: "Prueba rápida",
+            clearChat: "Limpiar chat",
+            typing: "Escribiendo...",
+            noMessages: "Inicia una conversación",
+            noMessagesDesc: "Envía un mensaje o usa una de las sugerencias rápidas",
+            poweredBy: "Impulsado por IA",
           }
         : {
             title: "Chatbot Simulator",
-            desc: "Test the chatbot response flow in real time.",
+            desc: "Test chatbot responses in real time",
             placeholder: "Type a message...",
             send: "Send",
             sending: "Sending...",
             noBusiness: "No active business.",
             errorFetch: "Failed to send message.",
-            hint: "Messages are processed with the same logic as WhatsApp/Instagram.",
+            hint: "Responses use the same logic as WhatsApp and Instagram",
+            quickPrompts: "Quick prompts",
+            clearChat: "Clear chat",
+            typing: "Typing...",
+            noMessages: "Start a conversation",
+            noMessagesDesc: "Send a message or use one of the quick prompts",
+            poweredBy: "Powered by AI",
           },
     [isEs]
   );
 
-  const handleSend = useCallback(async () => {
-    const trimmed = input.trim();
-    if (!trimmed || loading) return;
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
-    if (!businessId) {
-      setError(copy.noBusiness);
-      return;
-    }
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, isTyping]);
 
-    const userMsg: Message = {
-      id: crypto.randomUUID(),
-      role: "user",
-      text: trimmed,
-    };
-    setMessages((prev) => [...prev, userMsg]);
-    setInput("");
-    setLoading(true);
-    setError(null);
+  const handleSend = useCallback(
+    async (messageText?: string) => {
+      const trimmed = (messageText || input).trim();
+      if (!trimmed || loading) return;
 
-    try {
-      const res = await fetch("/api/dev/chatbot-simulate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ businessId, message: trimmed }),
-      });
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        throw new Error(data?.error || copy.errorFetch);
+      if (!businessId) {
+        setError(copy.noBusiness);
+        return;
       }
 
-      const botMsg: Message = {
+      const userMsg: Message = {
         id: crypto.randomUUID(),
-        role: "bot",
-        text: data?.reply || "...",
+        role: "user",
+        text: trimmed,
+        timestamp: new Date(),
       };
-      setMessages((prev) => [...prev, botMsg]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : copy.errorFetch);
-    } finally {
-      setLoading(false);
-    }
-  }, [input, loading, businessId, copy]);
+      setMessages((prev) => [...prev, userMsg]);
+      setInput("");
+      setLoading(true);
+      setIsTyping(true);
+      setError(null);
+
+      try {
+        const res = await fetch("/api/dev/chatbot-simulate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ businessId, message: trimmed }),
+        });
+        const data = await res.json().catch(() => null);
+
+        if (!res.ok) {
+          throw new Error(data?.error || copy.errorFetch);
+        }
+
+        // Simulate typing delay for better UX
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        const botMsg: Message = {
+          id: crypto.randomUUID(),
+          role: "bot",
+          text: data?.reply || "...",
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, botMsg]);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : copy.errorFetch);
+      } finally {
+        setLoading(false);
+        setIsTyping(false);
+      }
+    },
+    [input, loading, businessId, copy]
+  );
+
+  const handleClearChat = () => {
+    setMessages([]);
+    setError(null);
+  };
+
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString(isEs ? "es-ES" : "en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
 
   if (bizLoading) {
     return (
-      <div className="grid min-h-[50vh] place-items-center text-muted-foreground">
-        <Loader2 className="animate-spin" />
+      <div className="grid min-h-[60vh] place-items-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative">
+            <div className="h-16 w-16 rounded-full bg-accent/20 animate-pulse" />
+            <Bot className="absolute inset-0 m-auto h-8 w-8 text-accent" />
+          </div>
+          <p className="text-muted-foreground">{isEs ? "Cargando..." : "Loading..."}</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
-      <PageHeader title={copy.title} description={copy.desc} />
+    <div className="space-y-6 animate-fade-in">
+      <PageHeader
+        title={copy.title}
+        description={copy.desc}
+        actions={
+          <Badge variant="outline" className="gap-1.5 border-accent/50 text-accent">
+            <Sparkles className="h-3 w-3" />
+            {copy.poweredBy}
+          </Badge>
+        }
+      />
 
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle>{copy.title}</CardTitle>
-          <CardDescription>{copy.hint}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="max-h-96 min-h-[200px] space-y-3 overflow-y-auto rounded-lg border bg-muted/30 p-4">
-            {messages.length === 0 && (
-              <p className="text-center text-sm text-muted-foreground">
-                {isEs ? "Sin mensajes aun." : "No messages yet."}
-              </p>
-            )}
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+      <div className="grid gap-6 lg:grid-cols-4">
+        {/* Quick Prompts Sidebar */}
+        <Card className="lg:col-span-1 h-fit">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Zap className="h-4 w-4 text-accent" />
+              {copy.quickPrompts}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {quickPrompts[isEs ? "es" : "en"].map((prompt, idx) => (
+              <button
+                key={idx}
+                onClick={() => handleSend(prompt)}
+                disabled={loading}
+                className="w-full text-left rounded-lg border border-dashed border-border/60 bg-muted/30 px-3 py-2.5 text-sm transition-all hover:border-accent hover:bg-accent/5 hover:text-accent disabled:opacity-50"
               >
-                <div
-                  className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm shadow-sm ${
-                    msg.role === "user"
-                      ? "bg-foreground text-background"
-                      : "bg-background text-foreground border"
-                  }`}
-                >
-                  {msg.text}
-                </div>
-              </div>
+                {prompt}
+              </button>
             ))}
-            {loading && (
-              <div className="flex justify-start">
-                <div className="rounded-2xl border bg-background px-4 py-2 text-sm text-muted-foreground">
-                  <Loader2 className="inline-block size-4 animate-spin" />
+            
+            {messages.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClearChat}
+                className="w-full mt-4 text-muted-foreground hover:text-destructive"
+              >
+                <RefreshCw className="mr-2 h-3 w-3" />
+                {copy.clearChat}
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Chat Window */}
+        <Card className="lg:col-span-3 flex flex-col overflow-hidden">
+          <CardHeader className="border-b bg-gradient-to-r from-accent/5 to-transparent">
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <div className="h-10 w-10 rounded-full bg-accent/20 flex items-center justify-center">
+                  <Bot className="h-5 w-5 text-accent" />
                 </div>
+                <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-500 border-2 border-background" />
               </div>
+              <div>
+                <CardTitle className="text-base">AI Assistant</CardTitle>
+                <CardDescription className="text-xs">{copy.hint}</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+
+          {/* Messages Area */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-[400px] max-h-[500px] bg-gradient-to-b from-muted/20 to-transparent">
+            {messages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-center py-12">
+                <div className="rounded-full bg-accent/10 p-6 mb-4">
+                  <MessageSquare className="h-10 w-10 text-accent" />
+                </div>
+                <h3 className="text-lg font-medium">{copy.noMessages}</h3>
+                <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                  {copy.noMessagesDesc}
+                </p>
+              </div>
+            ) : (
+              <>
+                {messages.map((msg, idx) => (
+                  <div
+                    key={msg.id}
+                    className={`flex gap-3 animate-fade-in ${
+                      msg.role === "user" ? "flex-row-reverse" : ""
+                    }`}
+                    style={{ animationDelay: `${idx * 50}ms` }}
+                  >
+                    {/* Avatar */}
+                    <div
+                      className={`flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center ${
+                        msg.role === "user"
+                          ? "bg-foreground text-background"
+                          : "bg-accent/20 text-accent"
+                      }`}
+                    >
+                      {msg.role === "user" ? (
+                        <User className="h-4 w-4" />
+                      ) : (
+                        <Bot className="h-4 w-4" />
+                      )}
+                    </div>
+
+                    {/* Message Bubble */}
+                    <div
+                      className={`group relative max-w-[75%] ${
+                        msg.role === "user" ? "items-end" : "items-start"
+                      }`}
+                    >
+                      <div
+                        className={`rounded-2xl px-4 py-2.5 shadow-sm ${
+                          msg.role === "user"
+                            ? "bg-foreground text-background rounded-br-md"
+                            : "bg-card border rounded-bl-md"
+                        }`}
+                      >
+                        <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
+                      </div>
+                      <span
+                        className={`text-[10px] text-muted-foreground mt-1 opacity-0 group-hover:opacity-100 transition-opacity ${
+                          msg.role === "user" ? "text-right block" : ""
+                        }`}
+                      >
+                        {formatTime(msg.timestamp)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Typing Indicator */}
+                {isTyping && (
+                  <div className="flex gap-3 animate-fade-in">
+                    <div className="flex-shrink-0 h-8 w-8 rounded-full bg-accent/20 flex items-center justify-center">
+                      <Bot className="h-4 w-4 text-accent" />
+                    </div>
+                    <div className="bg-card border rounded-2xl rounded-bl-md px-4 py-3">
+                      <div className="flex gap-1">
+                        <span className="h-2 w-2 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: "0ms" }} />
+                        <span className="h-2 w-2 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: "150ms" }} />
+                        <span className="h-2 w-2 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: "300ms" }} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </>
             )}
           </div>
 
+          {/* Error Message */}
           {error && (
-            <p className="text-sm text-destructive">{error}</p>
+            <div className="px-4 py-2 bg-destructive/10 border-t border-destructive/20">
+              <p className="text-sm text-destructive">{error}</p>
+            </div>
           )}
 
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              className="flex-1 rounded-lg border bg-background px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-              placeholder={copy.placeholder}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-              disabled={loading}
-            />
-            <Button onClick={handleSend} disabled={loading || !input.trim()}>
-              {loading ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Send className="size-4" />
-              )}
-              <span className="ml-2 hidden sm:inline">{loading ? copy.sending : copy.send}</span>
-            </Button>
+          {/* Input Area */}
+          <div className="border-t p-4 bg-background">
+            <div className="flex items-center gap-2">
+              <div className="flex-1 relative">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  className="w-full rounded-full border bg-muted/50 px-4 py-3 pr-12 text-sm transition-all focus:bg-background focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+                  placeholder={copy.placeholder}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                  }}
+                  disabled={loading}
+                />
+              </div>
+              <Button
+                onClick={() => handleSend()}
+                disabled={loading || !input.trim()}
+                size="icon"
+                className="h-12 w-12 rounded-full bg-accent text-white hover:bg-accent/90 shadow-lg shadow-accent/25 transition-all hover:shadow-accent/40"
+              >
+                {loading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Send className="h-5 w-5" />
+                )}
+              </Button>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 }
