@@ -1,6 +1,4 @@
-"use client"
-
-import { useRouter } from "next/navigation"
+import { useNavigate } from "react-router-dom"
 import { useState } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -8,7 +6,7 @@ import { useAuth } from "@/hooks/useAuth"
 import { useLanguage } from "@/components/providers/language-provider"
 
 export function UserNav() {
-  const router = useRouter()
+  const navigate = useNavigate()
   const { user, loading, signOut } = useAuth()
   const [signingOut, setSigningOut] = useState(false)
   const { lang } = useLanguage()
@@ -24,8 +22,7 @@ export function UserNav() {
   const handleSignOut = async () => {
     setSigningOut(true)
     await signOut()
-    router.replace("/login")
-    router.refresh()
+    navigate("/login", { replace: true })
     setSigningOut(false)
   }
 
@@ -45,10 +42,10 @@ export function UserNav() {
         </div>
       ) : (
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => router.push("/login")}>
+          <Button variant="outline" size="sm" onClick={() => navigate("/login")}>
             {copy.login}
           </Button>
-          <Button variant="default" size="sm" onClick={() => router.push("/signup")}>
+          <Button variant="default" size="sm" onClick={() => navigate("/signup")}>
             {copy.signup}
           </Button>
         </div>
