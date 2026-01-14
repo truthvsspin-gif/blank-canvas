@@ -1,4 +1,4 @@
-
+﻿"use client"
 
 import { cn } from "@/lib/utils"
 import { useLanguage } from "@/components/providers/language-provider"

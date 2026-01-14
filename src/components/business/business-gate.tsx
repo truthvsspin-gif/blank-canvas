@@ -1,67 +1,69 @@
-import { useEffect, useMemo, useState } from "react";
-import { Building2, Loader2, Sparkles } from "lucide-react";
+"use client"
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useAuth } from "@/components/providers/auth-provider";
-import { useLanguage } from "@/components/providers/language-provider";
-import { useCurrentBusiness } from "@/hooks/use-current-business";
-import { supabase } from "@/lib/supabaseClient";
+import { useEffect, useMemo, useState } from "react"
+import { Building2, Loader2, Sparkles } from "lucide-react"
+
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useAuth } from "@/components/providers/auth-provider"
+import { useLanguage } from "@/components/providers/language-provider"
+import { useCurrentBusiness } from "@/hooks/use-current-business"
+import { supabase } from "@/lib/supabaseClient"
 
 type Props = {
-  children: React.ReactNode;
-};
+  children: React.ReactNode
+}
 
 /**
  * BusinessGate blocks app routes until the user has an active business.
  * It offers a guided create action that also adds the user as owner.
  */
 export function BusinessGate({ children }: Props) {
-  const { user } = useAuth();
-  const { businessId, loading, error, refresh } = useCurrentBusiness();
-  const { lang } = useLanguage();
-  const isEs = lang === "es";
-  const defaultName = isEs ? "Mi negocio" : "My business";
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [name, setName] = useState(() => defaultName);
+  const { user } = useAuth()
+  const { businessId, loading, error, refresh } = useCurrentBusiness()
+  const { lang } = useLanguage()
+  const isEs = lang === "es"
+  const defaultName = isEs ? "Mi negocio" : "My business"
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+  const [name, setName] = useState(() => defaultName)
 
   useEffect(() => {
     setName((prev) => {
       if (prev === "Mi negocio" || prev === "My business") {
-        return defaultName;
+        return defaultName
       }
-      return prev;
-    });
-  }, [defaultName]);
+      return prev
+    })
+  }, [defaultName])
 
   const suggestedDomain = useMemo(() => {
-    const localPart = (user?.email || "workspace").split("@")[0] || "workspace";
-    return `${localPart.toLowerCase().replace(/[^a-z0-9-]/g, "-")}.detapro.app`;
-  }, [user]);
+    const localPart = (user?.email || "workspace").split("@")[0] || "workspace"
+    return `${localPart.toLowerCase().replace(/[^a-z0-9-]/g, "-")}.detapro.app`
+  }, [user])
 
   const handleCreate = async () => {
     if (!user) {
-      setCreateError(isEs ? "Inicia sesion para crear un negocio." : "Sign in to create a business.");
-      return;
+      setCreateError(isEs ? "Inicia sesion para crear un negocio." : "Sign in to create a business.")
+      return
     }
-    setCreating(true);
-    setCreateError(null);
-    setSuccess(null);
+    setCreating(true)
+    setCreateError(null)
+    setSuccess(null)
 
     const fullName =
-      typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name : null;
+      typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name : null
 
     const { error: userErr } = await supabase.from("users").upsert({
       id: user.id,
       email: user.email ?? "",
       full_name: fullName,
-    });
+    })
     if (userErr) {
-      setCreateError(userErr.message);
-      setCreating(false);
-      return;
+      setCreateError(userErr.message)
+      setCreating(false)
+      return
     }
 
     const { data: business, error: bizErr } = await supabase
@@ -72,33 +74,33 @@ export function BusinessGate({ children }: Props) {
         owner_user_id: user.id,
       })
       .select("id, name")
-      .single();
+      .single()
 
     if (bizErr || !business?.id) {
-      setCreateError(bizErr?.message || (isEs ? "No se pudo crear el negocio." : "Unable to create business."));
-      setCreating(false);
-      return;
+      setCreateError(bizErr?.message || (isEs ? "No se pudo crear el negocio." : "Unable to create business."))
+      setCreating(false)
+      return
     }
 
     const { error: membershipErr } = await supabase.from("memberships").insert({
       business_id: business.id,
       user_id: user.id,
       role: "owner",
-    });
+    })
     if (membershipErr) {
-      setCreateError(membershipErr.message);
-      setCreating(false);
-      return;
+      setCreateError(membershipErr.message)
+      setCreating(false)
+      return
     }
 
     setSuccess(
       isEs
         ? `Negocio "${business.name}" creado y asignado.`
         : `Business "${business.name}" created and assigned.`
-    );
-    await refresh();
-    setCreating(false);
-  };
+    )
+    await refresh()
+    setCreating(false)
+  }
 
   if (loading) {
     return (
@@ -108,11 +110,11 @@ export function BusinessGate({ children }: Props) {
           {isEs ? "Verificando tu negocio activo..." : "Checking your active business..."}
         </div>
       </div>
-    );
+    )
   }
 
   if (businessId) {
-    return <>{children}</>;
+    return <>{children}</>
   }
 
   return (
@@ -202,5 +204,5 @@ export function BusinessGate({ children }: Props) {
         </CardContent>
       </Card>
     </div>
-  );
+  )
 }
