@@ -1,7 +1,4 @@
-"use client"
-
-import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { Link, useLocation } from "react-router-dom"
 
 import { appSections } from "@/config/navigation"
 import { cn } from "@/lib/utils"
@@ -12,7 +9,7 @@ type MainNavProps = {
 }
 
 export function MainNav({ className }: MainNavProps) {
-  const pathname = usePathname()
+  const { pathname } = useLocation()
   const { lang } = useLanguage()
 
   return (
@@ -29,7 +26,7 @@ export function MainNav({ className }: MainNavProps) {
         return (
           <Link
             key={item.href}
-            href={item.href}
+            to={item.href}
             className={cn(
               "rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
               isActive
