@@ -284,13 +284,13 @@ export default function Home() {
             {copy.stats.map((stat, i) => (
               <div
                 key={stat.label}
-                className="rounded-2xl border border-slate-200 bg-white/80 backdrop-blur-sm p-6 text-center hover:shadow-lg hover:border-slate-300 transition-all animate-fade-in"
+                className="rounded-2xl border border-slate-200 bg-white p-6 text-center hover:shadow-lg hover:border-slate-300 transition-all animate-fade-in"
                 style={{ animationDelay: `${500 + i * 100}ms` }}
               >
-                <p className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-slate-900 to-slate-600 bg-clip-text text-transparent">
+                <p className="text-3xl sm:text-4xl font-bold text-slate-900">
                   {stat.value}
                 </p>
-                <p className="text-sm text-slate-500 mt-1">{stat.label}</p>
+                <p className="text-sm text-slate-600 mt-1">{stat.label}</p>
               </div>
             ))}
           </div>
