@@ -3,11 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "build:dev": "vite build --mode development",
-    "start": "next start",
-    "lint": "eslint"
+    "dev": "vite --host :: --port 8080",
+    "build": "vite build",
+    "preview": "vite preview --host :: --port 8080",
+    "lint": "eslint",
+    "build:dev": "vite build --mode development"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",
