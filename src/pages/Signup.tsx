@@ -81,7 +81,7 @@ function SignupForm() {
     if (!authLoading && session) {
       navigate(redirect)
     }
-  }, [authLoading, redirect, router, session])
+  }, [authLoading, redirect, navigate, session])
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
