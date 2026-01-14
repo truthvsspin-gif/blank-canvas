@@ -248,8 +248,13 @@ export default function Home() {
             </h1>
 
             {/* Subtitle */}
-            <p className="text-lg sm:text-xl text-slate-500 max-w-2xl mb-10 leading-relaxed animate-fade-in" style={{ animationDelay: "200ms" }}>
+            <p className="text-lg sm:text-xl text-slate-500 max-w-2xl mb-4 leading-relaxed animate-fade-in" style={{ animationDelay: "200ms" }}>
               {copy.hero.subtitle}
+            </p>
+
+            {/* Developer credit */}
+            <p className="text-sm text-slate-400 mb-10 animate-fade-in" style={{ animationDelay: "250ms" }}>
+              Developed by: <span className="font-semibold text-slate-500">ElDetailerPRO</span>
             </p>
 
             {/* CTA */}
