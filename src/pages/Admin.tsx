@@ -108,7 +108,6 @@ export default function AdminPage() {
       contactHandle: string
       lastMessage: string
       lastMessageAt: string
-      lastIntent: string | null
       unreadCount: number
     }[]
   >([])
@@ -283,7 +282,7 @@ export default function AdminPage() {
 
       const threadsQuery = supabase
         .from("inbox_threads")
-        .select("id, contact_name, contact_handle, last_message_text, last_message_at, last_intent, unread_count")
+        .select("id, contact_name, contact_handle, last_message_text, last_message_at, unread_count")
         .eq("business_id", businessId)
         .eq("channel", "whatsapp")
         .order("last_message_at", { ascending: false })
@@ -305,11 +304,11 @@ export default function AdminPage() {
         .gte("created_at", startOfMonth.toISOString())
 
       const handoffQuery = supabase
-        .from("inbox_threads")
+        .from("conversations")
         .select("id", { count: "exact", head: true })
         .eq("business_id", businessId)
         .eq("channel", "whatsapp")
-        .eq("last_intent", "booking")
+        .eq("intent", "booking")
         .gte("updated_at", startOfMonth.toISOString())
 
       const [threadsRes, conversationsRes, qualifiedRes, handoffRes] = await Promise.all([
@@ -334,7 +333,6 @@ export default function AdminPage() {
         contactHandle: thread.contact_handle || "",
         lastMessage: thread.last_message_text || "",
         lastMessageAt: thread.last_message_at || "",
-        lastIntent: thread.last_intent ?? null,
         unreadCount: thread.unread_count ?? 0,
       }))
 
@@ -633,9 +631,6 @@ export default function AdminPage() {
                         ) : null}
                       </div>
                       <div className="flex items-center gap-2 text-xs text-slate-500">
-                        {thread.lastIntent ? (
-                          <Badge variant="secondary">{thread.lastIntent}</Badge>
-                        ) : null}
                         {thread.lastMessageAt ? (
                           <span>
                             {new Date(thread.lastMessageAt).toLocaleString(
