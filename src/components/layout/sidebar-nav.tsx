@@ -224,8 +224,8 @@ export function SidebarNav({ className, collapsed = false, onToggleCollapse }: S
                       {!collapsed && (
                         <div className="flex flex-1 items-center justify-between min-w-0">
                           <span className={cn(
-                            "font-medium truncate text-sm",
-                            isActive ? "text-white" : ""
+                            "font-semibold truncate text-sm",
+                            isActive ? "text-foreground" : "text-foreground/70"
                           )}>
                             {item.name[lang]}
                           </span>
