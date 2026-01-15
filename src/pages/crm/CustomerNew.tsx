@@ -1,7 +1,6 @@
 import { FormEvent, useState } from "react"
-import { Link } from "react-router-dom"
-import { ArrowLeft, Loader2, Save } from "lucide-react"
-import { useNavigate } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
+import { ArrowLeft, Car, Loader2, Mail, Phone, Save, Tag, User, FileText } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/page-header"
 import { Button } from "@/components/ui/button"
@@ -21,50 +20,58 @@ export default function NewCustomerPage() {
 
   const copy = isEs
     ? {
-        title: "Nuevo cliente",
-        description: "Captura basica de cliente.",
-        back: "Volver",
-        formTitle: "Formulario",
-        formDesc: "Nombre, contacto, vehiculos, tags y notas.",
+        title: "Nuevo Cliente",
+        description: "Agrega un nuevo cliente a tu base de datos.",
+        back: "Volver a clientes",
+        formTitle: "Información del Cliente",
+        formDesc: "Completa los datos básicos del cliente.",
         errorNoBusiness: "No hay negocio activo para asociar el cliente.",
-        success: "Cliente guardado.",
+        success: "Cliente guardado exitosamente.",
         name: "Nombre completo",
-        phone: "Telefono",
+        phone: "Teléfono",
         email: "Email",
-        vehicle: "Notas de vehiculo",
-        vehiclesTitle: "Vehiculo principal",
-        vehiclesDesc: "Agrega los datos del primer vehiculo (opcional).",
+        vehicle: "Notas de vehículo",
+        vehiclesTitle: "Vehículo Principal",
+        vehiclesDesc: "Agrega los datos del primer vehículo (opcional).",
         vehicleBrand: "Marca",
         vehicleModel: "Modelo",
         vehicleColor: "Color",
         vehiclePlate: "Placa",
-        vehicleSize: "Tamano",
-        tags: "Tags (separados por coma)",
-        notes: "Notas",
-        save: "Guardar cliente",
+        vehicleSize: "Tamaño",
+        tags: "Etiquetas",
+        tagsHint: "Separadas por coma (ej: VIP, recurrente)",
+        notes: "Notas adicionales",
+        save: "Guardar Cliente",
+        contactSection: "Información de Contacto",
+        vehicleSection: "Información del Vehículo",
+        additionalSection: "Información Adicional",
       }
     : {
-        title: "New customer",
-        description: "Basic customer intake.",
-        back: "Back",
-        formTitle: "Form",
-        formDesc: "Name, contact, vehicles, tags, and notes.",
+        title: "New Customer",
+        description: "Add a new customer to your database.",
+        back: "Back to customers",
+        formTitle: "Customer Information",
+        formDesc: "Complete the basic customer details.",
         errorNoBusiness: "No active business to associate the customer.",
-        success: "Customer saved.",
+        success: "Customer saved successfully.",
         name: "Full name",
         phone: "Phone",
         email: "Email",
         vehicle: "Vehicle notes",
-        vehiclesTitle: "Primary vehicle",
+        vehiclesTitle: "Primary Vehicle",
         vehiclesDesc: "Add the first vehicle details (optional).",
         vehicleBrand: "Brand",
         vehicleModel: "Model",
         vehicleColor: "Color",
         vehiclePlate: "License plate",
         vehicleSize: "Size",
-        tags: "Tags (comma-separated)",
-        notes: "Notes",
-        save: "Save customer",
+        tags: "Tags",
+        tagsHint: "Comma-separated (e.g., VIP, recurring)",
+        notes: "Additional notes",
+        save: "Save Customer",
+        contactSection: "Contact Information",
+        vehicleSection: "Vehicle Information",
+        additionalSection: "Additional Information",
       }
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -144,7 +151,7 @@ export default function NewCustomerPage() {
         title={copy.title}
         description={copy.description}
         actions={
-          <Button variant="outline" size="sm" asChild>
+          <Button variant="outline" size="sm" asChild className="border-slate-200">
             <Link to="/crm/customers">
               <ArrowLeft className="mr-2 size-4" />
               {copy.back}
@@ -153,129 +160,186 @@ export default function NewCustomerPage() {
         }
       />
 
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle>{copy.formTitle}</CardTitle>
-          <CardDescription>{copy.formDesc}</CardDescription>
+      <Card className="shadow-lg shadow-black/5 border-0 bg-card overflow-hidden">
+        <CardHeader className="border-b bg-gradient-to-r from-emerald-50 to-white">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100">
+              <User className="h-5 w-5 text-emerald-600" />
+            </div>
+            <div>
+              <CardTitle className="text-lg font-semibold">{copy.formTitle}</CardTitle>
+              <CardDescription>{copy.formDesc}</CardDescription>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent className="space-y-4 text-sm text-muted-foreground">
-          {error ? (
-            <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-rose-700">
+        <CardContent className="p-6">
+          {error && (
+            <div className="mb-6 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
               Error: {error}
             </div>
-          ) : null}
-          {success ? (
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-700">
+          )}
+          {success && (
+            <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
               {copy.success}
             </div>
-          ) : null}
-          <form className="space-y-4 text-foreground" onSubmit={handleSubmit}>
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="flex flex-col gap-1 text-sm font-medium">
-                {copy.name}
-                <input
-                  name="full_name"
-                  required
-                  className="rounded-lg border border-input bg-white px-3 py-2 text-sm text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
-                  placeholder={isEs ? "Nombre y apellido" : "First and last name"}
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-sm font-medium">
-                {copy.phone}
-                <input
-                  name="phone"
-                  className="rounded-lg border border-input bg-white px-3 py-2 text-sm text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
-                  placeholder="+34 600 000 000"
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-sm font-medium">
-                {copy.email}
-                <input
-                  name="email"
-                  type="email"
-                  className="rounded-lg border border-input bg-white px-3 py-2 text-sm text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
-                  placeholder="customer@company.com"
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-sm font-medium">
-                {copy.vehicle}
-                <input
-                  name="vehicle_info"
-                  className="rounded-lg border border-input bg-white px-3 py-2 text-sm text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
-                  placeholder={isEs ? "Detalle opcional" : "Optional detail"}
-                />
-              </label>
+          )}
+          
+          <form className="space-y-8" onSubmit={handleSubmit}>
+            {/* Contact Section */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <User className="h-4 w-4 text-emerald-600" />
+                {copy.contactSection}
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-sm font-medium text-foreground">{copy.name}</label>
+                  <input
+                    name="full_name"
+                    required
+                    className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                    placeholder={isEs ? "Nombre y apellido" : "First and last name"}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                    <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                    {copy.phone}
+                  </label>
+                  <input
+                    name="phone"
+                    type="tel"
+                    className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                    placeholder="+34 600 000 000"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                    <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                    {copy.email}
+                  </label>
+                  <input
+                    name="email"
+                    type="email"
+                    className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                    placeholder="customer@company.com"
+                  />
+                </div>
+              </div>
             </div>
 
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-              <p className="font-semibold text-slate-900">{copy.vehiclesTitle}</p>
-              <p className="text-xs text-slate-600">{copy.vehiclesDesc}</p>
+            {/* Vehicle Section */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <Car className="h-4 w-4 text-emerald-600" />
+                {copy.vehicleSection}
+              </div>
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-4">
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100">
+                    <Car className="h-4 w-4 text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-foreground">{copy.vehiclesTitle}</p>
+                    <p className="text-xs text-muted-foreground">{copy.vehiclesDesc}</p>
+                  </div>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">{copy.vehicleBrand}</label>
+                    <input
+                      name="vehicle_brand"
+                      className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                      placeholder={isEs ? "Ej: BMW" : "e.g. BMW"}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">{copy.vehicleModel}</label>
+                    <input
+                      name="vehicle_model"
+                      className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                      placeholder={isEs ? "Ej: X5" : "e.g. X5"}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">{copy.vehicleColor}</label>
+                    <input
+                      name="vehicle_color"
+                      className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                      placeholder={isEs ? "Negro" : "Black"}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">{copy.vehiclePlate}</label>
+                    <input
+                      name="vehicle_plate"
+                      className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                      placeholder={isEs ? "1234-ABC" : "ABC-1234"}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">{copy.vehicleSize}</label>
+                    <select
+                      name="vehicle_size"
+                      className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                      defaultValue=""
+                    >
+                      <option value="">{isEs ? "Seleccionar..." : "Select..."}</option>
+                      <option value="compact">{isEs ? "Compacto" : "Compact"}</option>
+                      <option value="sedan">{isEs ? "Sedán" : "Sedan"}</option>
+                      <option value="suv">SUV</option>
+                      <option value="truck">{isEs ? "Camioneta" : "Truck"}</option>
+                      <option value="van">{isEs ? "Van" : "Van"}</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">{copy.vehicle}</label>
+                    <input
+                      name="vehicle_info"
+                      className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                      placeholder={isEs ? "Detalles adicionales" : "Additional details"}
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="flex flex-col gap-1 text-sm font-medium">
-                {copy.vehicleBrand}
-                <input
-                  name="vehicle_brand"
-                  className="rounded-lg border border-input bg-white px-3 py-2 text-sm text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
-                  placeholder={isEs ? "Ej: BMW" : "e.g. BMW"}
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-sm font-medium">
-                {copy.vehicleModel}
-                <input
-                  name="vehicle_model"
-                  className="rounded-lg border border-input bg-white px-3 py-2 text-sm text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
-                  placeholder={isEs ? "Ej: X5" : "e.g. X5"}
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-sm font-medium">
-                {copy.vehicleColor}
-                <input
-                  name="vehicle_color"
-                  className="rounded-lg border border-input bg-white px-3 py-2 text-sm text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
-                  placeholder={isEs ? "Negro" : "Black"}
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-sm font-medium">
-                {copy.vehiclePlate}
-                <input
-                  name="vehicle_plate"
-                  className="rounded-lg border border-input bg-white px-3 py-2 text-sm text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
-                  placeholder={isEs ? "1234-ABC" : "ABC-1234"}
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-sm font-medium md:col-span-2">
-                {copy.vehicleSize}
-                <input
-                  name="vehicle_size"
-                  className="rounded-lg border border-input bg-white px-3 py-2 text-sm text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
-                  placeholder={isEs ? "Compacto, SUV, camioneta" : "Compact, SUV, truck"}
-                />
-              </label>
+            {/* Additional Section */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <FileText className="h-4 w-4 text-emerald-600" />
+                {copy.additionalSection}
+              </div>
+              <div className="grid gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                    <Tag className="h-3.5 w-3.5 text-muted-foreground" />
+                    {copy.tags}
+                  </label>
+                  <input
+                    name="tags"
+                    className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                    placeholder={copy.tagsHint}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">{copy.notes}</label>
+                  <textarea
+                    name="notes"
+                    rows={3}
+                    className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all resize-none"
+                    placeholder={isEs ? "Indicaciones, preferencias, historial..." : "Directions, preferences, history..."}
+                  />
+                </div>
+              </div>
             </div>
 
-            <label className="flex flex-col gap-1 text-sm font-medium">
-              {copy.tags}
-              <input
-                name="tags"
-                className="rounded-lg border border-input bg-white px-3 py-2 text-sm text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
-                placeholder={isEs ? "VIP, recurrente, nuevo" : "VIP, recurring, new"}
-              />
-            </label>
-
-            <label className="flex flex-col gap-1 text-sm font-medium">
-              {copy.notes}
-              <textarea
-                name="notes"
-                rows={3}
-                className="rounded-lg border border-input bg-white px-3 py-2 text-sm text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
-                placeholder={isEs ? "Indicaciones, preferencias, historial." : "Directions, preferences, history."}
-              />
-            </label>
-
-            <div className="flex justify-end">
-              <Button className="bg-rose-600 text-white hover:bg-rose-500" type="submit" disabled={loading}>
+            <div className="flex justify-end pt-4 border-t">
+              <Button 
+                className="bg-gradient-to-r from-emerald-600 to-emerald-500 text-white hover:from-emerald-500 hover:to-emerald-400 shadow-lg shadow-emerald-500/20" 
+                type="submit" 
+                disabled={loading}
+              >
                 {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
                 {copy.save}
               </Button>
@@ -286,4 +350,3 @@ export default function NewCustomerPage() {
     </div>
   )
 }
-

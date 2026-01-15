@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
-import { CalendarDays, Filter, Loader2, Plus, Search } from "lucide-react"
+import { CalendarDays, Clock, DollarSign, Filter, Loader2, Plus, Search, User, Wrench, ChevronLeft, ChevronRight } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/page-header"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { supabase } from "@/lib/supabaseClient"
@@ -10,13 +11,16 @@ import { useCurrentBusiness } from "@/hooks/use-current-business"
 import { useAuth } from "@/hooks/useAuth"
 import { Booking } from "@/types/crm"
 import { useLanguage } from "@/components/providers/language-provider"
+import { cn } from "@/lib/utils"
+
+const PAGE_SIZE = 10
 
 const statusOptions = [
-  { value: "new", labelEs: "Nuevo", labelEn: "New" },
-  { value: "pending", labelEs: "Pendiente", labelEn: "Pending" },
-  { value: "confirmed", labelEs: "Confirmado", labelEn: "Confirmed" },
-  { value: "completed", labelEs: "Completado", labelEn: "Completed" },
-  { value: "cancelled", labelEs: "Cancelado", labelEn: "Cancelled" },
+  { value: "new", labelEs: "Nuevo", labelEn: "New", color: "bg-blue-100 text-blue-700 border-blue-200" },
+  { value: "pending", labelEs: "Pendiente", labelEn: "Pending", color: "bg-amber-100 text-amber-700 border-amber-200" },
+  { value: "confirmed", labelEs: "Confirmado", labelEn: "Confirmed", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+  { value: "completed", labelEs: "Completado", labelEn: "Completed", color: "bg-slate-100 text-slate-700 border-slate-200" },
+  { value: "cancelled", labelEs: "Cancelado", labelEn: "Cancelled", color: "bg-rose-100 text-rose-700 border-rose-200" },
 ]
 
 export default function BookingsPage() {
@@ -35,18 +39,20 @@ export default function BookingsPage() {
   const [statusFilter, setStatusFilter] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [customerMap, setCustomerMap] = useState<Map<string, string>>(new Map())
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
 
   const copy = isEs
     ? {
         title: "Reservas",
-        description: "Agenda y gestiona bookings por cliente y servicio.",
+        description: "Agenda y gestiona citas por cliente y servicio.",
         newBooking: "Nueva reserva",
-        cardTitle: "Bookings",
-        cardDesc: "Filtra por estado, fecha y servicio.",
-        searchPlaceholder: "Buscar por servicio",
-        allStatuses: "Todos los estados",
-        loading: "Cargando bookings...",
-        empty: "No hay bookings para los filtros seleccionados.",
+        cardTitle: "Gestión de Reservas",
+        cardDesc: "Filtra por estado, busca y administra tus citas.",
+        searchPlaceholder: "Buscar por servicio...",
+        allStatuses: "Todos",
+        loading: "Cargando reservas...",
+        empty: "No hay reservas para mostrar.",
         customer: "Cliente",
         service: "Servicio",
         date: "Fecha",
@@ -54,21 +60,21 @@ export default function BookingsPage() {
         price: "Precio",
         source: "Origen",
         actions: "Acciones",
-        view: "Ver",
-        calendar: "Calendario",
-        calendarDesc: "Vista mensual/semanal para agendar.",
-        calendarPlaceholder: "Integrar calendario o heatmap de citas.",
+        view: "Ver detalles",
+        totalBookings: "reservas en total",
+        pageLabel: "Mostrando",
+        of: "de",
       }
     : {
         title: "Bookings",
-        description: "Schedule and manage bookings by customer and service.",
+        description: "Schedule and manage appointments by customer and service.",
         newBooking: "New booking",
-        cardTitle: "Bookings",
-        cardDesc: "Filter by status, date, and service.",
-        searchPlaceholder: "Search by service",
-        allStatuses: "All statuses",
+        cardTitle: "Booking Management",
+        cardDesc: "Filter by status, search, and manage your appointments.",
+        searchPlaceholder: "Search by service...",
+        allStatuses: "All",
         loading: "Loading bookings...",
-        empty: "No bookings match the selected filters.",
+        empty: "No bookings to display.",
         customer: "Customer",
         service: "Service",
         date: "Date",
@@ -76,10 +82,10 @@ export default function BookingsPage() {
         price: "Price",
         source: "Source",
         actions: "Actions",
-        view: "View",
-        calendar: "Calendar",
-        calendarDesc: "Monthly/weekly view to schedule.",
-        calendarPlaceholder: "Integrate a calendar or appointment heatmap.",
+        view: "View details",
+        totalBookings: "total bookings",
+        pageLabel: "Showing",
+        of: "of",
       }
 
   useEffect(() => {
@@ -87,11 +93,13 @@ export default function BookingsPage() {
       if (!businessId) return
       setLoading(true)
       setError(null)
+      const offset = (page - 1) * PAGE_SIZE
       let query = supabase
         .from("bookings")
-        .select("*")
+        .select("*", { count: "exact" })
         .eq("business_id", businessId)
         .order("created_at", { ascending: false })
+        .range(offset, offset + PAGE_SIZE - 1)
 
       if (statusFilter) {
         if (statusFilter === "new") {
@@ -105,17 +113,18 @@ export default function BookingsPage() {
         query = query.ilike("service_name", `%${text}%`)
       }
 
-      const { data, error: err } = await query
+      const { data, error: err, count } = await query
       if (err) {
         setError(err.message)
         setBookings([])
       } else {
         setBookings((data as Booking[]) || [])
+        setTotal(count || 0)
       }
       setLoading(false)
     }
     fetchBookings()
-  }, [businessId, statusFilter, search])
+  }, [businessId, statusFilter, search, page])
 
   useEffect(() => {
     const fetchCustomers = async () => {
@@ -148,14 +157,12 @@ export default function BookingsPage() {
     fetchCustomers()
   }, [businessId, bookings])
 
-  const resolveStatusLabel = (value: string) => {
-    const match = statusOptions.find((s) => s.value === value)
-    if (!match) return value
-    return isEs ? match.labelEs : match.labelEn
+  const getStatusConfig = (value: string) => {
+    return statusOptions.find((s) => s.value === value) || statusOptions[0]
   }
 
   const formatBookingTime = (value: string | null) => {
-    if (!value) return "N/A"
+    if (!value) return "—"
     try {
       return new Intl.DateTimeFormat(locale, {
         dateStyle: "medium",
@@ -167,13 +174,16 @@ export default function BookingsPage() {
     }
   }
 
+  const hasPrev = page > 1
+  const hasNext = page * PAGE_SIZE < total
+
   return (
     <div className="space-y-6">
       <PageHeader
         title={copy.title}
         description={copy.description}
         actions={
-          <Button asChild className="bg-rose-600 text-white hover:bg-rose-500">
+          <Button asChild className="bg-gradient-to-r from-rose-600 to-rose-500 text-white hover:from-rose-500 hover:to-rose-400 shadow-lg shadow-rose-500/20">
             <Link to="/crm/bookings/new">
               <Plus className="mr-2 size-4" />
               {copy.newBooking}
@@ -182,42 +192,77 @@ export default function BookingsPage() {
         }
       />
 
-      <Card className="shadow-sm">
-        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      {/* Stats Cards */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Card className="bg-gradient-to-br from-rose-50 to-white border-rose-100">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-100">
+                <CalendarDays className="h-5 w-5 text-rose-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-rose-700">{total}</p>
+                <p className="text-xs text-rose-600/70">{copy.totalBookings}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="shadow-lg shadow-black/5 border-0 bg-card">
+        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between border-b bg-muted/30 rounded-t-xl">
           <div className="space-y-1">
-            <CardTitle>{copy.cardTitle}</CardTitle>
+            <CardTitle className="text-lg font-semibold">{copy.cardTitle}</CardTitle>
             <CardDescription>{copy.cardDesc}</CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 shadow-xs md:w-auto">
-              <Search className="size-4 text-slate-400" />
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <input
                 placeholder={copy.searchPlaceholder}
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none"
+                onChange={(e) => {
+                  setSearch(e.target.value)
+                  setPage(1)
+                }}
+                className="w-full md:w-56 pl-10 pr-4 py-2.5 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
               />
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-slate-200 text-slate-700"
-              onClick={() => setStatusFilter(null)}
-            >
-              <Filter className="mr-2 size-4" />
-              {statusFilter ? `${copy.status}: ${resolveStatusLabel(statusFilter)}` : copy.allStatuses}
-            </Button>
           </div>
         </CardHeader>
-        <CardContent className="space-y-3 text-sm">
+        <CardContent className="p-4 space-y-4">
+          {/* Status Filter Pills */}
           <div className="flex flex-wrap gap-2">
+            <Button
+              variant={statusFilter === null ? "default" : "outline"}
+              size="sm"
+              className={cn(
+                "rounded-full transition-all",
+                statusFilter === null 
+                  ? "bg-slate-900 text-white hover:bg-slate-800" 
+                  : "border-slate-200 text-slate-600 hover:bg-slate-50"
+              )}
+              onClick={() => {
+                setStatusFilter(null)
+                setPage(1)
+              }}
+            >
+              <Filter className="mr-1.5 size-3.5" />
+              {copy.allStatuses}
+            </Button>
             {statusOptions.map((s) => (
               <Button
                 key={s.value}
-                variant={statusFilter === s.value ? "default" : "outline"}
+                variant="outline"
                 size="sm"
-                className={statusFilter === s.value ? "bg-slate-900 text-white" : "border-slate-200 text-slate-700"}
-                onClick={() => setStatusFilter(statusFilter === s.value ? null : s.value)}
+                className={cn(
+                  "rounded-full border transition-all",
+                  statusFilter === s.value ? s.color : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                )}
+                onClick={() => {
+                  setStatusFilter(statusFilter === s.value ? null : s.value)
+                  setPage(1)
+                }}
               >
                 {isEs ? s.labelEs : s.labelEn}
               </Button>
@@ -225,74 +270,138 @@ export default function BookingsPage() {
           </div>
 
           {loading ? (
-            <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-6 text-slate-700">
-              <Loader2 className="size-4 animate-spin" />
-              {copy.loading}
+            <div className="flex items-center justify-center gap-3 py-16 text-muted-foreground">
+              <Loader2 className="size-5 animate-spin" />
+              <span>{copy.loading}</span>
             </div>
           ) : error ? (
-            <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-rose-700">Error: {error}</div>
+            <div className="rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              Error: {error}
+            </div>
           ) : bookings.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-slate-600">
-              {copy.empty}
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-rose-100">
+                <CalendarDays className="h-8 w-8 text-rose-600" />
+              </div>
+              <p className="text-muted-foreground mb-4">{copy.empty}</p>
+              <Button asChild variant="outline" className="border-rose-200 text-rose-700 hover:bg-rose-50">
+                <Link to="/crm/bookings/new">
+                  <Plus className="mr-2 size-4" />
+                  {copy.newBooking}
+                </Link>
+              </Button>
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-slate-200">
-              <table className="min-w-full divide-y divide-slate-200 text-sm">
-                <thead className="bg-slate-50 text-slate-700">
-                  <tr>
-                    <th className="px-4 py-3 text-left font-semibold">{copy.customer}</th>
-                    <th className="px-4 py-3 text-left font-semibold">{copy.service}</th>
-                    <th className="px-4 py-3 text-left font-semibold">{copy.date}</th>
-                    <th className="px-4 py-3 text-left font-semibold">{copy.status}</th>
-                    <th className="px-4 py-3 text-left font-semibold">{copy.price}</th>
-                    <th className="px-4 py-3 text-left font-semibold">{copy.source}</th>
-                    <th className="px-4 py-3 text-left font-semibold">{copy.actions}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 bg-white">
-                  {bookings.map((booking) => (
-                    <tr key={booking.id}>
-                      <td className="px-4 py-3 text-slate-900">
-                        {booking.customer_id ? customerMap.get(booking.customer_id) || "�" : "�"}
-                      </td>
-                      <td className="px-4 py-3 text-slate-900">{booking.service_name}</td>
-                      <td className="px-4 py-3 text-slate-700">
-                        {formatBookingTime(booking.scheduled_at)}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold capitalize text-slate-700">
-                          {resolveStatusLabel(booking.status)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">
-                        {booking.price != null ? `$${booking.price.toFixed(2)}` : "N/A"}
-                      </td>
-                      <td className="px-4 py-3 text-slate-700 capitalize">{booking.source || "manual"}</td>
-                      <td className="px-4 py-3">
-                        <Button variant="ghost" size="sm" className="text-rose-700 hover:bg-rose-50" asChild>
-                          <Link to={`/crm/bookings/${booking.id}`}>{copy.view}</Link>
-                        </Button>
-                      </td>
+            <>
+              <div className="overflow-x-auto rounded-xl border border-border">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/50">
+                      <th className="px-4 py-3 text-left font-semibold text-foreground">{copy.customer}</th>
+                      <th className="px-4 py-3 text-left font-semibold text-foreground">{copy.service}</th>
+                      <th className="px-4 py-3 text-left font-semibold text-foreground">{copy.date}</th>
+                      <th className="px-4 py-3 text-left font-semibold text-foreground">{copy.status}</th>
+                      <th className="px-4 py-3 text-left font-semibold text-foreground">{copy.price}</th>
+                      <th className="px-4 py-3 text-left font-semibold text-foreground">{copy.source}</th>
+                      <th className="px-4 py-3 text-right font-semibold text-foreground">{copy.actions}</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                  </thead>
+                  <tbody className="divide-y">
+                    {bookings.map((booking, idx) => {
+                      const statusConfig = getStatusConfig(booking.status)
+                      const customerName = booking.customer_id ? customerMap.get(booking.customer_id) : null
+                      return (
+                        <tr 
+                          key={booking.id} 
+                          className={cn(
+                            "hover:bg-muted/50 transition-colors",
+                            idx % 2 === 0 ? "bg-background" : "bg-muted/20"
+                          )}
+                        >
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-rose-400 to-rose-600 text-white font-medium text-sm">
+                                {customerName ? customerName.charAt(0).toUpperCase() : <User className="h-4 w-4" />}
+                              </div>
+                              <span className="font-medium text-foreground">{customerName || "—"}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2 text-foreground">
+                              <Wrench className="h-3.5 w-3.5 text-muted-foreground" />
+                              {booking.service_name}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <Clock className="h-3.5 w-3.5" />
+                              {formatBookingTime(booking.scheduled_at)}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <Badge variant="outline" className={cn("text-xs", statusConfig.color)}>
+                              {isEs ? statusConfig.labelEs : statusConfig.labelEn}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1 text-foreground font-medium">
+                              <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
+                              {booking.price != null ? booking.price.toFixed(2) : "—"}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="text-muted-foreground capitalize">{booking.source || "manual"}</span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              asChild 
+                              className="text-rose-700 hover:text-rose-800 hover:bg-rose-50"
+                            >
+                              <Link to={`/crm/bookings/${booking.id}`}>{copy.view}</Link>
+                            </Button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
 
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle>{copy.calendar}</CardTitle>
-          <CardDescription>{copy.calendarDesc}</CardDescription>
-        </CardHeader>
-        <CardContent className="flex items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-sm text-muted-foreground">
-          <CalendarDays className="mr-2 size-5 text-slate-500" />
-          {copy.calendarPlaceholder}
+              {/* Pagination */}
+              <div className="flex items-center justify-between border-t pt-4">
+                <span className="text-sm text-muted-foreground">
+                  {copy.pageLabel} {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} {copy.of} {total}
+                </span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={!hasPrev}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    className="h-8 w-8 p-0"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="px-3 py-1 text-sm font-medium bg-background border rounded-lg">
+                    {page}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={!hasNext}
+                    onClick={() => setPage((p) => p + 1)}
+                    className="h-8 w-8 p-0"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>
   )
 }
-

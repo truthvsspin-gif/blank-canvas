@@ -1,7 +1,6 @@
 import { FormEvent, useEffect, useState } from "react"
-import { Link } from "react-router-dom"
-import { ArrowLeft, Loader2, Save } from "lucide-react"
-import { useNavigate } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
+import { ArrowLeft, CalendarDays, Car, Clock, DollarSign, Loader2, Save, User, Wrench } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/page-header"
 import { Button } from "@/components/ui/button"
@@ -11,18 +10,19 @@ import { useCurrentBusiness } from "@/hooks/use-current-business"
 import { useAuth } from "@/hooks/useAuth"
 import { Customer, Service, Vehicle } from "@/types/crm"
 import { useLanguage } from "@/components/providers/language-provider"
+import { cn } from "@/lib/utils"
 
 const statusOptions = [
-  { value: "new", labelEs: "Nuevo", labelEn: "New" },
-  { value: "confirmed", labelEs: "Confirmado", labelEn: "Confirmed" },
-  { value: "completed", labelEs: "Completado", labelEn: "Completed" },
-  { value: "cancelled", labelEs: "Cancelado", labelEn: "Cancelled" },
+  { value: "new", labelEs: "Nuevo", labelEn: "New", color: "bg-blue-100 text-blue-700" },
+  { value: "confirmed", labelEs: "Confirmado", labelEn: "Confirmed", color: "bg-emerald-100 text-emerald-700" },
+  { value: "completed", labelEs: "Completado", labelEn: "Completed", color: "bg-slate-100 text-slate-700" },
+  { value: "cancelled", labelEs: "Cancelado", labelEn: "Cancelled", color: "bg-rose-100 text-rose-700" },
 ]
 
 const sourceOptions = [
   { value: "manual", labelEs: "Manual", labelEn: "Manual" },
   { value: "chatbot", labelEs: "Chatbot", labelEn: "Chatbot" },
-  { value: "reservation-page", labelEs: "Pagina de reserva", labelEn: "Reservation page" },
+  { value: "reservation-page", labelEs: "Página de reserva", labelEn: "Reservation page" },
 ]
 
 export default function NewBookingPage() {
@@ -77,6 +77,7 @@ export default function NewBookingPage() {
     const adjusted = new Date(utcGuess.getTime() - offsetMinutes * 60000)
     return adjusted.toISOString()
   }
+  
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
@@ -84,37 +85,40 @@ export default function NewBookingPage() {
 
   const copy = isEs
     ? {
-        title: "Nueva reserva",
+        title: "Nueva Reserva",
         description: "Crea una cita ligando cliente, servicio y fecha.",
-        back: "Volver",
-        formTitle: "Formulario",
-        formDesc: "Selecciona cliente, vehiculo, servicio, precio y fecha.",
+        back: "Volver a reservas",
+        formTitle: "Detalles de la Reserva",
+        formDesc: "Completa la información para agendar una nueva cita.",
         errorNoBusiness: "No hay negocio activo.",
         errorLoad: "Error al cargar datos",
-        success: "Booking creado.",
+        success: "Reserva creada exitosamente.",
         customer: "Cliente",
-        vehicle: "Vehiculo",
+        vehicle: "Vehículo",
         service: "Servicio",
         price: "Precio",
         date: "Fecha y hora",
         status: "Estado",
         source: "Origen",
-        selectCustomer: "Selecciona cliente",
-        selectVehicle: "Selecciona vehiculo",
+        selectCustomer: "Selecciona un cliente",
+        selectVehicle: "Selecciona un vehículo",
         selectCustomerFirst: "Primero selecciona un cliente",
-        vehicleNone: "Sin vehiculos disponibles",
-        selectService: "Selecciona servicio",
-        save: "Guardar reserva",
+        vehicleNone: "Sin vehículos disponibles",
+        selectService: "Selecciona un servicio",
+        save: "Crear Reserva",
+        customerSection: "Información del Cliente",
+        serviceSection: "Servicio y Precio",
+        scheduleSection: "Programación",
       }
     : {
-        title: "New booking",
+        title: "New Booking",
         description: "Create an appointment by linking customer, service, and date.",
-        back: "Back",
-        formTitle: "Form",
-        formDesc: "Select customer, vehicle, service, price, and date.",
+        back: "Back to bookings",
+        formTitle: "Booking Details",
+        formDesc: "Complete the information to schedule a new appointment.",
         errorNoBusiness: "No active business.",
         errorLoad: "Failed to load data",
-        success: "Booking created.",
+        success: "Booking created successfully.",
         customer: "Customer",
         vehicle: "Vehicle",
         service: "Service",
@@ -122,12 +126,15 @@ export default function NewBookingPage() {
         date: "Date and time",
         status: "Status",
         source: "Source",
-        selectCustomer: "Select customer",
-        selectVehicle: "Select vehicle",
+        selectCustomer: "Select a customer",
+        selectVehicle: "Select a vehicle",
         selectCustomerFirst: "Select a customer first",
         vehicleNone: "No vehicles available",
-        selectService: "Select service",
-        save: "Save booking",
+        selectService: "Select a service",
+        save: "Create Booking",
+        customerSection: "Customer Information",
+        serviceSection: "Service & Pricing",
+        scheduleSection: "Scheduling",
       }
 
   useEffect(() => {
@@ -136,7 +143,7 @@ export default function NewBookingPage() {
       setLoading(true)
       const [{ data: cust, error: custErr }, { data: serv, error: servErr }] = await Promise.all([
         supabase.from("customers").select("*").eq("business_id", businessId).order("full_name", { ascending: true }),
-        supabase.from("services").select("*").eq("business_id", businessId).order("name", { ascending: true }),
+        supabase.from("services").select("*").eq("business_id", businessId).eq("is_active", true).order("name", { ascending: true }),
       ])
       if (custErr || servErr) {
         setError(custErr?.message || servErr?.message || copy.errorLoad)
@@ -232,7 +239,7 @@ export default function NewBookingPage() {
         title={copy.title}
         description={copy.description}
         actions={
-          <Button variant="outline" size="sm" asChild>
+          <Button variant="outline" size="sm" asChild className="border-slate-200">
             <Link to="/crm/bookings">
               <ArrowLeft className="mr-2 size-4" />
               {copy.back}
@@ -241,151 +248,185 @@ export default function NewBookingPage() {
         }
       />
 
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle>{copy.formTitle}</CardTitle>
-          <CardDescription>{copy.formDesc}</CardDescription>
+      <Card className="shadow-lg shadow-black/5 border-0 bg-card overflow-hidden">
+        <CardHeader className="border-b bg-gradient-to-r from-rose-50 to-white">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-100">
+              <CalendarDays className="h-5 w-5 text-rose-600" />
+            </div>
+            <div>
+              <CardTitle className="text-lg font-semibold">{copy.formTitle}</CardTitle>
+              <CardDescription>{copy.formDesc}</CardDescription>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent className="space-y-4 text-sm text-muted-foreground">
-          {error ? (
-            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">
+        <CardContent className="p-6">
+          {error && (
+            <div className="mb-6 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
               Error: {error}
             </div>
-          ) : null}
-          {success ? (
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700">
+          )}
+          {success && (
+            <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
               {copy.success}
             </div>
-          ) : null}
-          <form className="space-y-4 text-foreground" onSubmit={handleSubmit}>
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="flex flex-col gap-1 text-sm font-medium">
-                {copy.customer}
-                <select
-                  name="customer_id"
-                  required
-                  onChange={(e) => setSelectedCustomerId(e.target.value)}
-                  className="rounded-lg border border-input bg-white px-3 py-2 text-sm text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
-                  defaultValue=""
-                >
-                  <option value="" disabled>
-                    {copy.selectCustomer}
-                  </option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.full_name}
+          )}
+          
+          <form className="space-y-8" onSubmit={handleSubmit}>
+            {/* Customer Section */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <User className="h-4 w-4 text-rose-600" />
+                {copy.customerSection}
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">{copy.customer}</label>
+                  <select
+                    name="customer_id"
+                    required
+                    onChange={(e) => setSelectedCustomerId(e.target.value)}
+                    className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
+                    defaultValue=""
+                  >
+                    <option value="" disabled>{copy.selectCustomer}</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>{c.full_name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                    <Car className="h-3.5 w-3.5 text-muted-foreground" />
+                    {copy.vehicle}
+                  </label>
+                  <select
+                    key={selectedCustomerId || "vehicle"}
+                    name="vehicle_id"
+                    className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    defaultValue=""
+                    disabled={!selectedCustomerId || vehiclesLoading || vehicles.length === 0}
+                  >
+                    <option value="">
+                      {!selectedCustomerId
+                        ? copy.selectCustomerFirst
+                        : vehiclesLoading
+                        ? "..."
+                        : vehicles.length === 0
+                        ? copy.vehicleNone
+                        : copy.selectVehicle}
                     </option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1 text-sm font-medium">
-                {copy.vehicle}
-                <select
-                  key={selectedCustomerId || "vehicle"}
-                  name="vehicle_id"
-                  className="rounded-lg border border-input bg-white px-3 py-2 text-sm text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
-                  defaultValue=""
-                  disabled={!selectedCustomerId || vehiclesLoading || vehicles.length === 0}
-                >
-                  <option value="">
-                    {!selectedCustomerId
-                      ? copy.selectCustomerFirst
-                      : vehiclesLoading
-                      ? "..."
-                      : vehicles.length === 0
-                      ? copy.vehicleNone
-                      : copy.selectVehicle}
-                  </option>
-                  {vehicles.map((vehicle) => {
-                    const label = [vehicle.brand, vehicle.model, vehicle.license_plate]
-                      .filter(Boolean)
-                      .join(" ")
-                    return (
-                      <option key={vehicle.id} value={vehicle.id}>
-                        {label || vehicle.id}
-                      </option>
-                    )
-                  })}
-                </select>
-                {vehiclesError ? (
-                  <span className="text-xs text-rose-600">{vehiclesError}</span>
-                ) : null}
-              </label>
-              <label className="flex flex-col gap-1 text-sm font-medium">
-                {copy.service}
-                <select
-                  name="service_name"
-                  required
-                  onChange={(e) => handleServiceChange(e.target.value)}
-                  className="rounded-lg border border-input bg-white px-3 py-2 text-sm text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
-                  defaultValue=""
-                >
-                  <option value="" disabled>
-                    {copy.selectService}
-                  </option>
-                  {services.map((s) => (
-                    <option key={s.id} value={s.name}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1 text-sm font-medium">
-                {copy.price}
-                <input
-                  name="price"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  defaultValue={selectedService?.base_price ?? ""}
-                  onChange={() => null}
-                  className="rounded-lg border border-input bg-white px-3 py-2 text-sm text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
-                  placeholder="0.00"
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-sm font-medium">
-                {copy.date}
-                <input
-                  name="scheduled_at"
-                  type="datetime-local"
-                  className="rounded-lg border border-input bg-white px-3 py-2 text-sm text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
-                />
-              </label>
+                    {vehicles.map((vehicle) => {
+                      const label = [vehicle.brand, vehicle.model, vehicle.license_plate].filter(Boolean).join(" ")
+                      return (
+                        <option key={vehicle.id} value={vehicle.id}>{label || vehicle.id}</option>
+                      )
+                    })}
+                  </select>
+                  {vehiclesError && <span className="text-xs text-destructive">{vehiclesError}</span>}
+                </div>
+              </div>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-3">
-              <label className="flex flex-col gap-1 text-sm font-medium">
-                {copy.status}
-                <select
-                  name="status"
-                  defaultValue="new"
-                  className="rounded-lg border border-input bg-white px-3 py-2 text-sm text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
-                >
-                  {statusOptions.map((s) => (
-                    <option key={s.value} value={s.value}>
-                      {isEs ? s.labelEs : s.labelEn}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1 text-sm font-medium">
-                {copy.source}
-                <select
-                  name="source"
-                  defaultValue="manual"
-                  className="rounded-lg border border-input bg-white px-3 py-2 text-sm text-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-200"
-                >
-                  {sourceOptions.map((s) => (
-                    <option key={s.value} value={s.value}>
-                      {isEs ? s.labelEs : s.labelEn}
-                    </option>
-                  ))}
-                </select>
-              </label>
+            {/* Service Section */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <Wrench className="h-4 w-4 text-rose-600" />
+                {copy.serviceSection}
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">{copy.service}</label>
+                  <select
+                    name="service_name"
+                    required
+                    onChange={(e) => handleServiceChange(e.target.value)}
+                    className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
+                    defaultValue=""
+                  >
+                    <option value="" disabled>{copy.selectService}</option>
+                    {services.map((s) => (
+                      <option key={s.id} value={s.name}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                    <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
+                    {copy.price}
+                  </label>
+                  <input
+                    name="price"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    defaultValue={selectedService?.base_price ?? ""}
+                    className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
             </div>
 
-            <div className="flex justify-end">
-              <Button className="bg-rose-600 text-white hover:bg-rose-500" type="submit" disabled={loading}>
+            {/* Schedule Section */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <Clock className="h-4 w-4 text-rose-600" />
+                {copy.scheduleSection}
+              </div>
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">{copy.date}</label>
+                  <input
+                    name="scheduled_at"
+                    type="datetime-local"
+                    className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">{copy.status}</label>
+                  <div className="flex flex-wrap gap-2">
+                    {statusOptions.map((s) => (
+                      <label key={s.value} className="cursor-pointer">
+                        <input
+                          type="radio"
+                          name="status"
+                          value={s.value}
+                          defaultChecked={s.value === "new"}
+                          className="peer sr-only"
+                        />
+                        <span className={cn(
+                          "inline-flex items-center rounded-full px-3 py-1.5 text-xs font-medium border transition-all",
+                          "peer-checked:ring-2 peer-checked:ring-offset-1 peer-checked:ring-rose-500/50",
+                          s.color
+                        )}>
+                          {isEs ? s.labelEs : s.labelEn}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">{copy.source}</label>
+                  <select
+                    name="source"
+                    defaultValue="manual"
+                    className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
+                  >
+                    {sourceOptions.map((s) => (
+                      <option key={s.value} value={s.value}>{isEs ? s.labelEs : s.labelEn}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-4 border-t">
+              <Button 
+                className="bg-gradient-to-r from-rose-600 to-rose-500 text-white hover:from-rose-500 hover:to-rose-400 shadow-lg shadow-rose-500/20" 
+                type="submit" 
+                disabled={loading}
+              >
                 {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
                 {copy.save}
               </Button>
@@ -396,4 +437,3 @@ export default function NewBookingPage() {
     </div>
   )
 }
-
