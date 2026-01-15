@@ -14,7 +14,9 @@ import {
   Hash,
   CheckCircle2,
   AlertCircle,
-  Sparkles
+  Sparkles,
+  Save,
+  Loader2
 } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -31,10 +33,10 @@ export default function ProfilePage() {
 
   const copy = isEs
     ? {
-        title: "Perfil",
-        subtitle: "Gestiona tu identidad, email y credenciales de forma segura.",
-        profileTitle: "Detalles de perfil",
-        profileDesc: "Actualiza tu información personal y preferencias.",
+        title: "Mi Perfil",
+        subtitle: "Gestiona tu identidad y preferencias de cuenta.",
+        profileTitle: "Información Personal",
+        profileDesc: "Actualiza tus datos personales y de contacto.",
         fullName: "Nombre completo",
         email: "Email",
         emailHint: "Cambiar el email enviará un mensaje de confirmación.",
@@ -47,12 +49,12 @@ export default function ProfilePage() {
         bioHint: "Una línea sobre ti o tu rol.",
         save: "Guardar cambios",
         saving: "Guardando...",
-        accountTitle: "Cuenta",
-        accountDesc: "Información básica de tu cuenta.",
+        accountTitle: "Información de Cuenta",
+        accountDesc: "Detalles básicos de tu cuenta.",
         userId: "User ID",
         lastSignIn: "Último acceso",
         securityTitle: "Seguridad",
-        securityDesc: "Mantén tu cuenta segura actualizando tu contraseña.",
+        securityDesc: "Mantén tu cuenta segura.",
         newPassword: "Nueva contraseña",
         passwordHint: "Mínimo 8 caracteres.",
         updatePassword: "Actualizar contraseña",
@@ -69,10 +71,10 @@ export default function ProfilePage() {
         verified: "Verificado",
       }
     : {
-        title: "Profile",
-        subtitle: "Manage your identity, email, and credentials securely.",
-        profileTitle: "Profile Details",
-        profileDesc: "Update your personal information and preferences.",
+        title: "My Profile",
+        subtitle: "Manage your identity and account preferences.",
+        profileTitle: "Personal Information",
+        profileDesc: "Update your personal and contact details.",
         fullName: "Full name",
         email: "Email",
         emailHint: "Changing your email will send a confirmation message.",
@@ -85,12 +87,12 @@ export default function ProfilePage() {
         bioHint: "One line about you or your role.",
         save: "Save changes",
         saving: "Saving...",
-        accountTitle: "Account",
-        accountDesc: "Basic account information.",
+        accountTitle: "Account Information",
+        accountDesc: "Basic account details.",
         userId: "User ID",
         lastSignIn: "Last sign-in",
         securityTitle: "Security",
-        securityDesc: "Keep your account safe by updating your password.",
+        securityDesc: "Keep your account secure.",
         newPassword: "New password",
         passwordHint: "Minimum 8 characters.",
         updatePassword: "Update password",
@@ -212,165 +214,174 @@ export default function ProfilePage() {
     setNewPassword("")
   }
 
-  const inputClasses = "w-full rounded-xl border border-border bg-card px-4 py-3 text-sm text-foreground shadow-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary placeholder:text-muted-foreground"
-  const selectClasses = "w-full rounded-xl border border-border bg-card px-4 py-3 text-sm text-foreground shadow-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-
   return (
-    <div className="space-y-8 animate-fade-in">
-      {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-foreground to-foreground/80 p-8 text-background">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-primary/20 to-transparent rounded-bl-full" />
-        <div className="absolute bottom-0 left-0 w-32 h-32 bg-gradient-to-tr from-accent/20 to-transparent rounded-tr-full" />
-        <div className="relative flex items-center gap-6">
-          <div className="grid size-20 place-items-center rounded-2xl bg-background/10 backdrop-blur-sm border border-background/20">
-            <User className="size-10 text-background" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold">{copy.title}</h1>
-            <p className="text-background/70 mt-1">{copy.subtitle}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Quick Stats */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card className="border-border bg-card/50 backdrop-blur-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="grid size-12 place-items-center rounded-xl bg-primary/10 text-primary">
-                <Clock className="size-6" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">{copy.memberSince}</p>
-                <p className="text-lg font-semibold text-foreground">{memberSince}</p>
-              </div>
+    <div className="space-y-6">
+      {/* Header Card */}
+      <Card className="shadow-lg shadow-black/5 border-0 bg-gradient-to-r from-violet-50 via-white to-white overflow-hidden">
+        <CardContent className="p-6">
+          <div className="flex flex-col md:flex-row md:items-center gap-6">
+            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-400 to-violet-600 text-white text-3xl font-bold shadow-lg shadow-violet-500/30">
+              {fullName ? fullName.charAt(0).toUpperCase() : <User className="h-10 w-10" />}
             </div>
-          </CardContent>
-        </Card>
-        <Card className="border-border bg-card/50 backdrop-blur-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="grid size-12 place-items-center rounded-xl bg-emerald-500/10 text-emerald-500">
-                <CheckCircle2 className="size-6" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">{copy.accountStatus}</p>
-                <div className="flex items-center gap-2">
-                  <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20">{copy.active}</Badge>
-                  <Badge variant="outline" className="border-primary/20 text-primary">{copy.verified}</Badge>
+            <div className="flex-1 space-y-2">
+              <h1 className="text-2xl font-bold text-foreground">{copy.title}</h1>
+              <p className="text-muted-foreground">{copy.subtitle}</p>
+              <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground pt-1">
+                <div className="flex items-center gap-1.5">
+                  <Mail className="h-4 w-4" />
+                  {email || copy.unknown}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Clock className="h-4 w-4" />
+                  {copy.memberSince} {memberSince}
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
-        <Card className="border-border bg-card/50 backdrop-blur-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="grid size-12 place-items-center rounded-xl bg-accent/10 text-accent-foreground">
-                <Sparkles className="size-6" />
+            <div className="flex gap-2">
+              <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">{copy.active}</Badge>
+              <Badge variant="outline" className="border-violet-200 text-violet-700">{copy.verified}</Badge>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Quick Stats */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Card className="bg-gradient-to-br from-violet-50 to-white border-violet-100">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-100">
+                <Clock className="h-5 w-5 text-violet-600" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">{copy.lastSignIn}</p>
-                <p className="text-sm font-medium text-foreground">{lastSignedIn}</p>
+                <p className="text-xs text-violet-600/70">{copy.memberSince}</p>
+                <p className="text-lg font-bold text-violet-700">{memberSince}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-emerald-50 to-white border-emerald-100">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100">
+                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+              </div>
+              <div>
+                <p className="text-xs text-emerald-600/70">{copy.accountStatus}</p>
+                <p className="text-lg font-bold text-emerald-700">{copy.active}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-amber-50 to-white border-amber-100">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100">
+                <Sparkles className="h-5 w-5 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-xs text-amber-600/70">{copy.lastSignIn}</p>
+                <p className="text-sm font-medium text-amber-700 truncate max-w-[120px]">{lastSignedIn}</p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Main Content */}
-      <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+      <div className="grid gap-6 lg:grid-cols-3">
         {/* Profile Form */}
-        <Card className="border-border bg-card/50 backdrop-blur-sm">
-          <CardHeader className="border-b border-border">
-            <div className="flex items-center gap-3">
-              <div className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary">
-                <User className="size-5" />
+        <div className="lg:col-span-2">
+          <Card className="shadow-lg shadow-black/5 border-0 bg-card">
+            <CardHeader className="border-b bg-muted/30">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-100">
+                  <User className="h-5 w-5 text-violet-600" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg font-semibold">{copy.profileTitle}</CardTitle>
+                  <CardDescription>{copy.profileDesc}</CardDescription>
+                </div>
               </div>
-              <div>
-                <CardTitle className="text-foreground">{copy.profileTitle}</CardTitle>
-                <CardDescription className="text-muted-foreground">{copy.profileDesc}</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-6">
-            <form className="space-y-6" onSubmit={handleProfileUpdate}>
-              <div className="space-y-4">
-                <label className="block space-y-2">
-                  <span className="flex items-center gap-2 text-sm font-medium text-foreground">
-                    <User className="size-4 text-muted-foreground" />
-                    {copy.fullName}
-                  </span>
-                  <input
-                    type="text"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder={isEs ? "Tu nombre" : "Your name"}
-                    className={inputClasses}
-                  />
-                </label>
-
-                <label className="block space-y-2">
-                  <span className="flex items-center gap-2 text-sm font-medium text-foreground">
-                    <Mail className="size-4 text-muted-foreground" />
-                    {copy.email}
-                  </span>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    className={inputClasses}
-                  />
-                  <span className="text-xs text-muted-foreground">{copy.emailHint}</span>
-                </label>
-
+            </CardHeader>
+            <CardContent className="p-6">
+              <form className="space-y-6" onSubmit={handleProfileUpdate}>
                 <div className="grid gap-4 md:grid-cols-2">
-                  <label className="block space-y-2">
-                    <span className="flex items-center gap-2 text-sm font-medium text-foreground">
-                      <Phone className="size-4 text-muted-foreground" />
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                      <User className="h-3.5 w-3.5 text-muted-foreground" />
+                      {copy.fullName}
+                    </label>
+                    <input
+                      type="text"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder={isEs ? "Tu nombre" : "Your name"}
+                      className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                      <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                      {copy.email}
+                    </label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all"
+                    />
+                    <span className="text-xs text-muted-foreground">{copy.emailHint}</span>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                      <Phone className="h-3.5 w-3.5 text-muted-foreground" />
                       {copy.phone}
-                    </span>
+                    </label>
                     <input
                       type="tel"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="+1 555 0100"
-                      className={inputClasses}
+                      className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all"
                     />
-                  </label>
-                  <label className="block space-y-2">
-                    <span className="flex items-center gap-2 text-sm font-medium text-foreground">
-                      <Building className="size-4 text-muted-foreground" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                      <Building className="h-3.5 w-3.5 text-muted-foreground" />
                       {copy.company}
-                    </span>
+                    </label>
                     <input
                       type="text"
                       value={company}
                       onChange={(e) => setCompany(e.target.value)}
                       placeholder={isEs ? "Empresa" : "Company"}
-                      className={inputClasses}
+                      className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all"
                     />
-                  </label>
-                  <label className="block space-y-2">
-                    <span className="flex items-center gap-2 text-sm font-medium text-foreground">
-                      <Briefcase className="size-4 text-muted-foreground" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                      <Briefcase className="h-3.5 w-3.5 text-muted-foreground" />
                       {copy.titleLabel}
-                    </span>
+                    </label>
                     <input
                       type="text"
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
                       placeholder={isEs ? "Gerente" : "Manager"}
-                      className={inputClasses}
+                      className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all"
                     />
-                  </label>
-                  <label className="block space-y-2">
-                    <span className="flex items-center gap-2 text-sm font-medium text-foreground">
-                      <Globe className="size-4 text-muted-foreground" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                      <Globe className="h-3.5 w-3.5 text-muted-foreground" />
                       {copy.timezone}
-                    </span>
-                    <select value={timezone} onChange={(e) => setTimezone(e.target.value)} className={selectClasses}>
+                    </label>
+                    <select
+                      value={timezone}
+                      onChange={(e) => setTimezone(e.target.value)}
+                      className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all"
+                    >
                       <option value="UTC">UTC</option>
                       <option value="America/New_York">America/New_York</option>
                       <option value="America/Los_Angeles">America/Los_Angeles</option>
@@ -379,88 +390,91 @@ export default function ProfilePage() {
                       <option value="Asia/Dubai">Asia/Dubai</option>
                       <option value="Asia/Karachi">Asia/Karachi</option>
                     </select>
-                  </label>
+                  </div>
                 </div>
 
-                <label className="block space-y-2">
-                  <span className="flex items-center gap-2 text-sm font-medium text-foreground">
-                    <Languages className="size-4 text-muted-foreground" />
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                    <Languages className="h-3.5 w-3.5 text-muted-foreground" />
                     {copy.preferredLang}
-                  </span>
+                  </label>
                   <select
                     value={preferredLang}
                     onChange={(e) => setPreferredLang(e.target.value === "es" ? "es" : "en")}
-                    className={selectClasses}
+                    className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all"
                   >
                     <option value="en">English</option>
                     <option value="es">Español</option>
                   </select>
-                </label>
+                </div>
 
-                <label className="block space-y-2">
-                  <span className="flex items-center gap-2 text-sm font-medium text-foreground">
-                    <FileText className="size-4 text-muted-foreground" />
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                    <FileText className="h-3.5 w-3.5 text-muted-foreground" />
                     {copy.bio}
-                  </span>
+                  </label>
                   <textarea
                     rows={3}
                     value={bio}
                     onChange={(e) => setBio(e.target.value)}
                     placeholder={copy.bioHint}
-                    className={inputClasses}
+                    className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all resize-none"
                   />
-                </label>
-              </div>
-
-              {profileError && (
-                <div className="flex items-center gap-3 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive animate-fade-in">
-                  <AlertCircle className="size-5 shrink-0" />
-                  {profileError}
                 </div>
-              )}
-              {profileSuccess && (
-                <div className="flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-600 animate-fade-in">
-                  <CheckCircle2 className="size-5 shrink-0" />
-                  {profileSuccess}
-                </div>
-              )}
 
-              <Button 
-                type="submit" 
-                disabled={profileSaving} 
-                className="w-full sm:w-auto bg-foreground text-background hover:bg-foreground/90 transition-all duration-300"
-              >
-                {profileSaving ? copy.saving : copy.save}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+                {profileError && (
+                  <div className="flex items-center gap-3 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                    <AlertCircle className="size-5 shrink-0" />
+                    {profileError}
+                  </div>
+                )}
+                {profileSuccess && (
+                  <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                    <CheckCircle2 className="size-5 shrink-0" />
+                    {profileSuccess}
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-2">
+                  <Button 
+                    type="submit" 
+                    disabled={profileSaving} 
+                    className="bg-gradient-to-r from-violet-600 to-violet-500 text-white hover:from-violet-500 hover:to-violet-400 shadow-lg shadow-violet-500/20"
+                  >
+                    {profileSaving ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
+                    {profileSaving ? copy.saving : copy.save}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Sidebar */}
         <div className="space-y-6">
           {/* Account Info */}
-          <Card className="border-border bg-card/50 backdrop-blur-sm">
-            <CardHeader className="border-b border-border">
+          <Card className="shadow-lg shadow-black/5 border-0 bg-card">
+            <CardHeader className="border-b bg-muted/30">
               <div className="flex items-center gap-3">
-                <div className="grid size-10 place-items-center rounded-xl bg-accent/10 text-accent-foreground">
-                  <Hash className="size-5" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100">
+                  <Hash className="h-5 w-5 text-slate-600" />
                 </div>
                 <div>
-                  <CardTitle className="text-foreground">{copy.accountTitle}</CardTitle>
-                  <CardDescription className="text-muted-foreground">{copy.accountDesc}</CardDescription>
+                  <CardTitle className="text-lg font-semibold">{copy.accountTitle}</CardTitle>
+                  <CardDescription>{copy.accountDesc}</CardDescription>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="space-y-3 pt-4">
-              <div className="group flex items-center justify-between rounded-xl border border-border bg-card p-4 transition-all duration-200 hover:shadow-md">
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center justify-between rounded-xl border bg-muted/30 p-3">
                 <span className="text-sm text-muted-foreground">{copy.userId}</span>
                 <span className="font-mono text-xs text-foreground bg-muted px-2 py-1 rounded-lg">{user?.id?.slice(0, 8)}...</span>
               </div>
-              <div className="group flex items-center justify-between rounded-xl border border-border bg-card p-4 transition-all duration-200 hover:shadow-md">
+              <div className="flex items-center justify-between rounded-xl border bg-muted/30 p-3">
                 <span className="text-sm text-muted-foreground">{copy.email}</span>
-                <span className="text-sm font-medium text-foreground">{user?.email}</span>
+                <span className="text-sm font-medium text-foreground truncate max-w-[140px]">{user?.email}</span>
               </div>
-              <div className="group flex items-center justify-between rounded-xl border border-border bg-card p-4 transition-all duration-200 hover:shadow-md">
+              <div className="flex items-center justify-between rounded-xl border bg-muted/30 p-3">
                 <span className="text-sm text-muted-foreground">{copy.lastSignIn}</span>
                 <span className="text-sm font-medium text-foreground">{lastSignedIn}</span>
               </div>
@@ -468,43 +482,43 @@ export default function ProfilePage() {
           </Card>
 
           {/* Security */}
-          <Card className="border-border bg-card/50 backdrop-blur-sm">
-            <CardHeader className="border-b border-border">
+          <Card className="shadow-lg shadow-black/5 border-0 bg-card">
+            <CardHeader className="border-b bg-muted/30">
               <div className="flex items-center gap-3">
-                <div className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary">
-                  <Shield className="size-5" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-100">
+                  <Shield className="h-5 w-5 text-rose-600" />
                 </div>
                 <div>
-                  <CardTitle className="text-foreground">{copy.securityTitle}</CardTitle>
-                  <CardDescription className="text-muted-foreground">{copy.securityDesc}</CardDescription>
+                  <CardTitle className="text-lg font-semibold">{copy.securityTitle}</CardTitle>
+                  <CardDescription>{copy.securityDesc}</CardDescription>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="pt-4">
+            <CardContent className="p-4">
               <form className="space-y-4" onSubmit={handlePasswordUpdate}>
-                <label className="block space-y-2">
-                  <span className="flex items-center gap-2 text-sm font-medium text-foreground">
-                    <Key className="size-4 text-muted-foreground" />
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                    <Key className="h-3.5 w-3.5 text-muted-foreground" />
                     {copy.newPassword}
-                  </span>
+                  </label>
                   <input
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="••••••••"
-                    className={inputClasses}
+                    className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
                   />
                   <span className="text-xs text-muted-foreground">{copy.passwordHint}</span>
-                </label>
+                </div>
 
                 {passwordError && (
-                  <div className="flex items-center gap-3 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive animate-fade-in">
+                  <div className="flex items-center gap-3 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
                     <AlertCircle className="size-5 shrink-0" />
                     {passwordError}
                   </div>
                 )}
                 {passwordSuccess && (
-                  <div className="flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-600 animate-fade-in">
+                  <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
                     <CheckCircle2 className="size-5 shrink-0" />
                     {passwordSuccess}
                   </div>
@@ -514,7 +528,7 @@ export default function ProfilePage() {
                   type="submit" 
                   disabled={passwordSaving} 
                   variant="outline"
-                  className="w-full border-border hover:bg-accent transition-all duration-300"
+                  className="w-full border-rose-200 text-rose-700 hover:bg-rose-50"
                 >
                   {passwordSaving ? copy.updatingPassword : copy.updatePassword}
                 </Button>

@@ -140,39 +140,39 @@ function SignupForm() {
     <div className="w-full max-w-md mx-auto">
       {/* Header */}
       <div className="text-center mb-8">
-        <div className="inline-flex items-center gap-2 mb-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-rose-600 to-rose-400 shadow-lg shadow-rose-200">
-            <Sparkles className="h-5 w-5 text-white" />
+        <div className="inline-flex items-center justify-center mb-6">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-600 to-emerald-400 shadow-xl shadow-emerald-500/30">
+            <Sparkles className="h-8 w-8 text-white" />
           </div>
         </div>
-        <Badge className="mb-3 border-rose-200 bg-rose-50 text-rose-700 font-medium">{copy.badge}</Badge>
-        <h1 className="text-2xl font-bold text-foreground mb-2">{copy.title}</h1>
-        <p className="text-sm text-muted-foreground">{copy.subtitle}</p>
+        <Badge className="mb-4 border-emerald-200 bg-emerald-50 text-emerald-700 font-medium px-4 py-1">{copy.badge}</Badge>
+        <h1 className="text-3xl font-bold text-foreground mb-2">{copy.title}</h1>
+        <p className="text-muted-foreground">{copy.subtitle}</p>
       </div>
 
       {/* Features List */}
-      <div className="mb-6 flex flex-wrap justify-center gap-3">
+      <div className="mb-6 flex flex-wrap justify-center gap-2">
         {copy.features.map((feature, idx) => (
-          <div key={idx} className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 rounded-full px-3 py-1.5">
-            <Check className="h-3 w-3 text-rose-600" />
+          <div key={idx} className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted rounded-full px-3 py-1.5">
+            <Check className="h-3 w-3 text-emerald-600" />
             {feature}
           </div>
         ))}
       </div>
 
       {/* Form Card */}
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-xl shadow-black/5 p-6">
+      <div className="rounded-2xl border border-border bg-card shadow-xl shadow-black/5 p-8">
         <form className="space-y-4" onSubmit={handleSubmit}>
           {/* Full Name Field */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">{copy.fullName}</label>
             <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <User className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <input
                 type="text"
                 required
                 placeholder={isEs ? "Juan García" : "John Doe"}
-                className="w-full pl-10 pr-4 py-3 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-rose-200 focus:border-rose-500 transition-all"
+                className="w-full pl-12 pr-4 py-3 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
                 value={fullName}
                 onChange={(event) => setFullName(event.target.value)}
               />
@@ -183,12 +183,12 @@ function SignupForm() {
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">{copy.email}</label>
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <input
                 type="email"
                 required
                 placeholder="you@company.com"
-                className="w-full pl-10 pr-4 py-3 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-rose-200 focus:border-rose-500 transition-all"
+                className="w-full pl-12 pr-4 py-3 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
               />
@@ -199,19 +199,19 @@ function SignupForm() {
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">{copy.password}</label>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <input
                 type={showPassword ? "text" : "password"}
                 required
                 placeholder="••••••••"
-                className="w-full pl-10 pr-12 py-3 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-rose-200 focus:border-rose-500 transition-all"
+                className="w-full pl-12 pr-12 py-3 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
               >
                 {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
               </button>
@@ -222,22 +222,22 @@ function SignupForm() {
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">{copy.confirmPassword}</label>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <input
                 type={showPassword ? "text" : "password"}
                 required
                 placeholder="••••••••"
                 className={cn(
-                  "w-full pl-10 pr-12 py-3 rounded-xl border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 transition-all",
+                  "w-full pl-12 pr-12 py-3 rounded-xl border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 transition-all",
                   passwordMatch
-                    ? "border-rose-500 focus:ring-rose-200"
-                    : "border-input focus:ring-rose-200 focus:border-rose-500"
+                    ? "border-emerald-500 focus:ring-emerald-500/20"
+                    : "border-input focus:ring-emerald-500/20 focus:border-emerald-500"
                 )}
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
               />
               {passwordMatch && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-white">
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white">
                   <Check className="h-3 w-3" />
                 </div>
               )}
@@ -253,7 +253,7 @@ function SignupForm() {
 
           {/* Submit Button */}
           <Button
-            className="w-full bg-rose-600 text-white hover:bg-rose-500 shadow-lg shadow-rose-200 py-6 text-base font-semibold"
+            className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 text-white hover:from-emerald-500 hover:to-emerald-400 shadow-lg shadow-emerald-500/20 py-6 text-base font-semibold"
             type="submit"
             disabled={submitting}
           >
@@ -264,10 +264,10 @@ function SignupForm() {
       </div>
 
       {/* Login Link */}
-      <div className="mt-6 text-center">
-        <p className="text-sm text-foreground/80">
+      <div className="mt-8 text-center">
+        <p className="text-muted-foreground">
           {copy.haveAccount}{" "}
-          <Link to="/login" className="text-foreground font-semibold underline underline-offset-4">
+          <Link to="/login" className="text-emerald-600 font-semibold hover:underline">
             {copy.login}
           </Link>
         </p>
