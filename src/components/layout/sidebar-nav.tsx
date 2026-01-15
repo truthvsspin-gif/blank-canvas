@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link, useLocation } from "react-router-dom"
-import { ChevronDown, Sparkles, PanelLeftClose, PanelLeft } from "lucide-react"
+import { ChevronDown, Crown, Sparkles, PanelLeftClose, PanelLeft } from "lucide-react"
 
 import { navGroups, appSections } from "@/config/navigation"
 import { cn } from "@/lib/utils"
@@ -9,43 +9,56 @@ import { Button } from "@/components/ui/button"
 import { useLanguage } from "@/components/providers/language-provider"
 
 // Color schemes for each group
-const groupColors: Record<string, { 
-  iconBg: string
-  iconColor: string
-  activeBg: string
-  activeIndicator: string
-  badgeBg: string
-  dotColor: string
-}> = {
+const groupColors: Record<
+  string,
+  {
+    iconBg: string
+    iconColor: string
+    activeRing: string
+    activeIconBg: string
+    activeBadge: string
+    activeIndicator: string
+    badgeBg: string
+    dotColor: string
+  }
+> = {
   main: {
     iconBg: "bg-blue-100",
-    iconColor: "text-blue-600",
-    activeBg: "bg-gradient-to-r from-blue-600 to-blue-500",
-    activeIndicator: "bg-blue-400",
+    iconColor: "text-blue-700",
+    activeRing: "ring-blue-500/30",
+    activeIconBg: "bg-blue-600",
+    activeBadge: "bg-blue-600 text-white border-transparent",
+    activeIndicator: "bg-blue-500",
     badgeBg: "bg-blue-100 text-blue-700 border-blue-200",
     dotColor: "bg-blue-500",
   },
   crm: {
     iconBg: "bg-emerald-100",
-    iconColor: "text-emerald-600",
-    activeBg: "bg-gradient-to-r from-emerald-600 to-emerald-500",
-    activeIndicator: "bg-emerald-400",
+    iconColor: "text-emerald-700",
+    activeRing: "ring-emerald-500/30",
+    activeIconBg: "bg-emerald-600",
+    activeBadge: "bg-emerald-600 text-white border-transparent",
+    activeIndicator: "bg-emerald-500",
     badgeBg: "bg-emerald-100 text-emerald-700 border-emerald-200",
     dotColor: "bg-emerald-500",
   },
   messaging: {
     iconBg: "bg-violet-100",
-    iconColor: "text-violet-600",
-    activeBg: "bg-gradient-to-r from-violet-600 to-violet-500",
-    activeIndicator: "bg-violet-400",
+    iconColor: "text-violet-700",
+    activeRing: "ring-violet-500/30",
+    activeIconBg: "bg-violet-600",
+    activeBadge: "bg-violet-600 text-white border-transparent",
+    activeIndicator: "bg-violet-500",
     badgeBg: "bg-violet-100 text-violet-700 border-violet-200",
     dotColor: "bg-violet-500",
   },
   settings: {
     iconBg: "bg-amber-100",
-    iconColor: "text-amber-600",
-    activeBg: "bg-gradient-to-r from-amber-600 to-amber-500",
-    activeIndicator: "bg-amber-400",
+    iconColor: "text-amber-800",
+    activeRing: "ring-amber-500/30",
+    activeIconBg: "bg-amber-600",
+    activeBadge: "bg-amber-600 text-white border-transparent",
+    activeIndicator: "bg-amber-500",
     badgeBg: "bg-amber-100 text-amber-700 border-amber-200",
     dotColor: "bg-amber-500",
   },
@@ -124,7 +137,10 @@ export function SidebarNav({ className, collapsed = false, onToggleCollapse }: S
           </div>
           {!collapsed && (
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-violet-700">Pro Workspace</p>
+              <div className="flex items-center gap-2">
+                <Crown className="h-4 w-4 text-violet-700" />
+                <p className="text-sm font-bold text-violet-700">Pro Workspace</p>
+              </div>
               <p className="text-[11px] text-violet-600/70">Unlimited access</p>
             </div>
           )}
@@ -179,7 +195,7 @@ export function SidebarNav({ className, collapsed = false, onToggleCollapse }: S
                         "group relative flex items-center rounded-xl transition-all duration-200",
                         collapsed ? "justify-center p-2" : "gap-3 px-3 py-2.5",
                         isActive
-                          ? cn(colors.activeBg, "text-white shadow-lg")
+                          ? cn("bg-card text-foreground shadow-sm ring-1", colors.activeRing)
                           : "text-foreground/70 hover:bg-muted hover:text-foreground"
                       )}
                     >
@@ -197,7 +213,7 @@ export function SidebarNav({ className, collapsed = false, onToggleCollapse }: S
                           "flex items-center justify-center rounded-lg transition-all duration-200",
                           collapsed ? "h-10 w-10" : "h-8 w-8",
                           isActive 
-                            ? "bg-white/20 text-white" 
+                            ? cn(colors.activeIconBg, "text-white shadow-sm") 
                             : cn(colors.iconBg, colors.iconColor, "group-hover:scale-110")
                         )}>
                           <Icon className={cn(collapsed ? "h-5 w-5" : "h-4 w-4")} />
@@ -219,7 +235,7 @@ export function SidebarNav({ className, collapsed = false, onToggleCollapse }: S
                               className={cn(
                                 "ml-2 text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0 h-5 shrink-0 border",
                                 isActive 
-                                  ? "bg-white/20 text-white border-white/30" 
+                                  ? colors.activeBadge 
                                   : colors.badgeBg
                               )}
                             >
