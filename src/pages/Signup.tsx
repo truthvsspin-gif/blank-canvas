@@ -141,11 +141,11 @@ function SignupForm() {
       {/* Header */}
       <div className="text-center mb-8">
         <div className="inline-flex items-center gap-2 mb-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/20">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-rose-600 to-rose-400 shadow-lg shadow-rose-200">
             <Sparkles className="h-5 w-5 text-white" />
           </div>
         </div>
-        <Badge className="mb-3 bg-emerald-100 text-emerald-700 border-emerald-200 font-medium">{copy.badge}</Badge>
+        <Badge className="mb-3 border-rose-200 bg-rose-50 text-rose-700 font-medium">{copy.badge}</Badge>
         <h1 className="text-2xl font-bold text-foreground mb-2">{copy.title}</h1>
         <p className="text-sm text-muted-foreground">{copy.subtitle}</p>
       </div>
@@ -154,14 +154,14 @@ function SignupForm() {
       <div className="mb-6 flex flex-wrap justify-center gap-3">
         {copy.features.map((feature, idx) => (
           <div key={idx} className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 rounded-full px-3 py-1.5">
-            <Check className="h-3 w-3 text-emerald-600" />
+            <Check className="h-3 w-3 text-rose-600" />
             {feature}
           </div>
         ))}
       </div>
 
       {/* Form Card */}
-      <div className="bg-card rounded-2xl border shadow-xl shadow-black/5 p-6">
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-xl shadow-black/5 p-6">
         <form className="space-y-4" onSubmit={handleSubmit}>
           {/* Full Name Field */}
           <div className="space-y-2">
@@ -172,7 +172,7 @@ function SignupForm() {
                 type="text"
                 required
                 placeholder={isEs ? "Juan García" : "John Doe"}
-                className="w-full pl-10 pr-4 py-3 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                className="w-full pl-10 pr-4 py-3 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-rose-200 focus:border-rose-500 transition-all"
                 value={fullName}
                 onChange={(event) => setFullName(event.target.value)}
               />
@@ -188,7 +188,7 @@ function SignupForm() {
                 type="email"
                 required
                 placeholder="you@company.com"
-                className="w-full pl-10 pr-4 py-3 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                className="w-full pl-10 pr-4 py-3 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-rose-200 focus:border-rose-500 transition-all"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
               />
@@ -204,7 +204,7 @@ function SignupForm() {
                 type={showPassword ? "text" : "password"}
                 required
                 placeholder="••••••••"
-                className="w-full pl-10 pr-12 py-3 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                className="w-full pl-10 pr-12 py-3 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-rose-200 focus:border-rose-500 transition-all"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
               />
@@ -229,15 +229,15 @@ function SignupForm() {
                 placeholder="••••••••"
                 className={cn(
                   "w-full pl-10 pr-12 py-3 rounded-xl border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 transition-all",
-                  passwordMatch 
-                    ? "border-emerald-500 focus:ring-emerald-500/20" 
-                    : "border-input focus:ring-emerald-500/20 focus:border-emerald-500"
+                  passwordMatch
+                    ? "border-rose-500 focus:ring-rose-200"
+                    : "border-input focus:ring-rose-200 focus:border-rose-500"
                 )}
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
               />
               {passwordMatch && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white">
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-white">
                   <Check className="h-3 w-3" />
                 </div>
               )}
@@ -252,13 +252,13 @@ function SignupForm() {
           )}
 
           {/* Submit Button */}
-          <Button 
-            className="w-full bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-700 hover:to-teal-600 shadow-lg shadow-emerald-500/20 py-6 text-base font-semibold !text-black" 
-            type="submit" 
+          <Button
+            className="w-full bg-rose-600 text-white hover:bg-rose-500 shadow-lg shadow-rose-200 py-6 text-base font-semibold"
+            type="submit"
             disabled={submitting}
           >
-            <span className="text-black font-semibold">{submitting ? copy.submitting : copy.submit}</span>
-            <ArrowRight className="ml-2 size-4 text-black" />
+            <span className="text-white font-semibold">{submitting ? copy.submitting : copy.submit}</span>
+            <ArrowRight className="ml-2 size-4 text-white" />
           </Button>
         </form>
       </div>

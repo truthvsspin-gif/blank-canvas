@@ -107,17 +107,17 @@ function LoginForm() {
       {/* Header */}
       <div className="text-center mb-8">
         <div className="inline-flex items-center gap-2 mb-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-accent to-chart-1 shadow-lg shadow-accent/20">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-rose-600 to-rose-400 shadow-lg shadow-rose-200">
             <Sparkles className="h-5 w-5 text-white" />
           </div>
         </div>
-        <Badge className="mb-3 bg-accent/10 text-accent border-accent/20 font-medium">{copy.badge}</Badge>
+        <Badge className="mb-3 border-rose-200 bg-rose-50 text-rose-700 font-medium">{copy.badge}</Badge>
         <h1 className="text-2xl font-bold text-foreground mb-2">{copy.title}</h1>
         <p className="text-sm text-muted-foreground">{copy.subtitle}</p>
       </div>
 
       {/* Form Card */}
-      <div className="bg-card rounded-2xl border shadow-xl shadow-black/5 p-6">
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-xl shadow-black/5 p-6">
         <form className="space-y-5" onSubmit={handleSubmit}>
           {/* Email Field */}
           <div className="space-y-2">
@@ -128,7 +128,7 @@ function LoginForm() {
                 type="email"
                 required
                 placeholder="you@company.com"
-                className="w-full pl-10 pr-4 py-3 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all"
+                className="w-full pl-10 pr-4 py-3 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-rose-200 focus:border-rose-500 transition-all"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
               />
@@ -144,7 +144,7 @@ function LoginForm() {
                 type={showPassword ? "text" : "password"}
                 required
                 placeholder="••••••••"
-                className="w-full pl-10 pr-12 py-3 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all"
+                className="w-full pl-10 pr-12 py-3 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-rose-200 focus:border-rose-500 transition-all"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
               />
@@ -164,7 +164,7 @@ function LoginForm() {
               <input type="checkbox" className="size-4 rounded border border-input accent-accent" />
               <span>{copy.remember}</span>
             </label>
-            <Link to="#" className="text-accent font-medium hover:underline">
+            <Link to="#" className="text-rose-600 font-medium hover:underline">
               {copy.forgot}
             </Link>
           </div>
@@ -177,13 +177,13 @@ function LoginForm() {
           )}
 
           {/* Submit Button */}
-          <Button 
-            className="w-full bg-gradient-to-r from-accent to-chart-1 hover:opacity-90 shadow-lg shadow-accent/20 py-6 text-base font-semibold !text-black" 
-            type="submit" 
+          <Button
+            className="w-full bg-rose-600 text-white hover:bg-rose-500 shadow-lg shadow-rose-200 py-6 text-base font-semibold"
+            type="submit"
             disabled={submitting}
           >
-            <span className="text-black font-semibold">{submitting ? copy.submitting : copy.submit}</span>
-            <ArrowRight className="ml-2 size-4 text-black" />
+            <span className="text-white font-semibold">{submitting ? copy.submitting : copy.submit}</span>
+            <ArrowRight className="ml-2 size-4 text-white" />
           </Button>
         </form>
       </div>
@@ -192,7 +192,7 @@ function LoginForm() {
       <div className="mt-6 text-center">
         <p className="text-sm text-muted-foreground">
           {copy.noAccount}{" "}
-          <Link to="/signup" className="text-accent font-semibold hover:underline">
+          <Link to="/signup" className="text-rose-700 font-semibold hover:underline">
             {copy.createAccount}
           </Link>
         </p>
