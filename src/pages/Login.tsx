@@ -1,7 +1,6 @@
-import { Link } from "react-router-dom"
-import { useNavigate, useSearchParams } from "react-router-dom"
+import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { Suspense, useEffect, useState } from "react"
-import { ArrowRight, Lock, Mail } from "lucide-react"
+import { ArrowRight, Eye, EyeOff, Lock, Mail, Sparkles } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -31,38 +30,39 @@ function LoginForm() {
   const isEs = lang === "es"
   const copy = isEs
     ? {
-        badge: "Acceso",
-        title: "Iniciar sesion",
-        subtitle: "Entra a tu consola Detapro para continuar donde lo dejaste.",
-        email: "Correo electronico",
-        password: "Contrasena",
+        badge: "Bienvenido",
+        title: "Iniciar sesión",
+        subtitle: "Accede a tu panel de Detapro y gestiona tu negocio.",
+        email: "Correo electrónico",
+        password: "Contraseña",
         remember: "Recordarme",
-        forgot: "Olvidaste la contrasena?",
-        submit: "Entrar",
+        forgot: "¿Olvidaste la contraseña?",
+        submit: "Iniciar sesión",
         submitting: "Entrando...",
-        toastSuccess: "Sesion iniciada, redirigiendo...",
-        noAccount: "No tienes cuenta?",
-        createAccount: "Crear cuenta",
-        toastError: "Error al iniciar sesion.",
+        toastSuccess: "Sesión iniciada, redirigiendo...",
+        noAccount: "¿No tienes cuenta?",
+        createAccount: "Crear cuenta gratis",
+        toastError: "Error al iniciar sesión.",
       }
     : {
-        badge: "Access",
-        title: "Sign in",
-        subtitle: "Enter your Detapro console to continue where you left off.",
-        email: "Email",
+        badge: "Welcome back",
+        title: "Sign in to your account",
+        subtitle: "Access your Detapro dashboard and manage your business.",
+        email: "Email address",
         password: "Password",
         remember: "Remember me",
-        forgot: "Forgot your password?",
+        forgot: "Forgot password?",
         submit: "Sign in",
         submitting: "Signing in...",
         toastSuccess: "Signed in, redirecting...",
-        noAccount: "No account yet?",
-        createAccount: "Create account",
+        noAccount: "Don't have an account?",
+        createAccount: "Create free account",
         toastError: "Unable to sign in.",
       }
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<ToastState>(null)
@@ -99,79 +99,106 @@ function LoginForm() {
 
     await supabase.auth.getSession()
     navigate(redirect)
-        setSubmitting(false)
+    setSubmitting(false)
   }
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-2 text-center">
-        <Badge className="bg-rose-100 text-rose-700 border-rose-200">{copy.badge}</Badge>
-        <h1 className="text-2xl font-semibold">{copy.title}</h1>
+    <div className="w-full max-w-md mx-auto">
+      {/* Header */}
+      <div className="text-center mb-8">
+        <div className="inline-flex items-center gap-2 mb-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-accent to-chart-1 shadow-lg shadow-accent/20">
+            <Sparkles className="h-5 w-5 text-white" />
+          </div>
+        </div>
+        <Badge className="mb-3 bg-accent/10 text-accent border-accent/20 font-medium">{copy.badge}</Badge>
+        <h1 className="text-2xl font-bold text-foreground mb-2">{copy.title}</h1>
         <p className="text-sm text-muted-foreground">{copy.subtitle}</p>
       </div>
 
-      <form className="space-y-4" onSubmit={handleSubmit}>
-        <label className="flex flex-col gap-1 text-sm font-medium text-foreground">
-          {copy.email}
-          <div className="flex items-center gap-2 rounded-lg border border-input bg-white px-3 py-2 shadow-xs focus-within:ring-2 focus-within:ring-rose-200">
-            <Mail className="size-4 text-muted-foreground" />
-            <input
-              type="email"
-              required
-              placeholder="you@company.com"
-              className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-            />
+      {/* Form Card */}
+      <div className="bg-card rounded-2xl border shadow-xl shadow-black/5 p-6">
+        <form className="space-y-5" onSubmit={handleSubmit}>
+          {/* Email Field */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">{copy.email}</label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <input
+                type="email"
+                required
+                placeholder="you@company.com"
+                className="w-full pl-10 pr-4 py-3 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+              />
+            </div>
           </div>
-        </label>
 
-        <label className="flex flex-col gap-1 text-sm font-medium text-foreground">
-          {copy.password}
-          <div className="flex items-center gap-2 rounded-lg border border-input bg-white px-3 py-2 shadow-xs focus-within:ring-2 focus-within:ring-rose-200">
-            <Lock className="size-4 text-muted-foreground" />
-            <input
-              type="password"
-              required
-              placeholder="********"
-              className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-            />
+          {/* Password Field */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">{copy.password}</label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <input
+                type={showPassword ? "text" : "password"}
+                required
+                placeholder="••••••••"
+                className="w-full pl-10 pr-12 py-3 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </div>
           </div>
-        </label>
 
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <label className="flex items-center gap-2">
-            <input type="checkbox" className="size-4 rounded border border-input text-rose-600" />
-            <span>{copy.remember}</span>
-          </label>
-          <Link to="#" className="text-rose-600 hover:underline">
-            {copy.forgot}
-          </Link>
-        </div>
-
-        {error ? (
-          <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-            {error}
+          {/* Remember & Forgot */}
+          <div className="flex items-center justify-between text-sm">
+            <label className="flex items-center gap-2 text-muted-foreground cursor-pointer">
+              <input type="checkbox" className="size-4 rounded border border-input accent-accent" />
+              <span>{copy.remember}</span>
+            </label>
+            <Link to="#" className="text-accent font-medium hover:underline">
+              {copy.forgot}
+            </Link>
           </div>
-        ) : null}
 
-        <Button className="w-full bg-rose-600 text-white hover:bg-rose-500" type="submit" disabled={submitting}>
-          {submitting ? copy.submitting : copy.submit}
-          <ArrowRight className="ml-2 size-4" />
-        </Button>
-      </form>
+          {/* Error Message */}
+          {error && (
+            <div className="rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
 
-      <div className="rounded-lg border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-        {copy.noAccount} {" "}
-        <Link to="/signup" className="font-semibold underline">
-          {copy.createAccount}
-        </Link>
+          {/* Submit Button */}
+          <Button 
+            className="w-full bg-gradient-to-r from-accent to-chart-1 text-white hover:opacity-90 shadow-lg shadow-accent/20 py-6 text-base font-semibold" 
+            type="submit" 
+            disabled={submitting}
+          >
+            {submitting ? copy.submitting : copy.submit}
+            <ArrowRight className="ml-2 size-4" />
+          </Button>
+        </form>
       </div>
 
-      {toast ? <Toast message={toast.message} variant={toast.variant} onClose={() => setToast(null)} /> : null}
+      {/* Signup Link */}
+      <div className="mt-6 text-center">
+        <p className="text-sm text-muted-foreground">
+          {copy.noAccount}{" "}
+          <Link to="/signup" className="text-accent font-semibold hover:underline">
+            {copy.createAccount}
+          </Link>
+        </p>
+      </div>
+
+      {toast && <Toast message={toast.message} variant={toast.variant} onClose={() => setToast(null)} />}
     </div>
   )
 }
-

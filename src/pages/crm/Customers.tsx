@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
-import { ArrowRight, Loader2, Plus, Search } from "lucide-react"
+import { ArrowRight, Loader2, Plus, Search, Users, Phone, Mail as MailIcon, Car, Tag, ChevronLeft, ChevronRight } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/page-header"
 import { Badge } from "@/components/ui/badge"
@@ -10,6 +10,7 @@ import { supabase } from "@/lib/supabaseClient"
 import { useCurrentBusiness } from "@/hooks/use-current-business"
 import { Customer } from "@/types/crm"
 import { useLanguage } from "@/components/providers/language-provider"
+import { cn } from "@/lib/utils"
 
 const PAGE_SIZE = 10
 
@@ -27,49 +28,51 @@ export default function CustomersPage() {
   const copy = isEs
     ? {
         title: "Clientes",
-        description: "Vista de clientes con filtros y acciones rapidas.",
+        description: "Gestiona tu base de clientes con filtros y acciones rápidas.",
         newCustomer: "Nuevo cliente",
-        cardTitle: "Clientes",
+        cardTitle: "Base de Clientes",
         loadingBusiness: "Cargando negocio...",
-        searchHint: "Agrega filtros o busca por nombre o telefono.",
-        searchPlaceholder: "Buscar clientes",
+        searchHint: "Busca por nombre, teléfono o email.",
+        searchPlaceholder: "Buscar clientes...",
         loading: "Cargando clientes...",
-        empty: "No hay clientes aun. Crea el primero.",
+        empty: "No hay clientes aún. ¡Crea el primero!",
         name: "Nombre",
-        phone: "Telefono",
+        phone: "Teléfono",
         email: "Email",
-        vehicle: "Vehiculo",
-        tags: "Tags",
+        vehicle: "Vehículo",
+        tags: "Etiquetas",
         actions: "Acciones",
-        view: "Ver",
-        pageLabel: "Pagina",
+        view: "Ver perfil",
+        pageLabel: "Mostrando",
         of: "de",
         prev: "Anterior",
         next: "Siguiente",
-        emptyValue: "N/A",
+        emptyValue: "—",
+        totalCustomers: "clientes en total",
       }
     : {
         title: "Customers",
-        description: "Customer view with filters and quick actions.",
+        description: "Manage your customer base with filters and quick actions.",
         newCustomer: "New customer",
-        cardTitle: "Customers",
+        cardTitle: "Customer Database",
         loadingBusiness: "Loading business...",
-        searchHint: "Add filters or search by name or phone.",
-        searchPlaceholder: "Search customers",
+        searchHint: "Search by name, phone, or email.",
+        searchPlaceholder: "Search customers...",
         loading: "Loading customers...",
-        empty: "No customers yet. Create the first one.",
+        empty: "No customers yet. Create the first one!",
         name: "Name",
         phone: "Phone",
         email: "Email",
         vehicle: "Vehicle",
         tags: "Tags",
         actions: "Actions",
-        view: "View",
-        pageLabel: "Page",
+        view: "View profile",
+        pageLabel: "Showing",
         of: "of",
         prev: "Previous",
         next: "Next",
-        emptyValue: "N/A",
+        emptyValue: "—",
+        totalCustomers: "total customers",
       }
 
   const hasPrev = page > 1
@@ -90,7 +93,7 @@ export default function CustomersPage() {
 
       const filter = search.trim()
       if (filter) {
-        query.or(`full_name.ilike.%${filter}%,phone.ilike.%${filter}%`)
+        query.or(`full_name.ilike.%${filter}%,phone.ilike.%${filter}%,email.ilike.%${filter}%`)
       }
 
       const { data, error: err, count } = await query
@@ -113,7 +116,7 @@ export default function CustomersPage() {
         title={copy.title}
         description={copy.description}
         actions={
-          <Button asChild className="bg-rose-600 text-white hover:bg-rose-500">
+          <Button asChild className="bg-gradient-to-r from-emerald-600 to-emerald-500 text-white hover:from-emerald-500 hover:to-emerald-400 shadow-lg shadow-emerald-500/20">
             <Link to="/crm/customers/new">
               <Plus className="mr-2 size-4" />
               {copy.newCustomer}
@@ -122,10 +125,27 @@ export default function CustomersPage() {
         }
       />
 
-      <Card className="shadow-sm">
-        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      {/* Stats Cards */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Card className="bg-gradient-to-br from-emerald-50 to-white border-emerald-100">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100">
+                <Users className="h-5 w-5 text-emerald-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-emerald-700">{total}</p>
+                <p className="text-xs text-emerald-600/70">{copy.totalCustomers}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="shadow-lg shadow-black/5 border-0 bg-card">
+        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between border-b bg-muted/30 rounded-t-xl">
           <div className="space-y-1">
-            <CardTitle>{copy.cardTitle}</CardTitle>
+            <CardTitle className="text-lg font-semibold">{copy.cardTitle}</CardTitle>
             <CardDescription>
               {bizError
                 ? bizError
@@ -134,111 +154,162 @@ export default function CustomersPage() {
                   : copy.searchHint}
             </CardDescription>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 shadow-xs md:w-auto">
-              <Search className="size-4 text-slate-400" />
-              <input
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value)
-                  setPage(1)
-                }}
-                placeholder={copy.searchPlaceholder}
-                className="w-full bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none"
-              />
-            </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <input
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value)
+                setPage(1)
+              }}
+              placeholder={copy.searchPlaceholder}
+              className="w-full md:w-64 pl-10 pr-4 py-2.5 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+            />
           </div>
         </CardHeader>
-        <CardContent className="space-y-3 text-sm">
+        <CardContent className="p-0">
           {loading ? (
-            <div className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-6 text-slate-700">
-              <Loader2 className="size-4 animate-spin" />
-              {copy.loading}
+            <div className="flex items-center justify-center gap-3 py-16 text-muted-foreground">
+              <Loader2 className="size-5 animate-spin" />
+              <span>{copy.loading}</span>
             </div>
           ) : error ? (
-            <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-rose-700">
+            <div className="m-4 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
               Error: {error}
             </div>
           ) : emptyState ? (
-            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-slate-600">
-              {copy.empty}
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
+                <Users className="h-8 w-8 text-emerald-600" />
+              </div>
+              <p className="text-muted-foreground mb-4">{copy.empty}</p>
+              <Button asChild variant="outline" className="border-emerald-200 text-emerald-700 hover:bg-emerald-50">
+                <Link to="/crm/customers/new">
+                  <Plus className="mr-2 size-4" />
+                  {copy.newCustomer}
+                </Link>
+              </Button>
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-slate-200">
-              <table className="min-w-full divide-y divide-slate-200 text-sm">
-                <thead className="bg-slate-50 text-slate-700">
-                  <tr>
-                    <th className="px-4 py-3 text-left font-semibold">{copy.name}</th>
-                    <th className="px-4 py-3 text-left font-semibold">{copy.phone}</th>
-                    <th className="px-4 py-3 text-left font-semibold">{copy.email}</th>
-                    <th className="px-4 py-3 text-left font-semibold">{copy.vehicle}</th>
-                    <th className="px-4 py-3 text-left font-semibold">{copy.tags}</th>
-                    <th className="px-4 py-3 text-left font-semibold">{copy.actions}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 bg-white">
-                  {customers.map((customer) => (
-                    <tr key={customer.id}>
-                      <td className="px-4 py-3 text-slate-900">{customer.full_name}</td>
-                      <td className="px-4 py-3 text-slate-700">{customer.phone || copy.emptyValue}</td>
-                      <td className="px-4 py-3 text-slate-700">{customer.email || copy.emptyValue}</td>
-                      <td className="px-4 py-3 text-slate-700">{customer.vehicle_info || copy.emptyValue}</td>
-                      <td className="px-4 py-3 text-slate-700">
-                        {customer.tags && customer.tags.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {customer.tags.map((tag) => (
-                              <Badge key={tag} variant="outline" className="border-slate-200 text-slate-700">
-                                {tag}
-                              </Badge>
-                            ))}
-                          </div>
-                        ) : (
-                          copy.emptyValue
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Button variant="ghost" size="sm" asChild className="text-rose-700 hover:bg-rose-50">
-                          <Link to={`/crm/customers/${customer.id}`}>
-                            {copy.view}
-                            <ArrowRight className="ml-1 size-4" />
-                          </Link>
-                        </Button>
-                      </td>
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/50">
+                      <th className="px-4 py-3 text-left font-semibold text-foreground">{copy.name}</th>
+                      <th className="px-4 py-3 text-left font-semibold text-foreground">{copy.phone}</th>
+                      <th className="px-4 py-3 text-left font-semibold text-foreground">{copy.email}</th>
+                      <th className="px-4 py-3 text-left font-semibold text-foreground">{copy.vehicle}</th>
+                      <th className="px-4 py-3 text-left font-semibold text-foreground">{copy.tags}</th>
+                      <th className="px-4 py-3 text-right font-semibold text-foreground">{copy.actions}</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                  </thead>
+                  <tbody className="divide-y">
+                    {customers.map((customer, idx) => (
+                      <tr 
+                        key={customer.id} 
+                        className={cn(
+                          "hover:bg-muted/50 transition-colors",
+                          idx % 2 === 0 ? "bg-background" : "bg-muted/20"
+                        )}
+                      >
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-white font-medium text-sm">
+                              {customer.full_name.charAt(0).toUpperCase()}
+                            </div>
+                            <span className="font-medium text-foreground">{customer.full_name}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Phone className="h-3.5 w-3.5" />
+                            {customer.phone || copy.emptyValue}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <MailIcon className="h-3.5 w-3.5" />
+                            {customer.email || copy.emptyValue}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Car className="h-3.5 w-3.5" />
+                            {customer.vehicle_info || copy.emptyValue}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          {customer.tags && customer.tags.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {customer.tags.slice(0, 2).map((tag) => (
+                                <Badge key={tag} variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs">
+                                  <Tag className="h-2.5 w-2.5 mr-1" />
+                                  {tag}
+                                </Badge>
+                              ))}
+                              {customer.tags.length > 2 && (
+                                <Badge variant="outline" className="bg-muted text-muted-foreground border-border text-xs">
+                                  +{customer.tags.length - 2}
+                                </Badge>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">{copy.emptyValue}</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            asChild 
+                            className="text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50"
+                          >
+                            <Link to={`/crm/customers/${customer.id}`}>
+                              {copy.view}
+                              <ArrowRight className="ml-1.5 size-3.5" />
+                            </Link>
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
-          <div className="flex items-center justify-between text-sm text-slate-600">
-            <span>
-              {copy.pageLabel} {page} {copy.of} {total} {copy.title.toLowerCase()}
-            </span>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-slate-200"
-                disabled={!hasPrev}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                {copy.prev}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-slate-200"
-                disabled={!hasNext}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                {copy.next}
-              </Button>
-            </div>
-          </div>
+              {/* Pagination */}
+              <div className="flex items-center justify-between border-t px-4 py-3 bg-muted/30">
+                <span className="text-sm text-muted-foreground">
+                  {copy.pageLabel} {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} {copy.of} {total}
+                </span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={!hasPrev}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    className="h-8 w-8 p-0"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="px-3 py-1 text-sm font-medium bg-background border rounded-lg">
+                    {page}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={!hasNext}
+                    onClick={() => setPage((p) => p + 1)}
+                    className="h-8 w-8 p-0"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>
   )
 }
-
