@@ -20,7 +20,34 @@ export const appSections: AppSection[] = [
     badge: { en: "Customer", es: "Clientes" },
   },
   {
-    name: { en: "CRM Leads", es: "Leads CRM" },
+    name: { en: "Customers", es: "Clientes" },
+    href: "/crm/customers",
+    summary: {
+      en: "Manage customer profiles, vehicles, and contact info.",
+      es: "Gestiona perfiles de clientes, vehiculos e informacion de contacto.",
+    },
+    badge: { en: "CRM", es: "CRM" },
+  },
+  {
+    name: { en: "Bookings", es: "Reservas" },
+    href: "/crm/bookings",
+    summary: {
+      en: "View and manage all service appointments.",
+      es: "Ver y gestionar todas las citas de servicio.",
+    },
+    badge: { en: "CRM", es: "CRM" },
+  },
+  {
+    name: { en: "Services", es: "Servicios" },
+    href: "/crm/services",
+    summary: {
+      en: "Configure service offerings and pricing.",
+      es: "Configura servicios y precios.",
+    },
+    badge: { en: "CRM", es: "CRM" },
+  },
+  {
+    name: { en: "Leads", es: "Leads" },
     href: "/crm/leads",
     summary: {
       en: "Qualified leads by conversation intent.",
@@ -29,7 +56,7 @@ export const appSections: AppSection[] = [
     badge: { en: "Leads", es: "Leads" },
   },
   {
-    name: { en: "CRM Inbox", es: "Bandeja CRM" },
+    name: { en: "Inbox", es: "Bandeja" },
     href: "/crm/inbox",
     summary: {
       en: "View WhatsApp and Instagram conversations by customer.",
