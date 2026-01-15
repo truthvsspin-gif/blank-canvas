@@ -265,9 +265,9 @@ function SignupForm() {
 
       {/* Login Link */}
       <div className="mt-6 text-center">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-foreground/80">
           {copy.haveAccount}{" "}
-          <Link to="/login" className="text-emerald-600 font-semibold hover:underline">
+          <Link to="/login" className="text-foreground font-semibold underline underline-offset-4">
             {copy.login}
           </Link>
         </p>
