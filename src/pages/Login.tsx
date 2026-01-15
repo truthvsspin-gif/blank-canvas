@@ -30,7 +30,7 @@ function LoginForm() {
   const isEs = lang === "es"
   const copy = isEs
     ? {
-        badge: "Bienvenido",
+        badge: "Bienvenido de nuevo",
         title: "Iniciar sesión",
         subtitle: "Accede a tu panel de Detapro y gestiona tu negocio.",
         email: "Correo electrónico",
@@ -106,29 +106,29 @@ function LoginForm() {
     <div className="w-full max-w-md mx-auto">
       {/* Header */}
       <div className="text-center mb-8">
-        <div className="inline-flex items-center gap-2 mb-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-rose-600 to-rose-400 shadow-lg shadow-rose-200">
-            <Sparkles className="h-5 w-5 text-white" />
+        <div className="inline-flex items-center justify-center mb-6">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-violet-400 shadow-xl shadow-violet-500/30">
+            <Sparkles className="h-8 w-8 text-white" />
           </div>
         </div>
-        <Badge className="mb-3 border-rose-200 bg-rose-50 text-rose-700 font-medium">{copy.badge}</Badge>
-        <h1 className="text-2xl font-bold text-foreground mb-2">{copy.title}</h1>
-        <p className="text-sm text-muted-foreground">{copy.subtitle}</p>
+        <Badge className="mb-4 border-violet-200 bg-violet-50 text-violet-700 font-medium px-4 py-1">{copy.badge}</Badge>
+        <h1 className="text-3xl font-bold text-foreground mb-2">{copy.title}</h1>
+        <p className="text-muted-foreground">{copy.subtitle}</p>
       </div>
 
       {/* Form Card */}
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-xl shadow-black/5 p-6">
+      <div className="rounded-2xl border border-border bg-card shadow-xl shadow-black/5 p-8">
         <form className="space-y-5" onSubmit={handleSubmit}>
           {/* Email Field */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">{copy.email}</label>
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <input
                 type="email"
                 required
                 placeholder="you@company.com"
-                className="w-full pl-10 pr-4 py-3 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-rose-200 focus:border-rose-500 transition-all"
+                className="w-full pl-12 pr-4 py-3 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
               />
@@ -139,19 +139,19 @@ function LoginForm() {
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">{copy.password}</label>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <input
                 type={showPassword ? "text" : "password"}
                 required
                 placeholder="••••••••"
-                className="w-full pl-10 pr-12 py-3 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-rose-200 focus:border-rose-500 transition-all"
+                className="w-full pl-12 pr-12 py-3 rounded-xl border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
               >
                 {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
               </button>
@@ -161,10 +161,10 @@ function LoginForm() {
           {/* Remember & Forgot */}
           <div className="flex items-center justify-between text-sm">
             <label className="flex items-center gap-2 text-muted-foreground cursor-pointer">
-              <input type="checkbox" className="size-4 rounded border border-input accent-accent" />
+              <input type="checkbox" className="size-4 rounded border border-input accent-violet-600" />
               <span>{copy.remember}</span>
             </label>
-            <Link to="#" className="text-rose-600 font-medium hover:underline">
+            <Link to="#" className="text-violet-600 font-medium hover:underline">
               {copy.forgot}
             </Link>
           </div>
@@ -178,7 +178,7 @@ function LoginForm() {
 
           {/* Submit Button */}
           <Button
-            className="w-full bg-rose-600 text-white hover:bg-rose-500 shadow-lg shadow-rose-200 py-6 text-base font-semibold"
+            className="w-full bg-gradient-to-r from-violet-600 to-violet-500 text-white hover:from-violet-500 hover:to-violet-400 shadow-lg shadow-violet-500/20 py-6 text-base font-semibold"
             type="submit"
             disabled={submitting}
           >
@@ -189,10 +189,10 @@ function LoginForm() {
       </div>
 
       {/* Signup Link */}
-      <div className="mt-6 text-center">
-        <p className="text-sm text-muted-foreground">
+      <div className="mt-8 text-center">
+        <p className="text-muted-foreground">
           {copy.noAccount}{" "}
-          <Link to="/signup" className="text-rose-700 font-semibold hover:underline">
+          <Link to="/signup" className="text-violet-600 font-semibold hover:underline">
             {copy.createAccount}
           </Link>
         </p>
