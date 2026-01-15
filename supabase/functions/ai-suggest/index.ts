@@ -1,3 +1,4 @@
+// @ts-nocheck - Deno edge function, uses Deno runtime types
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -9,7 +10,7 @@ const corsHeaders = {
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-serve(async (req) => {
+serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -119,7 +120,8 @@ Generate a single suggested reply (1-3 sentences max).`;
       JSON.stringify({ success: true, suggestion }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error) {
+  } catch (err) {
+    const error = err as Error;
     console.error("AI suggest error:", error);
     return new Response(
       JSON.stringify({ error: error.message }),
