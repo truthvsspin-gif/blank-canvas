@@ -1,4 +1,23 @@
+import { 
+  LayoutDashboard, 
+  Users, 
+  Calendar, 
+  Wrench, 
+  Target, 
+  Inbox, 
+  Bot, 
+  TestTube, 
+  Shield, 
+  User,
+  Briefcase
+} from "lucide-react"
 import { AppSection } from "@/types/navigation"
+
+export type NavGroup = {
+  id: string
+  label: { en: string; es: string }
+  items: AppSection[]
+}
 
 export const appSections: AppSection[] = [
   {
@@ -9,6 +28,8 @@ export const appSections: AppSection[] = [
       es: "Salud del workspace, adopcion y KPIs de alto nivel.",
     },
     badge: { en: "Overview", es: "Resumen" },
+    icon: LayoutDashboard,
+    group: "main",
   },
   {
     name: { en: "CRM", es: "CRM" },
@@ -18,6 +39,8 @@ export const appSections: AppSection[] = [
       es: "Pipeline, cuentas y ciclo de vida del cliente.",
     },
     badge: { en: "Customer", es: "Clientes" },
+    icon: Briefcase,
+    group: "crm",
   },
   {
     name: { en: "Customers", es: "Clientes" },
@@ -27,6 +50,8 @@ export const appSections: AppSection[] = [
       es: "Gestiona perfiles de clientes, vehiculos e informacion de contacto.",
     },
     badge: { en: "CRM", es: "CRM" },
+    icon: Users,
+    group: "crm",
   },
   {
     name: { en: "Bookings", es: "Reservas" },
@@ -36,6 +61,8 @@ export const appSections: AppSection[] = [
       es: "Ver y gestionar todas las citas de servicio.",
     },
     badge: { en: "CRM", es: "CRM" },
+    icon: Calendar,
+    group: "crm",
   },
   {
     name: { en: "Services", es: "Servicios" },
@@ -45,6 +72,8 @@ export const appSections: AppSection[] = [
       es: "Configura servicios y precios.",
     },
     badge: { en: "CRM", es: "CRM" },
+    icon: Wrench,
+    group: "crm",
   },
   {
     name: { en: "Leads", es: "Leads" },
@@ -54,6 +83,8 @@ export const appSections: AppSection[] = [
       es: "Leads calificados por intencion.",
     },
     badge: { en: "Leads", es: "Leads" },
+    icon: Target,
+    group: "crm",
   },
   {
     name: { en: "Inbox", es: "Bandeja" },
@@ -63,6 +94,8 @@ export const appSections: AppSection[] = [
       es: "Ver conversaciones de WhatsApp e Instagram por cliente.",
     },
     badge: { en: "Inbox", es: "Bandeja" },
+    icon: Inbox,
+    group: "messaging",
   },
   {
     name: { en: "Chatbot", es: "Chatbot" },
@@ -72,6 +105,8 @@ export const appSections: AppSection[] = [
       es: "Configuracion del chatbot, integraciones y flujos.",
     },
     badge: { en: "AI", es: "IA" },
+    icon: Bot,
+    group: "messaging",
   },
   {
     name: { en: "Chatbot Test", es: "Prueba Chatbot" },
@@ -81,6 +116,8 @@ export const appSections: AppSection[] = [
       es: "Simula el chatbot con mensajes de prueba.",
     },
     badge: { en: "Test", es: "Test" },
+    icon: TestTube,
+    group: "messaging",
   },
   {
     name: { en: "Admin", es: "Admin" },
@@ -90,6 +127,8 @@ export const appSections: AppSection[] = [
       es: "Controles de tenant, permisos, facturacion y cumplimiento.",
     },
     badge: { en: "Control", es: "Control" },
+    icon: Shield,
+    group: "settings",
   },
   {
     name: { en: "Profile", es: "Perfil" },
@@ -99,5 +138,30 @@ export const appSections: AppSection[] = [
       es: "Gestiona datos basicos, identidad y seguridad.",
     },
     badge: { en: "You", es: "Tu" },
+    icon: User,
+    group: "settings",
+  },
+]
+
+export const navGroups: NavGroup[] = [
+  {
+    id: "main",
+    label: { en: "Overview", es: "Vista General" },
+    items: appSections.filter(s => s.group === "main"),
+  },
+  {
+    id: "crm",
+    label: { en: "CRM", es: "CRM" },
+    items: appSections.filter(s => s.group === "crm"),
+  },
+  {
+    id: "messaging",
+    label: { en: "Messaging & AI", es: "Mensajería e IA" },
+    items: appSections.filter(s => s.group === "messaging"),
+  },
+  {
+    id: "settings",
+    label: { en: "Settings", es: "Configuración" },
+    items: appSections.filter(s => s.group === "settings"),
   },
 ]
