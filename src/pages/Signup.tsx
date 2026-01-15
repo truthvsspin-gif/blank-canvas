@@ -253,12 +253,12 @@ function SignupForm() {
 
           {/* Submit Button */}
           <Button 
-            className="w-full bg-gradient-to-r from-emerald-600 to-teal-500 text-white hover:opacity-90 shadow-lg shadow-emerald-500/20 py-6 text-base font-semibold" 
+            className="w-full bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-700 hover:to-teal-600 shadow-lg shadow-emerald-500/20 py-6 text-base font-semibold [&]:text-white" 
             type="submit" 
             disabled={submitting}
           >
-            {submitting ? copy.submitting : copy.submit}
-            <ArrowRight className="ml-2 size-4" />
+            <span className="text-white">{submitting ? copy.submitting : copy.submit}</span>
+            <ArrowRight className="ml-2 size-4 text-white" />
           </Button>
         </form>
       </div>
