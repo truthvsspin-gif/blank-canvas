@@ -94,18 +94,16 @@ export function SidebarNav({ className }: { className?: string }) {
   return (
     <nav className={cn("flex flex-col gap-1", className)}>
       {/* Pro Badge with rainbow gradient */}
-      <div className="mb-4 relative overflow-hidden rounded-xl p-3 border border-violet-200/50">
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-violet-500/10 to-pink-500/10" />
-        <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white/50 to-transparent" />
+      <div className="mb-4 relative overflow-hidden rounded-xl p-3 bg-gradient-to-r from-violet-50 to-pink-50 border border-violet-200">
         <div className="relative flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 text-white shadow-lg shadow-violet-500/25">
             <Sparkles className="h-5 w-5" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold bg-gradient-to-r from-violet-600 to-pink-600 bg-clip-text text-transparent">
+            <p className="text-sm font-bold text-violet-700">
               Pro Workspace
             </p>
-            <p className="text-[11px] text-muted-foreground">Unlimited access</p>
+            <p className="text-[11px] text-violet-600/70">Unlimited access</p>
           </div>
         </div>
       </div>
@@ -209,9 +207,9 @@ export function SidebarNav({ className }: { className?: string }) {
 
       {/* Bottom decoration with gradient */}
       <div className="mt-auto pt-4">
-        <div className="h-px bg-gradient-to-r from-blue-500/20 via-violet-500/20 to-pink-500/20" />
+        <div className="h-px bg-gradient-to-r from-blue-300/30 via-violet-300/30 to-pink-300/30" />
         <p className="mt-3 text-center text-[10px] text-muted-foreground">
-          v1.0.0 • <span className="bg-gradient-to-r from-violet-600 to-pink-600 bg-clip-text text-transparent font-medium">Detapro</span>
+          v1.0.0 • <span className="text-violet-600 font-medium">Detapro</span>
         </p>
       </div>
     </nav>
