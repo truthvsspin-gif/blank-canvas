@@ -178,12 +178,12 @@ function LoginForm() {
 
           {/* Submit Button */}
           <Button 
-            className="w-full bg-gradient-to-r from-accent to-chart-1 text-white hover:opacity-90 shadow-lg shadow-accent/20 py-6 text-base font-semibold" 
+            className="w-full bg-gradient-to-r from-accent to-chart-1 hover:opacity-90 shadow-lg shadow-accent/20 py-6 text-base font-semibold !text-black" 
             type="submit" 
             disabled={submitting}
           >
-            {submitting ? copy.submitting : copy.submit}
-            <ArrowRight className="ml-2 size-4" />
+            <span className="text-black font-semibold">{submitting ? copy.submitting : copy.submit}</span>
+            <ArrowRight className="ml-2 size-4 text-black" />
           </Button>
         </form>
       </div>
