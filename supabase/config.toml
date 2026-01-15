@@ -1,1 +1,16 @@
 project_id = "ybifjdlelpvgzmzvgwls"
+
+[functions.webhook-whatsapp]
+verify_jwt = false
+
+[functions.webhook-instagram]
+verify_jwt = false
+
+[functions.send-reply]
+verify_jwt = false
+
+[functions.get-usage]
+verify_jwt = false
+
+[functions.ai-suggest]
+verify_jwt = false
