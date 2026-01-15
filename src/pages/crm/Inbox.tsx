@@ -52,6 +52,9 @@ export default function CrmInboxPage() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [filterChannel, setFilterChannel] = useState<"all" | "whatsapp" | "instagram">("all")
+  const [replyText, setReplyText] = useState("")
+  const [sending, setSending] = useState(false)
+  const [aiSuggestion, setAiSuggestion] = useState<string | null>(null)
 
   const copy = isEs
     ? {
@@ -122,7 +125,63 @@ export default function CrmInboxPage() {
       }
     }
     loadMessages()
+    // Load AI suggestion
+    if (activeThreadId && businessId) {
+      fetchAiSuggestion()
+    }
   }, [activeThreadId])
+
+  const fetchAiSuggestion = async () => {
+    if (!activeThreadId || !businessId) return
+    setAiSuggestion(null)
+    try {
+      const response = await fetch(`https://ybifjdlelpvgzmzvgwls.supabase.co/functions/v1/ai-suggest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ threadId: activeThreadId, businessId, lastMessages: messages.slice(-5) }),
+      })
+      const data = await response.json()
+      if (data.suggestion) setAiSuggestion(data.suggestion)
+    } catch (e) {
+      console.error("AI suggestion error:", e)
+    }
+  }
+
+  const handleSendReply = async () => {
+    if (!replyText.trim() || !activeThreadId || !businessId || sending) return
+    setSending(true)
+    try {
+      const response = await fetch(`https://ybifjdlelpvgzmzvgwls.supabase.co/functions/v1/send-reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ threadId: activeThreadId, messageText: replyText.trim(), businessId }),
+      })
+      if (response.ok) {
+        // Optimistically add message
+        const newMessage: InboxMessage = {
+          id: crypto.randomUUID(),
+          direction: "outbound",
+          message_text: replyText.trim(),
+          message_timestamp: new Date().toISOString(),
+        }
+        setMessages((prev) => [...prev, newMessage])
+        setReplyText("")
+        // Update thread list
+        setThreads((prev) => prev.map((t) => 
+          t.id === activeThreadId ? { ...t, last_message_text: replyText.trim(), unread_count: 0 } : t
+        ))
+      }
+    } catch (e) {
+      console.error("Send error:", e)
+    }
+    setSending(false)
+  }
+
+  const handleMarkAsRead = async () => {
+    if (!activeThreadId || !businessId) return
+    await supabase.from("inbox_threads").update({ unread_count: 0 }).eq("id", activeThreadId)
+    setThreads((prev) => prev.map((t) => t.id === activeThreadId ? { ...t, unread_count: 0 } : t))
+  }
 
   const activeThread = useMemo(
     () => threads.find((thread) => thread.id === activeThreadId) ?? null,
@@ -386,18 +445,23 @@ export default function CrmInboxPage() {
               </div>
 
               {/* AI Suggestion */}
-              <div className="px-4 py-2 border-t border-border bg-primary/5">
-                <div className="flex items-center gap-2 text-sm">
-                  <Sparkles className="size-4 text-primary" />
-                  <span className="text-primary font-medium">{copy.aiSuggestion}:</span>
-                  <span className="text-muted-foreground truncate">
-                    {isEs ? "Hola! Gracias por contactarnos..." : "Hi! Thanks for reaching out..."}
-                  </span>
-                  <Button variant="ghost" size="sm" className="ml-auto text-primary hover:text-primary hover:bg-primary/10">
-                    {isEs ? "Usar" : "Use"}
-                  </Button>
+              {aiSuggestion && (
+                <div className="px-4 py-2 border-t border-border bg-primary/5">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Sparkles className="size-4 text-primary" />
+                    <span className="text-primary font-medium">{copy.aiSuggestion}:</span>
+                    <span className="text-muted-foreground truncate flex-1">{aiSuggestion}</span>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => setReplyText(aiSuggestion)}
+                      className="ml-auto text-primary hover:text-primary hover:bg-primary/10"
+                    >
+                      {isEs ? "Usar" : "Use"}
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Input */}
               <div className="p-4 border-t border-border bg-card">
@@ -405,11 +469,18 @@ export default function CrmInboxPage() {
                   <input
                     type="text"
                     placeholder={copy.typeMessage}
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSendReply()}
                     className="flex-1 rounded-xl border border-border bg-card px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                   />
-                  <Button className="bg-foreground text-background hover:bg-foreground/90 rounded-xl px-6">
+                  <Button 
+                    onClick={handleSendReply} 
+                    disabled={sending || !replyText.trim()}
+                    className="bg-foreground text-background hover:bg-foreground/90 rounded-xl px-6"
+                  >
                     <Send className="size-4 mr-2" />
-                    {copy.send}
+                    {sending ? "..." : copy.send}
                   </Button>
                 </div>
               </div>
