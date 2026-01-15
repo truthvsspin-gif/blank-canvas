@@ -1,6 +1,7 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Menu, MessageCircle, Send, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { cn } from "@/lib/utils";
 
 import { MainNav } from "@/components/layout/main-nav";
 import { UserNav } from "@/components/layout/user-nav";
@@ -17,6 +18,7 @@ export default function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [chatMessages, setChatMessages] = useState<
@@ -161,9 +163,15 @@ export default function AppLayout() {
         </div>
       </header>
       <div className="mx-auto flex w-full max-w-6xl flex-1 gap-6 px-6 py-10">
-        <aside className="sticky top-20 hidden h-[calc(100vh-120px)] w-64 flex-none overflow-hidden rounded-2xl border bg-card/50 backdrop-blur-sm shadow-xl shadow-black/5 md:block">
-          <div className="flex h-full flex-col p-4 overflow-y-auto scrollbar-thin">
-            <SidebarNav />
+        <aside className={cn(
+          "sticky top-20 hidden h-[calc(100vh-120px)] flex-none overflow-hidden rounded-2xl border bg-card/50 backdrop-blur-sm shadow-xl shadow-black/5 md:block transition-all duration-300",
+          sidebarCollapsed ? "w-20" : "w-64"
+        )}>
+          <div className="flex h-full flex-col p-3 overflow-y-auto scrollbar-thin">
+            <SidebarNav 
+              collapsed={sidebarCollapsed} 
+              onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} 
+            />
           </div>
         </aside>
         <main className="flex-1 space-y-8">
