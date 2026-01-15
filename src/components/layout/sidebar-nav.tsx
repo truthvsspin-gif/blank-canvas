@@ -119,8 +119,8 @@ export function SidebarNav({ className, collapsed = false, onToggleCollapse }: S
         collapsed ? "p-2" : "p-3"
       )}>
         <div className={cn("flex items-center", collapsed ? "justify-center" : "gap-3")}>
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 shadow-lg shadow-violet-300">
-            <Sparkles className="h-5 w-5 text-white" />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-accent to-chart-3 shadow-lg shadow-accent/20 ring-1 ring-border">
+            <Sparkles className="h-5 w-5" color="white" strokeWidth={2.5} />
           </div>
           {!collapsed && (
             <div className="flex-1 min-w-0">
