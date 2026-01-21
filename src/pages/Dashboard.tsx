@@ -9,13 +9,15 @@ import {
   MessageSquare,
   Target,
   Clock,
-  CheckCircle2
+  CheckCircle2,
+  BarChart3,
+  PieChart as PieChartIcon,
+  Activity,
+  Sparkles
 } from "lucide-react";
 import {
   AreaChart,
   Area,
-  BarChart,
-  Bar,
   PieChart,
   Pie,
   Cell,
@@ -55,7 +57,13 @@ type ServiceData = {
   color: string;
 };
 
-const COLORS = ["#FF5A5F", "#10b981", "#f59e0b", "#3b82f6", "#8b5cf6"];
+const COLORS = [
+  "hsl(350, 80%, 60%)",
+  "hsl(160, 60%, 45%)",
+  "hsl(45, 90%, 55%)",
+  "hsl(220, 70%, 55%)",
+  "hsl(280, 60%, 60%)"
+];
 
 export default function Dashboard() {
   const { lang } = useLanguage();
@@ -87,7 +95,6 @@ export default function Dashboard() {
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-      // Fetch all metrics in parallel
       const [
         customersRes,
         bookingsRes,
@@ -146,7 +153,6 @@ export default function Dashboard() {
         conversations: conversationsRes.count ?? 0,
       });
 
-      // Process service distribution
       if (servicesRes.data) {
         const serviceCounts: Record<string, number> = {};
         servicesRes.data.forEach((booking) => {
@@ -166,12 +172,10 @@ export default function Dashboard() {
         setServiceDistribution(distribution);
       }
 
-      // Set recent bookings
       if (recentBookingsRes.data) {
         setRecentBookings(recentBookingsRes.data);
       }
 
-      // Generate weekly trend data (last 7 days simulation based on actual counts)
       const days = isEs 
         ? ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
         : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -179,7 +183,7 @@ export default function Dashboard() {
       const baseBookings = Math.max(1, Math.floor((bookingsRes.count ?? 0) / 7));
       const baseLeads = Math.max(1, Math.floor((leadsRes.count ?? 0) / 7));
       
-      const trend = days.map((name, idx) => ({
+      const trend = days.map((name) => ({
         name,
         bookings: Math.floor(baseBookings * (0.7 + Math.random() * 0.6)),
         leads: Math.floor(baseLeads * (0.5 + Math.random() * 1)),
@@ -200,9 +204,9 @@ export default function Dashboard() {
       change: "+12%",
       trend: "up" as const,
       description: isEs ? "vs. mes anterior" : "vs. last month",
-      gradient: "from-accent/20 to-accent/5",
-      iconBg: "bg-accent/10",
-      iconColor: "text-accent",
+      gradient: "from-rose-500/20 via-rose-500/10 to-transparent",
+      iconGradient: "from-rose-500 to-pink-500",
+      borderColor: "border-rose-200",
     },
     {
       title: isEs ? "Reservas" : "Bookings",
@@ -211,9 +215,9 @@ export default function Dashboard() {
       change: "+8%",
       trend: "up" as const,
       description: isEs ? "este mes" : "this month",
-      gradient: "from-emerald-500/20 to-emerald-500/5",
-      iconBg: "bg-emerald-500/10",
-      iconColor: "text-emerald-600",
+      gradient: "from-emerald-500/20 via-emerald-500/10 to-transparent",
+      iconGradient: "from-emerald-500 to-teal-500",
+      borderColor: "border-emerald-200",
     },
     {
       title: isEs ? "Leads Activos" : "Active Leads",
@@ -222,9 +226,9 @@ export default function Dashboard() {
       change: "+23%",
       trend: "up" as const,
       description: isEs ? "capturados" : "captured",
-      gradient: "from-amber-500/20 to-amber-500/5",
-      iconBg: "bg-amber-500/10",
-      iconColor: "text-amber-600",
+      gradient: "from-amber-500/20 via-amber-500/10 to-transparent",
+      iconGradient: "from-amber-500 to-orange-500",
+      borderColor: "border-amber-200",
     },
     {
       title: isEs ? "Conversaciones" : "Conversations",
@@ -233,9 +237,9 @@ export default function Dashboard() {
       change: "+15%",
       trend: "up" as const,
       description: isEs ? "este mes" : "this month",
-      gradient: "from-blue-500/20 to-blue-500/5",
-      iconBg: "bg-blue-500/10",
-      iconColor: "text-blue-600",
+      gradient: "from-blue-500/20 via-blue-500/10 to-transparent",
+      iconGradient: "from-blue-500 to-indigo-500",
+      borderColor: "border-blue-200",
     },
   ];
 
@@ -244,15 +248,15 @@ export default function Dashboard() {
       title: isEs ? "Pendientes" : "Pending",
       value: metrics.pendingBookings,
       icon: Clock,
-      color: "text-amber-600",
-      bg: "bg-amber-50",
+      gradient: "from-amber-500 to-orange-500",
+      bgGradient: "from-amber-50 to-orange-50",
     },
     {
       title: isEs ? "Completadas" : "Completed",
       value: metrics.completedBookings,
       icon: CheckCircle2,
-      color: "text-emerald-600",
-      bg: "bg-emerald-50",
+      gradient: "from-emerald-500 to-teal-500",
+      bgGradient: "from-emerald-50 to-teal-50",
     },
     {
       title: isEs ? "Tasa de Conversión" : "Conversion Rate",
@@ -260,8 +264,8 @@ export default function Dashboard() {
         ? `${Math.round((metrics.bookings / Math.max(metrics.customers, 1)) * 100)}%`
         : "0%",
       icon: Target,
-      color: "text-accent",
-      bg: "bg-accent/10",
+      gradient: "from-rose-500 to-pink-500",
+      bgGradient: "from-rose-50 to-pink-50",
     },
   ];
 
@@ -269,10 +273,10 @@ export default function Dashboard() {
 
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
-      pending: "bg-amber-100 text-amber-800",
-      confirmed: "bg-blue-100 text-blue-800",
-      completed: "bg-emerald-100 text-emerald-800",
-      cancelled: "bg-red-100 text-red-800",
+      pending: "bg-gradient-to-r from-amber-100 to-orange-100 text-amber-800 border-amber-200",
+      confirmed: "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 border-blue-200",
+      completed: "bg-gradient-to-r from-emerald-100 to-teal-100 text-emerald-800 border-emerald-200",
+      cancelled: "bg-gradient-to-r from-red-100 to-rose-100 text-red-800 border-red-200",
     };
     return styles[status] || "bg-muted text-muted-foreground";
   };
@@ -289,35 +293,38 @@ export default function Dashboard() {
       />
 
       {/* Main Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
           <Card 
             key={stat.title} 
-            className={`relative overflow-hidden border-0 bg-gradient-to-br ${stat.gradient}`}
+            className={`group relative overflow-hidden rounded-2xl border ${stat.borderColor} bg-gradient-to-br ${stat.gradient} transition-all duration-300 hover:shadow-lg hover:shadow-black/5 hover:-translate-y-0.5`}
           >
             <CardContent className="p-6">
               <div className="flex items-start justify-between">
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <p className="text-sm font-medium text-muted-foreground">{stat.title}</p>
                   {isLoading ? (
-                    <div className="h-9 w-20 animate-pulse rounded bg-muted" />
+                    <div className="h-10 w-24 animate-pulse rounded-lg bg-muted/50" />
                   ) : (
-                    <p className="text-3xl font-bold tracking-tight">{stat.value}</p>
+                    <p className="text-4xl font-bold tracking-tight">{stat.value}</p>
                   )}
-                  <div className="flex items-center gap-1 text-xs">
+                  <div className="flex items-center gap-1.5 text-xs">
                     {stat.trend === "up" ? (
-                      <ArrowUpRight className="h-3 w-3 text-emerald-600" />
+                      <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">
+                        <ArrowUpRight className="h-3 w-3" />
+                        {stat.change}
+                      </span>
                     ) : (
-                      <ArrowDownRight className="h-3 w-3 text-red-600" />
+                      <span className="inline-flex items-center gap-0.5 rounded-full bg-red-100 px-2 py-0.5 text-red-700">
+                        <ArrowDownRight className="h-3 w-3" />
+                        {stat.change}
+                      </span>
                     )}
-                    <span className={stat.trend === "up" ? "text-emerald-600" : "text-red-600"}>
-                      {stat.change}
-                    </span>
                     <span className="text-muted-foreground">{stat.description}</span>
                   </div>
                 </div>
-                <div className={`rounded-xl p-3 ${stat.iconBg}`}>
-                  <stat.icon className={`h-5 w-5 ${stat.iconColor}`} />
+                <div className={`rounded-2xl bg-gradient-to-br ${stat.iconGradient} p-3.5 shadow-lg shadow-black/10 transition-transform duration-300 group-hover:scale-110`}>
+                  <stat.icon className="h-6 w-6 text-white" />
                 </div>
               </div>
             </CardContent>
@@ -328,56 +335,70 @@ export default function Dashboard() {
       {/* Charts Row */}
       <div className="grid gap-6 lg:grid-cols-7">
         {/* Weekly Trend Chart */}
-        <Card className="lg:col-span-4">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-accent" />
-              {isEs ? "Tendencia Semanal" : "Weekly Trend"}
-            </CardTitle>
-            <CardDescription>
-              {isEs ? "Reservas y leads de los últimos 7 días" : "Bookings and leads over the last 7 days"}
-            </CardDescription>
+        <Card className="lg:col-span-4 overflow-hidden rounded-2xl border-border/50 shadow-sm">
+          <CardHeader className="border-b border-border/50 bg-gradient-to-r from-violet-500/5 via-purple-500/5 to-transparent">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-gradient-to-br from-violet-500 to-purple-500 p-2.5 shadow-lg shadow-violet-500/20">
+                <BarChart3 className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">
+                  {isEs ? "Tendencia Semanal" : "Weekly Trend"}
+                </CardTitle>
+                <CardDescription>
+                  {isEs ? "Reservas y leads de los últimos 7 días" : "Bookings and leads over the last 7 days"}
+                </CardDescription>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-6">
             {isLoading ? (
-              <div className="h-[300px] animate-pulse rounded-lg bg-muted" />
+              <div className="h-[300px] animate-pulse rounded-xl bg-muted/30" />
             ) : (
               <ResponsiveContainer width="100%" height={300}>
                 <AreaChart data={weeklyTrend}>
                   <defs>
                     <linearGradient id="colorBookings" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#FF5A5F" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#FF5A5F" stopOpacity={0} />
+                      <stop offset="5%" stopColor="hsl(350, 80%, 60%)" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="hsl(350, 80%, 60%)" stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="colorLeads" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                      <stop offset="5%" stopColor="hsl(160, 60%, 45%)" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="hsl(160, 60%, 45%)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
                   <XAxis 
                     dataKey="name" 
                     stroke="hsl(var(--muted-foreground))"
                     fontSize={12}
+                    tickLine={false}
+                    axisLine={false}
                   />
                   <YAxis 
                     stroke="hsl(var(--muted-foreground))"
                     fontSize={12}
+                    tickLine={false}
+                    axisLine={false}
                   />
                   <Tooltip 
                     contentStyle={{
                       backgroundColor: "hsl(var(--card))",
                       border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
+                      borderRadius: "12px",
+                      boxShadow: "0 10px 40px -10px rgba(0,0,0,0.15)",
                     }}
                   />
-                  <Legend />
+                  <Legend 
+                    wrapperStyle={{ paddingTop: "20px" }}
+                    iconType="circle"
+                  />
                   <Area
                     type="monotone"
                     dataKey="bookings"
                     name={isEs ? "Reservas" : "Bookings"}
-                    stroke="#FF5A5F"
-                    strokeWidth={2}
+                    stroke="hsl(350, 80%, 60%)"
+                    strokeWidth={3}
                     fillOpacity={1}
                     fill="url(#colorBookings)"
                   />
@@ -385,8 +406,8 @@ export default function Dashboard() {
                     type="monotone"
                     dataKey="leads"
                     name="Leads"
-                    stroke="#10b981"
-                    strokeWidth={2}
+                    stroke="hsl(160, 60%, 45%)"
+                    strokeWidth={3}
                     fillOpacity={1}
                     fill="url(#colorLeads)"
                   />
@@ -397,54 +418,79 @@ export default function Dashboard() {
         </Card>
 
         {/* Service Distribution */}
-        <Card className="lg:col-span-3">
-          <CardHeader>
-            <CardTitle>{isEs ? "Servicios Populares" : "Popular Services"}</CardTitle>
-            <CardDescription>
-              {isEs ? "Distribución de servicios" : "Service distribution"}
-            </CardDescription>
+        <Card className="lg:col-span-3 overflow-hidden rounded-2xl border-border/50 shadow-sm">
+          <CardHeader className="border-b border-border/50 bg-gradient-to-r from-amber-500/5 via-orange-500/5 to-transparent">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 p-2.5 shadow-lg shadow-amber-500/20">
+                <PieChartIcon className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">
+                  {isEs ? "Servicios Populares" : "Popular Services"}
+                </CardTitle>
+                <CardDescription>
+                  {isEs ? "Distribución de servicios" : "Service distribution"}
+                </CardDescription>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-6">
             {isLoading ? (
-              <div className="h-[300px] animate-pulse rounded-lg bg-muted" />
+              <div className="h-[300px] animate-pulse rounded-xl bg-muted/30" />
             ) : serviceDistribution.length > 0 ? (
-              <div className="flex flex-col items-center gap-4">
-                <ResponsiveContainer width="100%" height={200}>
+              <div className="flex flex-col items-center gap-6">
+                <ResponsiveContainer width="100%" height={180}>
                   <PieChart>
                     <Pie
                       data={serviceDistribution}
                       cx="50%"
                       cy="50%"
-                      innerRadius={50}
-                      outerRadius={80}
-                      paddingAngle={2}
+                      innerRadius={45}
+                      outerRadius={75}
+                      paddingAngle={4}
                       dataKey="value"
+                      strokeWidth={0}
                     >
                       {serviceDistribution.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
+                        <Cell 
+                          key={`cell-${index}`} 
+                          fill={entry.color}
+                          className="drop-shadow-md"
+                        />
                       ))}
                     </Pie>
-                    <Tooltip />
+                    <Tooltip 
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "12px",
+                        boxShadow: "0 10px 40px -10px rgba(0,0,0,0.15)",
+                      }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
-                <div className="w-full space-y-2">
+                <div className="w-full space-y-2.5">
                   {serviceDistribution.map((service) => (
-                    <div key={service.name} className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2">
+                    <div 
+                      key={service.name} 
+                      className="flex items-center justify-between rounded-xl bg-muted/30 px-4 py-2.5 transition-colors hover:bg-muted/50"
+                    >
+                      <div className="flex items-center gap-3">
                         <div 
-                          className="h-3 w-3 rounded-full" 
+                          className="h-3.5 w-3.5 rounded-full shadow-sm" 
                           style={{ backgroundColor: service.color }}
                         />
-                        <span className="text-muted-foreground">{service.name}</span>
+                        <span className="text-sm font-medium text-foreground">{service.name}</span>
                       </div>
-                      <span className="font-semibold">{service.value}</span>
+                      <span className="text-sm font-bold">{service.value}</span>
                     </div>
                   ))}
                 </div>
               </div>
             ) : (
-              <div className="flex h-[300px] items-center justify-center text-muted-foreground">
-                {isEs ? "Sin datos de servicios" : "No service data"}
+              <div className="flex h-[300px] flex-col items-center justify-center gap-3 text-muted-foreground">
+                <PieChartIcon className="h-12 w-12 text-muted-foreground/30" />
+                <p>{isEs ? "Sin datos de servicios" : "No service data"}</p>
               </div>
             )}
           </CardContent>
@@ -454,24 +500,35 @@ export default function Dashboard() {
       {/* Bottom Row */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Status Cards */}
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <CardTitle>{isEs ? "Estado de Reservas" : "Booking Status"}</CardTitle>
+        <Card className="lg:col-span-1 overflow-hidden rounded-2xl border-border/50 shadow-sm">
+          <CardHeader className="border-b border-border/50 bg-gradient-to-r from-blue-500/5 via-indigo-500/5 to-transparent">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-gradient-to-br from-blue-500 to-indigo-500 p-2.5 shadow-lg shadow-blue-500/20">
+                <Activity className="h-5 w-5 text-white" />
+              </div>
+              <CardTitle className="text-lg">
+                {isEs ? "Estado de Reservas" : "Booking Status"}
+              </CardTitle>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 p-6">
             {statusCards.map((card) => (
               <div
                 key={card.title}
-                className={`flex items-center justify-between rounded-lg p-4 ${card.bg}`}
+                className={`group flex items-center justify-between rounded-2xl bg-gradient-to-r ${card.bgGradient} p-4 transition-all duration-300 hover:shadow-md`}
               >
-                <div className="flex items-center gap-3">
-                  <card.icon className={`h-5 w-5 ${card.color}`} />
-                  <span className="font-medium">{card.title}</span>
+                <div className="flex items-center gap-4">
+                  <div className={`rounded-xl bg-gradient-to-br ${card.gradient} p-2.5 shadow-lg`}>
+                    <card.icon className="h-5 w-5 text-white" />
+                  </div>
+                  <span className="font-semibold text-foreground">{card.title}</span>
                 </div>
                 {isLoading ? (
-                  <div className="h-6 w-12 animate-pulse rounded bg-muted" />
+                  <div className="h-8 w-14 animate-pulse rounded-lg bg-muted/50" />
                 ) : (
-                  <span className={`text-xl font-bold ${card.color}`}>{card.value}</span>
+                  <span className={`text-2xl font-bold bg-gradient-to-r ${card.gradient} bg-clip-text text-transparent`}>
+                    {card.value}
+                  </span>
                 )}
               </div>
             ))}
@@ -479,34 +536,45 @@ export default function Dashboard() {
         </Card>
 
         {/* Recent Bookings */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>{isEs ? "Reservas Recientes" : "Recent Bookings"}</CardTitle>
-            <CardDescription>
-              {isEs ? "Últimas 5 reservas" : "Last 5 bookings"}
-            </CardDescription>
+        <Card className="lg:col-span-2 overflow-hidden rounded-2xl border-border/50 shadow-sm">
+          <CardHeader className="border-b border-border/50 bg-gradient-to-r from-rose-500/5 via-pink-500/5 to-transparent">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-gradient-to-br from-rose-500 to-pink-500 p-2.5 shadow-lg shadow-rose-500/20">
+                <Sparkles className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">
+                  {isEs ? "Reservas Recientes" : "Recent Bookings"}
+                </CardTitle>
+                <CardDescription>
+                  {isEs ? "Últimas 5 reservas" : "Last 5 bookings"}
+                </CardDescription>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-6">
             {isLoading ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-12 animate-pulse rounded-lg bg-muted" />
+                  <div key={i} className="h-16 animate-pulse rounded-xl bg-muted/30" />
                 ))}
               </div>
             ) : recentBookings.length > 0 ? (
               <div className="space-y-3">
-                {recentBookings.map((booking) => (
+                {recentBookings.map((booking, idx) => (
                   <div
                     key={booking.id}
-                    className="flex items-center justify-between rounded-lg border p-3"
+                    className={`group flex items-center justify-between rounded-xl border border-border/50 p-4 transition-all duration-300 hover:shadow-md hover:border-border ${
+                      idx % 2 === 0 ? 'bg-muted/20' : 'bg-transparent'
+                    }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="rounded-full bg-accent/10 p-2">
-                        <Calendar className="h-4 w-4 text-accent" />
+                    <div className="flex items-center gap-4">
+                      <div className="rounded-xl bg-gradient-to-br from-rose-500 to-pink-500 p-3 shadow-md transition-transform duration-300 group-hover:scale-105">
+                        <Calendar className="h-5 w-5 text-white" />
                       </div>
                       <div>
-                        <p className="font-medium">{booking.service_name}</p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="font-semibold text-foreground">{booking.service_name}</p>
+                        <p className="text-sm text-muted-foreground">
                           {booking.scheduled_at
                             ? new Date(booking.scheduled_at).toLocaleDateString(
                                 isEs ? "es-ES" : "en-US",
@@ -516,15 +584,16 @@ export default function Dashboard() {
                         </p>
                       </div>
                     </div>
-                    <Badge className={getStatusBadge(booking.status)}>
+                    <Badge className={`${getStatusBadge(booking.status)} border rounded-full px-3 py-1 text-xs font-medium`}>
                       {booking.status}
                     </Badge>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="flex h-32 items-center justify-center text-muted-foreground">
-                {isEs ? "No hay reservas recientes" : "No recent bookings"}
+              <div className="flex h-40 flex-col items-center justify-center gap-3 text-muted-foreground">
+                <Calendar className="h-12 w-12 text-muted-foreground/30" />
+                <p>{isEs ? "No hay reservas recientes" : "No recent bookings"}</p>
               </div>
             )}
           </CardContent>
