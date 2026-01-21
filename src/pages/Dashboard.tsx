@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { 
   Users, 
   Calendar, 
@@ -13,7 +14,11 @@ import {
   BarChart3,
   PieChart as PieChartIcon,
   Activity,
-  Sparkles
+  Sparkles,
+  Plus,
+  Inbox,
+  Wrench,
+  ChevronRight
 } from "lucide-react";
 import {
   AreaChart,
@@ -66,6 +71,7 @@ const COLORS = [
 ];
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const { lang } = useLanguage();
   const isEs = lang === "es";
   const { businessId, loading: bizLoading } = useCurrentBusiness();
@@ -269,6 +275,37 @@ export default function Dashboard() {
     },
   ];
 
+  const quickActions = [
+    {
+      title: isEs ? "Nueva Reserva" : "New Booking",
+      description: isEs ? "Agenda un servicio" : "Schedule a service",
+      icon: Calendar,
+      gradient: "from-rose-500 to-pink-500",
+      href: "/crm/bookings/new",
+    },
+    {
+      title: isEs ? "Nuevo Cliente" : "New Customer",
+      description: isEs ? "Añadir contacto" : "Add contact",
+      icon: UserPlus,
+      gradient: "from-emerald-500 to-teal-500",
+      href: "/crm/customers/new",
+    },
+    {
+      title: isEs ? "Nuevo Servicio" : "New Service",
+      description: isEs ? "Crear servicio" : "Create service",
+      icon: Wrench,
+      gradient: "from-violet-500 to-purple-500",
+      href: "/crm/services",
+    },
+    {
+      title: isEs ? "Ver Inbox" : "View Inbox",
+      description: isEs ? "Mensajes" : "Messages",
+      icon: Inbox,
+      gradient: "from-blue-500 to-indigo-500",
+      href: "/crm/inbox",
+    },
+  ];
+
   const isLoading = bizLoading || loading;
 
   const getStatusBadge = (status: string) => {
@@ -329,6 +366,26 @@ export default function Dashboard() {
               </div>
             </CardContent>
           </Card>
+        ))}
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {quickActions.map((action) => (
+          <button
+            key={action.title}
+            onClick={() => navigate(action.href)}
+            className="group relative flex items-center gap-4 rounded-2xl border border-border/50 bg-card p-5 text-left transition-all duration-300 hover:shadow-lg hover:shadow-black/5 hover:-translate-y-0.5 hover:border-border"
+          >
+            <div className={`rounded-xl bg-gradient-to-br ${action.gradient} p-3 shadow-lg transition-transform duration-300 group-hover:scale-110`}>
+              <action.icon className="h-5 w-5 text-white" />
+            </div>
+            <div className="flex-1">
+              <p className="font-semibold text-foreground">{action.title}</p>
+              <p className="text-sm text-muted-foreground">{action.description}</p>
+            </div>
+            <ChevronRight className="h-5 w-5 text-muted-foreground transition-transform duration-300 group-hover:translate-x-1" />
+          </button>
         ))}
       </div>
 
