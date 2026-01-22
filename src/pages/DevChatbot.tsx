@@ -35,12 +35,14 @@ type Message = {
 
 const quickPrompts = {
   es: [
+    "¿Qué servicios ofrecen?",
     "¿Cuáles son sus precios?",
     "¿Tienen disponibilidad hoy?",
     "Quiero reservar una cita",
     "¿Cuál es su horario?",
   ],
   en: [
+    "What services do you offer?",
     "What are your prices?",
     "Do you have availability today?",
     "I want to book an appointment",
