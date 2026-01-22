@@ -262,18 +262,19 @@ serve(async (req: Request) => {
       .eq("business_id", businessId)
       .eq("is_active", true);
 
-    // Load knowledge base for context
-    // First try to get all relevant knowledge chunks (for small knowledge bases this is fine)
+    // Load knowledge base for context - get all chunks for this business
     const { data: knowledgeChunks } = await supabase
       .from("knowledge_chunks")
       .select("content")
       .eq("business_id", businessId)
       .order("created_at", { ascending: false })
-      .limit(5);
+      .limit(10);
     
     console.log(`Loaded ${knowledgeChunks?.length || 0} knowledge chunks for business ${businessId}`);
 
-    const knowledgeContext = knowledgeChunks.map((k: any) => k.content).join("\n\n") || "";
+    // Combine all knowledge chunks (up to ~6000 chars to include more context)
+    const knowledgeContext = (knowledgeChunks || []).map((k: any) => k.content).join("\n\n");
+    const truncatedKnowledge = knowledgeContext.slice(0, 6000);
 
     // Detect language and intent
     const language = detectLanguage(userMessage);
@@ -283,8 +284,8 @@ serve(async (req: Request) => {
     let systemPrompt = buildSystemPrompt(business, services || [], language);
     
     // Add knowledge base context if available
-    if (knowledgeContext) {
-      systemPrompt += `\n\nAdditional business information:\n${knowledgeContext.slice(0, 1000)}`;
+    if (truncatedKnowledge) {
+      systemPrompt += `\n\n--- KNOWLEDGE BASE (Use this to answer customer questions) ---\n${truncatedKnowledge}`;
     }
 
     const messages: ChatMessage[] = [
