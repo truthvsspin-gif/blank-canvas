@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/card";
 import { useLanguage } from "@/components/providers/language-provider";
 import { useCurrentBusiness } from "@/hooks/use-current-business";
+import { supabase } from "@/lib/supabaseClient";
 
 type Message = {
   id: string;
@@ -33,21 +34,48 @@ type Message = {
   timestamp: Date;
 };
 
-const quickPrompts = {
-  es: [
-    "¿Qué servicios ofrecen?",
-    "¿Cuáles son sus precios?",
-    "¿Tienen disponibilidad hoy?",
-    "Quiero reservar una cita",
-    "¿Cuál es su horario?",
-  ],
-  en: [
-    "What services do you offer?",
-    "What are your prices?",
-    "Do you have availability today?",
-    "I want to book an appointment",
-    "What are your hours?",
-  ],
+// Industry-specific quick prompts
+const industryPrompts: Record<string, { en: string[]; es: string[] }> = {
+  general: {
+    en: ["What services do you offer?", "What are your prices?", "Do you have availability today?", "I want to book an appointment", "What are your hours?"],
+    es: ["¿Qué servicios ofrecen?", "¿Cuáles son sus precios?", "¿Tienen disponibilidad hoy?", "Quiero reservar una cita", "¿Cuál es su horario?"],
+  },
+  "retail/clothing": {
+    en: ["What sizes do you have?", "Do you have this in another color?", "What are your return policies?", "Do you ship internationally?", "What's on sale right now?"],
+    es: ["¿Qué tallas tienen?", "¿Tienen esto en otro color?", "¿Cuál es su política de devoluciones?", "¿Hacen envíos internacionales?", "¿Qué está en oferta?"],
+  },
+  electronics: {
+    en: ["What's the warranty period?", "Do you have this model in stock?", "Can I compare specifications?", "Do you offer installation services?", "What payment plans are available?"],
+    es: ["¿Cuál es el período de garantía?", "¿Tienen este modelo en stock?", "¿Puedo comparar especificaciones?", "¿Ofrecen servicio de instalación?", "¿Qué planes de pago tienen?"],
+  },
+  automotive: {
+    en: ["What detailing packages do you offer?", "How long does service take?", "Do you offer pickup/delivery?", "What's included in a full detail?", "Do you work on motorcycles?"],
+    es: ["¿Qué paquetes de detailing ofrecen?", "¿Cuánto tiempo toma el servicio?", "¿Ofrecen recogida/entrega?", "¿Qué incluye un detallado completo?", "¿Trabajan con motos?"],
+  },
+  restaurant: {
+    en: ["What's on the menu today?", "Do you take reservations?", "Do you have vegetarian options?", "What are your delivery hours?", "Do you cater events?"],
+    es: ["¿Cuál es el menú de hoy?", "¿Aceptan reservaciones?", "¿Tienen opciones vegetarianas?", "¿Cuál es su horario de entrega?", "¿Hacen catering para eventos?"],
+  },
+  healthcare: {
+    en: ["How do I book an appointment?", "What insurance do you accept?", "What are your consultation fees?", "Do you offer telemedicine?", "What services do you provide?"],
+    es: ["¿Cómo reservo una cita?", "¿Qué seguros aceptan?", "¿Cuánto cuesta una consulta?", "¿Ofrecen telemedicina?", "¿Qué servicios ofrecen?"],
+  },
+  "real-estate": {
+    en: ["What properties are available?", "Can I schedule a viewing?", "What's the price range?", "Do you handle rentals?", "What areas do you cover?"],
+    es: ["¿Qué propiedades tienen disponibles?", "¿Puedo agendar una visita?", "¿Cuál es el rango de precios?", "¿Manejan alquileres?", "¿Qué zonas cubren?"],
+  },
+  education: {
+    en: ["What courses do you offer?", "How do I enroll?", "What are the class schedules?", "Do you offer online classes?", "What are the tuition fees?"],
+    es: ["¿Qué cursos ofrecen?", "¿Cómo me inscribo?", "¿Cuáles son los horarios de clase?", "¿Ofrecen clases en línea?", "¿Cuánto cuesta la matrícula?"],
+  },
+  "beauty/spa": {
+    en: ["What treatments do you offer?", "How do I book an appointment?", "What are your prices?", "Do you have package deals?", "What products do you use?"],
+    es: ["¿Qué tratamientos ofrecen?", "¿Cómo reservo una cita?", "¿Cuáles son sus precios?", "¿Tienen paquetes especiales?", "¿Qué productos usan?"],
+  },
+  fitness: {
+    en: ["What membership plans do you have?", "What classes do you offer?", "Do you have personal trainers?", "What are your hours?", "Is there a free trial?"],
+    es: ["¿Qué planes de membresía tienen?", "¿Qué clases ofrecen?", "¿Tienen entrenadores personales?", "¿Cuál es su horario?", "¿Hay prueba gratis?"],
+  },
 };
 
 export default function DevChatbotPage() {
@@ -56,6 +84,28 @@ export default function DevChatbotPage() {
   const { businessId, loading: bizLoading } = useCurrentBusiness();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [industryType, setIndustryType] = useState<string>("general");
+
+  // Fetch business industry type
+  useEffect(() => {
+    if (!businessId) return;
+    supabase
+      .from("businesses")
+      .select("industry_type")
+      .eq("id", businessId)
+      .single()
+      .then(({ data }) => {
+        if (data?.industry_type) {
+          setIndustryType(data.industry_type);
+        }
+      });
+  }, [businessId]);
+
+  // Get prompts for current industry
+  const currentPrompts = useMemo(() => {
+    const prompts = industryPrompts[industryType] || industryPrompts.general;
+    return isEs ? prompts.es : prompts.en;
+  }, [industryType, isEs]);
 
   const initialMessage: Message = useMemo(() => ({
     id: "welcome",
@@ -267,7 +317,7 @@ export default function DevChatbotPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {quickPrompts[isEs ? "es" : "en"].map((prompt, idx) => (
+            {currentPrompts.map((prompt: string, idx: number) => (
               <button
                 key={idx}
                 onClick={() => handleSend(prompt)}
