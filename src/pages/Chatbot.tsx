@@ -4,6 +4,7 @@ import {
   ArrowRight,
   Bot,
   BookOpen,
+  Building2,
   CheckCircle2,
   ChevronRight,
   Database,
@@ -24,6 +25,7 @@ import {
   TestTube,
   ToggleLeft,
   ToggleRight,
+  Trash2,
   Upload,
   Zap,
 } from "lucide-react";
@@ -42,6 +44,113 @@ import { useLanguage } from "@/components/providers/language-provider";
 import { supabase } from "@/lib/supabaseClient";
 import { useCurrentBusiness } from "@/hooks/use-current-business";
 
+// Industry presets for auto-fill
+const INDUSTRY_PRESETS: Record<string, { description: { en: string; es: string }; instructions: { en: string; es: string } }> = {
+  general: {
+    description: { en: "", es: "" },
+    instructions: { en: "", es: "" },
+  },
+  automotive: {
+    description: { 
+      en: "We provide professional car care services including detailing, washing, and maintenance.",
+      es: "Ofrecemos servicios profesionales de cuidado automotriz incluyendo detallado, lavado y mantenimiento."
+    },
+    instructions: {
+      en: "Ask about vehicle type and preferred appointment times. Recommend appropriate services based on vehicle condition.",
+      es: "Pregunta sobre el tipo de vehículo y horarios preferidos. Recomienda servicios apropiados según la condición del vehículo."
+    }
+  },
+  retail_clothing: {
+    description: {
+      en: "We sell trendy clothing, accessories, and fashion items for all occasions.",
+      es: "Vendemos ropa de moda, accesorios y artículos de moda para todas las ocasiones."
+    },
+    instructions: {
+      en: "Help customers find sizes, styles, and shipping info. Ask about their style preferences and occasions.",
+      es: "Ayuda a los clientes a encontrar tallas, estilos e información de envío. Pregunta sobre sus preferencias de estilo y ocasiones."
+    }
+  },
+  retail_electronics: {
+    description: {
+      en: "We sell phones, tablets, computers, and electronic accessories.",
+      es: "Vendemos teléfonos, tablets, computadoras y accesorios electrónicos."
+    },
+    instructions: {
+      en: "Help with product specs, compatibility, and warranty info. Ask about use case and budget.",
+      es: "Ayuda con especificaciones, compatibilidad e información de garantía. Pregunta sobre el uso y presupuesto."
+    }
+  },
+  restaurant: {
+    description: {
+      en: "We serve delicious food with a variety of menu options for dine-in and delivery.",
+      es: "Servimos comida deliciosa con variedad de opciones para comer aquí o llevar."
+    },
+    instructions: {
+      en: "Help with menu info, hours, reservations, and dietary needs. Be warm and welcoming.",
+      es: "Ayuda con información del menú, horarios, reservaciones y necesidades dietéticas. Sé cálido y acogedor."
+    }
+  },
+  healthcare: {
+    description: {
+      en: "We provide healthcare services focused on patient wellness and care.",
+      es: "Proporcionamos servicios de salud enfocados en el bienestar del paciente."
+    },
+    instructions: {
+      en: "Be empathetic and professional. Help with appointment scheduling and general inquiries. Never provide medical advice.",
+      es: "Sé empático y profesional. Ayuda con citas y consultas generales. Nunca des consejos médicos."
+    }
+  },
+  beauty: {
+    description: {
+      en: "We offer beauty and wellness services including hair, nails, skincare, and spa treatments.",
+      es: "Ofrecemos servicios de belleza y bienestar incluyendo cabello, uñas, cuidado de piel y tratamientos de spa."
+    },
+    instructions: {
+      en: "Help with appointment booking and service recommendations. Ask about preferences and desired outcomes.",
+      es: "Ayuda con reservaciones y recomendaciones de servicios. Pregunta sobre preferencias y resultados deseados."
+    }
+  },
+  real_estate: {
+    description: {
+      en: "We help clients buy, sell, and rent properties in the area.",
+      es: "Ayudamos a clientes a comprar, vender y rentar propiedades en la zona."
+    },
+    instructions: {
+      en: "Qualify leads by asking about budget, location preferences, and timeline. Offer to schedule viewings.",
+      es: "Califica leads preguntando sobre presupuesto, preferencias de ubicación y plazos. Ofrece agendar visitas."
+    }
+  },
+  education: {
+    description: {
+      en: "We provide educational programs and training courses.",
+      es: "Proporcionamos programas educativos y cursos de capacitación."
+    },
+    instructions: {
+      en: "Help with course information, enrollment, and scheduling. Ask about learning goals and experience level.",
+      es: "Ayuda con información de cursos, inscripción y horarios. Pregunta sobre objetivos de aprendizaje y nivel de experiencia."
+    }
+  },
+  professional_services: {
+    description: {
+      en: "We provide professional consulting and business services.",
+      es: "Proporcionamos servicios profesionales de consultoría y negocios."
+    },
+    instructions: {
+      en: "Qualify leads by understanding their needs. Schedule consultations and explain service offerings.",
+      es: "Califica leads entendiendo sus necesidades. Agenda consultas y explica los servicios ofrecidos."
+    }
+  }
+};
+
+type IndustryType = keyof typeof INDUSTRY_PRESETS;
+
+interface KnowledgeSource {
+  id: string;
+  title: string | null;
+  source_type: string;
+  created_at: string;
+}
+
 export default function ChatbotPage() {
   const { lang } = useLanguage();
   const isEs = lang === "es";
@@ -51,6 +160,11 @@ export default function ChatbotPage() {
   const [chatbotEnabled, setChatbotEnabled] = useState(true);
   const [chatbotLanguage, setChatbotLanguage] = useState<"en" | "es">("en");
   const [greetingMessage, setGreetingMessage] = useState("");
+  
+  // New industry settings
+  const [industryType, setIndustryType] = useState<IndustryType>("general");
+  const [businessDescription, setBusinessDescription] = useState("");
+  const [aiInstructions, setAiInstructions] = useState("");
   
   // Integration state
   const [integrationState, setIntegrationState] = useState({
@@ -69,6 +183,8 @@ export default function ChatbotPage() {
   const [kbLoading, setKbLoading] = useState(false);
   const [kbMessage, setKbMessage] = useState<string | null>(null);
   const [kbError, setKbError] = useState<string | null>(null);
+  const [knowledgeSources, setKnowledgeSources] = useState<KnowledgeSource[]>([]);
+  const [kbSourcesLoading, setKbSourcesLoading] = useState(false);
   
   // Save state
   const [saveLoading, setSaveLoading] = useState(false);
@@ -83,7 +199,7 @@ export default function ChatbotPage() {
         quickStart: "Inicio Rápido",
         quickStartDesc: "Sigue estos pasos para configurar tu chatbot",
         steps: [
-          { title: "Activa el chatbot", desc: "Habilita respuestas automáticas" },
+          { title: "Selecciona tu industria", desc: "Define el tipo de negocio" },
           { title: "Configura el idioma", desc: "Elige español o inglés" },
           { title: "Añade conocimiento", desc: "URL, texto o documentos" },
           { title: "Prueba el flujo", desc: "Usa el simulador" },
@@ -96,6 +212,13 @@ export default function ChatbotPage() {
         language: "Idioma Principal",
         greeting: "Mensaje de Saludo",
         greetingPlaceholder: "¡Hola! Gracias por contactarnos.",
+        industry: "Tipo de Industria",
+        industryDesc: "Selecciona tu tipo de negocio para respuestas optimizadas",
+        businessDesc: "Descripción del Negocio",
+        businessDescPlaceholder: "Describe brevemente qué hace tu negocio...",
+        aiInstructions: "Instrucciones Personalizadas del AI",
+        aiInstructionsPlaceholder: "Instrucciones adicionales para el chatbot...",
+        applyPreset: "Aplicar Plantilla",
         integrations: "Integraciones",
         integrationsDesc: "Conecta WhatsApp e Instagram",
         whatsappToken: "WhatsApp Access Token",
@@ -105,6 +228,8 @@ export default function ChatbotPage() {
         metaLink: "Obtener credenciales de Meta",
         knowledge: "Base de Conocimiento",
         knowledgeDesc: "Añade información para que el chatbot responda mejor",
+        existingSources: "Fuentes Existentes",
+        noSources: "No hay fuentes de conocimiento",
         sourceType: "Tipo de Fuente",
         sourceUrl: "Sitio Web",
         sourceText: "Texto Largo",
@@ -128,6 +253,18 @@ export default function ChatbotPage() {
         noBusiness: "No hay negocio activo",
         ingestFail: "Error al procesar contenido",
         selectDoc: "Selecciona un documento",
+        industries: {
+          general: "General",
+          automotive: "Automotriz / Detallado",
+          retail_clothing: "Tienda de Ropa",
+          retail_electronics: "Tienda de Electrónica",
+          restaurant: "Restaurante",
+          healthcare: "Salud / Médico",
+          beauty: "Belleza / Spa",
+          real_estate: "Inmobiliaria",
+          education: "Educación",
+          professional_services: "Servicios Profesionales",
+        }
       }
     : {
         title: "Chatbot Center",
@@ -135,7 +272,7 @@ export default function ChatbotPage() {
         quickStart: "Quick Start",
         quickStartDesc: "Follow these steps to set up your chatbot",
         steps: [
-          { title: "Enable chatbot", desc: "Turn on automatic replies" },
+          { title: "Select your industry", desc: "Define your business type" },
           { title: "Set language", desc: "Choose English or Spanish" },
           { title: "Add knowledge", desc: "URL, text, or documents" },
           { title: "Test the flow", desc: "Use the simulator" },
@@ -148,6 +285,13 @@ export default function ChatbotPage() {
         language: "Primary Language",
         greeting: "Greeting Message",
         greetingPlaceholder: "Hi! Thanks for reaching out.",
+        industry: "Industry Type",
+        industryDesc: "Select your business type for optimized responses",
+        businessDesc: "Business Description",
+        businessDescPlaceholder: "Briefly describe what your business does...",
+        aiInstructions: "Custom AI Instructions",
+        aiInstructionsPlaceholder: "Additional instructions for the chatbot...",
+        applyPreset: "Apply Template",
         integrations: "Integrations",
         integrationsDesc: "Connect WhatsApp and Instagram",
         whatsappToken: "WhatsApp Access Token",
@@ -157,6 +301,8 @@ export default function ChatbotPage() {
         metaLink: "Get Meta credentials",
         knowledge: "Knowledge Base",
         knowledgeDesc: "Add information so the chatbot can answer better",
+        existingSources: "Existing Sources",
+        noSources: "No knowledge sources yet",
         sourceType: "Source Type",
         sourceUrl: "Website",
         sourceText: "Long Text",
@@ -180,6 +326,18 @@ export default function ChatbotPage() {
         noBusiness: "No active business",
         ingestFail: "Failed to process content",
         selectDoc: "Please select a document",
+        industries: {
+          general: "General",
+          automotive: "Automotive / Detailing",
+          retail_clothing: "Clothing Store",
+          retail_electronics: "Electronics Store",
+          restaurant: "Restaurant",
+          healthcare: "Healthcare / Medical",
+          beauty: "Beauty / Spa",
+          real_estate: "Real Estate",
+          education: "Education",
+          professional_services: "Professional Services",
+        }
       };
 
   // Load settings
@@ -190,7 +348,7 @@ export default function ChatbotPage() {
       
       const { data: business } = await supabase
         .from("businesses")
-        .select("chatbot_enabled, language_preference, greeting_message")
+        .select("chatbot_enabled, language_preference, greeting_message, industry_type, business_description, ai_instructions")
         .eq("id", businessId)
         .single();
         
@@ -202,6 +360,9 @@ export default function ChatbotPage() {
             : "en"
         );
         setGreetingMessage(business.greeting_message ?? "");
+        setIndustryType((business.industry_type as IndustryType) || "general");
+        setBusinessDescription(business.business_description ?? "");
+        setAiInstructions(business.ai_instructions ?? "");
       }
 
       const { data: integrations } = await supabase
@@ -223,6 +384,37 @@ export default function ChatbotPage() {
     loadSettings();
   }, [businessId]);
 
+  // Load knowledge sources
+  useEffect(() => {
+    const loadKnowledgeSources = async () => {
+      if (!businessId) return;
+      setKbSourcesLoading(true);
+      
+      const { data } = await supabase
+        .from("knowledge_sources")
+        .select("id, title, source_type, created_at")
+        .eq("business_id", businessId)
+        .order("created_at", { ascending: false });
+        
+      setKnowledgeSources(data || []);
+      setKbSourcesLoading(false);
+    };
+    loadKnowledgeSources();
+  }, [businessId, kbMessage]);
+
+  const handleApplyPreset = () => {
+    const preset = INDUSTRY_PRESETS[industryType];
+    if (preset) {
+      const langKey = isEs ? "es" : "en";
+      if (preset.description[langKey]) {
+        setBusinessDescription(preset.description[langKey]);
+      }
+      if (preset.instructions[langKey]) {
+        setAiInstructions(preset.instructions[langKey]);
+      }
+    }
+  };
+
   const handleSave = async () => {
     if (!businessId) {
       setSaveError(copy.noBusiness);
@@ -238,6 +430,9 @@ export default function ChatbotPage() {
         chatbot_enabled: chatbotEnabled,
         language_preference: chatbotLanguage,
         greeting_message: greetingMessage.trim() || null,
+        industry_type: industryType,
+        business_description: businessDescription.trim() || null,
+        ai_instructions: aiInstructions.trim() || null,
       })
       .eq("id", businessId);
 
@@ -285,11 +480,14 @@ export default function ChatbotPage() {
     setKbError(null);
     setKbMessage(null);
     
-    const response = await fetch("/api/knowledge/clear", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ businessId }),
-    });
+    const response = await fetch(
+      "https://ybifjdlelpvgzmzvgwls.supabase.co/functions/v1/knowledge-clear",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessId }),
+      }
+    );
     const result = await response.json().catch(() => null);
     
     if (!response.ok) {
@@ -297,7 +495,7 @@ export default function ChatbotPage() {
       setKbLoading(false);
       return;
     }
-    setKbMessage(copy.cleared(result?.sourceCount ?? 0, result?.chunkCount ?? 0));
+    setKbMessage(copy.cleared(result?.deletedSources ?? 0, result?.deletedChunks ?? 0));
     setKbLoading(false);
   };
 
@@ -477,6 +675,62 @@ export default function ChatbotPage() {
               )}
             </div>
 
+            {/* Industry Type Selection */}
+            <div className="space-y-3 rounded-xl border bg-gradient-to-br from-purple-50/50 to-transparent p-4">
+              <div className="flex items-center gap-2">
+                <Building2 className="h-4 w-4 text-purple-600" />
+                <span className="font-medium text-purple-700">{copy.industry}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">{copy.industryDesc}</p>
+              <div className="flex gap-2">
+                <select
+                  className="flex-1 rounded-lg border bg-background px-4 py-3 text-sm transition-colors focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+                  value={industryType}
+                  onChange={(e) => setIndustryType(e.target.value as IndustryType)}
+                >
+                  {Object.keys(INDUSTRY_PRESETS).map((key) => (
+                    <option key={key} value={key}>
+                      {copy.industries[key as keyof typeof copy.industries]}
+                    </option>
+                  ))}
+                </select>
+                <Button 
+                  variant="outline" 
+                  onClick={handleApplyPreset}
+                  className="shrink-0"
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  {copy.applyPreset}
+                </Button>
+              </div>
+            </div>
+
+            {/* Business Description */}
+            <div className="space-y-2">
+              <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                {copy.businessDesc}
+              </label>
+              <textarea
+                className="min-h-[80px] w-full rounded-lg border bg-background px-4 py-3 text-sm transition-colors focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+                value={businessDescription}
+                onChange={(e) => setBusinessDescription(e.target.value)}
+                placeholder={copy.businessDescPlaceholder}
+              />
+            </div>
+
+            {/* AI Instructions */}
+            <div className="space-y-2">
+              <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                {copy.aiInstructions}
+              </label>
+              <textarea
+                className="min-h-[80px] w-full rounded-lg border bg-background px-4 py-3 text-sm transition-colors focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+                value={aiInstructions}
+                onChange={(e) => setAiInstructions(e.target.value)}
+                placeholder={copy.aiInstructionsPlaceholder}
+              />
+            </div>
+
             {/* Language & Greeting */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
@@ -611,6 +865,50 @@ export default function ChatbotPage() {
           </div>
         </CardHeader>
         <CardContent className="p-6 space-y-6">
+          {/* Existing Sources */}
+          {knowledgeSources.length > 0 && (
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium text-muted-foreground">{copy.existingSources}</h4>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {knowledgeSources.map((source) => (
+                  <div 
+                    key={source.id}
+                    className="flex items-center justify-between rounded-lg border bg-muted/30 p-3"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      {source.source_type === "url" ? (
+                        <Globe className="h-4 w-4 text-blue-500 shrink-0" />
+                      ) : source.source_type === "document" ? (
+                        <Upload className="h-4 w-4 text-purple-500 shrink-0" />
+                      ) : (
+                        <FileText className="h-4 w-4 text-emerald-500 shrink-0" />
+                      )}
+                      <span className="text-sm truncate">
+                        {source.title || source.source_type}
+                      </span>
+                    </div>
+                    <Badge variant="secondary" className="text-xs shrink-0 ml-2">
+                      {source.source_type}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {kbSourcesLoading && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading sources...
+            </div>
+          )}
+
+          {!kbSourcesLoading && knowledgeSources.length === 0 && (
+            <div className="text-sm text-muted-foreground py-2">
+              {copy.noSources}
+            </div>
+          )}
+
           <div className="grid gap-4 sm:grid-cols-3">
             {/* Source Type Cards */}
             {[
@@ -707,6 +1005,7 @@ export default function ChatbotPage() {
               {copy.ingestReplace}
             </Button>
             <Button onClick={handleClearKnowledge} disabled={kbLoading} variant="ghost" className="text-destructive hover:text-destructive">
+              <Trash2 className="mr-2 h-4 w-4" />
               {copy.ingestClear}
             </Button>
             {kbMessage && <span className="text-sm text-emerald-600 animate-fade-in">{kbMessage}</span>}
@@ -735,14 +1034,18 @@ export default function ChatbotPage() {
                 <Phone className="h-4 w-4 text-emerald-600" />
                 <span className="font-medium">WhatsApp Webhook</span>
               </div>
-              <code className="text-xs text-muted-foreground break-all">/api/webhooks/whatsapp</code>
+              <code className="text-xs text-muted-foreground break-all">
+                https://ybifjdlelpvgzmzvgwls.supabase.co/functions/v1/webhook-whatsapp
+              </code>
             </div>
             <div className="rounded-lg border bg-muted/30 p-4">
               <div className="flex items-center gap-2 mb-2">
                 <Instagram className="h-4 w-4 text-pink-600" />
                 <span className="font-medium">Instagram Webhook</span>
               </div>
-              <code className="text-xs text-muted-foreground break-all">/api/webhooks/instagram</code>
+              <code className="text-xs text-muted-foreground break-all">
+                https://ybifjdlelpvgzmzvgwls.supabase.co/functions/v1/webhook-instagram
+              </code>
             </div>
           </div>
         </CardContent>

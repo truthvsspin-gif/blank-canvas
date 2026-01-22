@@ -63,54 +63,118 @@ function detectLanguage(text: string): "en" | "es" {
 function buildSystemPrompt(business: any, services: any[], language: "en" | "es"): string {
   const businessName = business?.name || "our business";
   const greeting = business?.greeting_message || "";
+  const industryType = business?.industry_type || "general";
+  const businessDescription = business?.business_description || "";
+  const aiInstructions = business?.ai_instructions || "";
   
-  const serviceList = services?.map((s: any) => 
-    `- ${s.name}: ${s.description || "No description"} - $${s.base_price || "TBD"} (${s.duration_minutes || "?"} min)`
-  ).join("\n") || "No services configured.";
+  const serviceList = services?.length > 0
+    ? services.map((s: any) => 
+        `- ${s.name}: ${s.description || "No description"} - $${s.base_price || "TBD"} (${s.duration_minutes || "?"} min)`
+      ).join("\n")
+    : null;
+
+  // Industry-specific context
+  const industryContexts: Record<string, { en: string; es: string }> = {
+    general: {
+      en: "a business",
+      es: "un negocio"
+    },
+    automotive: {
+      en: "an automotive/car care business",
+      es: "un negocio de cuidado automotriz"
+    },
+    retail_clothing: {
+      en: "a clothing and fashion retail store",
+      es: "una tienda de ropa y moda"
+    },
+    retail_electronics: {
+      en: "an electronics and technology store",
+      es: "una tienda de electrónica y tecnología"
+    },
+    restaurant: {
+      en: "a restaurant and food service",
+      es: "un restaurante y servicio de comida"
+    },
+    healthcare: {
+      en: "a healthcare and medical services provider",
+      es: "un proveedor de servicios de salud"
+    },
+    beauty: {
+      en: "a beauty and wellness business",
+      es: "un negocio de belleza y bienestar"
+    },
+    real_estate: {
+      en: "a real estate agency",
+      es: "una agencia inmobiliaria"
+    },
+    education: {
+      en: "an education and training provider",
+      es: "un proveedor de educación y capacitación"
+    },
+    professional_services: {
+      en: "a professional services firm",
+      es: "una firma de servicios profesionales"
+    }
+  };
+
+  const industryContext = industryContexts[industryType] || industryContexts.general;
+  const businessType = language === "es" ? industryContext.es : industryContext.en;
 
   if (language === "es") {
-    return `Eres un asistente de atención al cliente profesional y amigable para ${businessName}, un negocio de detallado automotriz.
+    let prompt = `Eres un asistente de atención al cliente profesional y amigable para ${businessName}, ${businessDescription || businessType}.
 
 Tu objetivo es:
-1. Responder preguntas sobre servicios, precios y horarios
-2. Calificar leads identificando interés en reservas
+1. Responder preguntas sobre productos, servicios, precios y horarios
+2. Calificar leads identificando interés en compras o reservas
 3. Hacer preguntas de seguimiento cuando sea necesario
 4. Mantener respuestas cortas (1-3 oraciones), profesionales y orientadas al negocio
 
 ${greeting ? `Saludo personalizado: ${greeting}` : ""}
+${businessDescription ? `\nDescripción del negocio: ${businessDescription}` : ""}`;
 
-Servicios disponibles:
-${serviceList}
+    if (serviceList) {
+      prompt += `\n\nServicios/Productos disponibles:\n${serviceList}`;
+    }
 
-Horario: Lunes a Sábado, 8am - 6pm
-
-Reglas:
+    prompt += `\n\nReglas:
 - Sé conciso y directo
-- Si el cliente muestra interés en reservar, pregunta por fecha/hora preferida y tipo de vehículo
+- Si el cliente muestra interés en comprar/reservar, pregunta por detalles relevantes
 - Si no conoces información específica, ofrece contactar al negocio directamente
-- Nunca inventes precios o servicios que no estén listados`;
+- Nunca inventes precios o productos que no estén listados`;
+
+    if (aiInstructions) {
+      prompt += `\n\nInstrucciones adicionales:\n${aiInstructions}`;
+    }
+
+    return prompt;
   }
 
-  return `You are a professional and friendly customer service assistant for ${businessName}, an auto detailing business.
+  let prompt = `You are a professional and friendly customer service assistant for ${businessName}, ${businessDescription || businessType}.
 
 Your goals:
-1. Answer questions about services, pricing, and hours
-2. Qualify leads by identifying booking interest
+1. Answer questions about products, services, pricing, and hours
+2. Qualify leads by identifying purchase or booking interest
 3. Ask follow-up questions when needed
 4. Keep responses short (1-3 sentences), professional, and business-oriented
 
 ${greeting ? `Custom greeting: ${greeting}` : ""}
+${businessDescription ? `\nBusiness description: ${businessDescription}` : ""}`;
 
-Available services:
-${serviceList}
+  if (serviceList) {
+    prompt += `\n\nAvailable services/products:\n${serviceList}`;
+  }
 
-Business hours: Monday to Saturday, 8am - 6pm
-
-Rules:
+  prompt += `\n\nRules:
 - Be concise and direct
-- If customer shows booking interest, ask for preferred date/time and vehicle type
+- If customer shows interest in purchasing/booking, ask for relevant details
 - If you don't know specific information, offer to have the business contact them directly
-- Never make up prices or services not listed`;
+- Never make up prices or products not listed`;
+
+  if (aiInstructions) {
+    prompt += `\n\nAdditional instructions:\n${aiInstructions}`;
+  }
+
+  return prompt;
 }
 
 async function callGroqAPI(
@@ -249,10 +313,10 @@ serve(async (req: Request) => {
       );
     }
 
-    // Load business context
+    // Load business context with new industry fields
     const { data: business } = await supabase
       .from("businesses")
-      .select("name, language_preference, greeting_message")
+      .select("name, language_preference, greeting_message, industry_type, business_description, ai_instructions")
       .eq("id", businessId)
       .single();
 

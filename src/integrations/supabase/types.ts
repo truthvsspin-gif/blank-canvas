@@ -118,14 +118,17 @@ export type Database = {
       }
       businesses: {
         Row: {
+          ai_instructions: string | null
           ai_reply_enabled: boolean
           auto_reply_rules: Json | null
           booking_rules: Json | null
+          business_description: string | null
           chatbot_enabled: boolean
           created_at: string
           domain: string | null
           greeting_message: string | null
           id: string
+          industry_type: string | null
           language_preference: string | null
           name: string
           office_hours: string | null
@@ -133,14 +136,17 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          ai_instructions?: string | null
           ai_reply_enabled?: boolean
           auto_reply_rules?: Json | null
           booking_rules?: Json | null
+          business_description?: string | null
           chatbot_enabled?: boolean
           created_at?: string
           domain?: string | null
           greeting_message?: string | null
           id?: string
+          industry_type?: string | null
           language_preference?: string | null
           name: string
           office_hours?: string | null
@@ -148,14 +154,17 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          ai_instructions?: string | null
           ai_reply_enabled?: boolean
           auto_reply_rules?: Json | null
           booking_rules?: Json | null
+          business_description?: string | null
           chatbot_enabled?: boolean
           created_at?: string
           domain?: string | null
           greeting_message?: string | null
           id?: string
+          industry_type?: string | null
           language_preference?: string | null
           name?: string
           office_hours?: string | null
