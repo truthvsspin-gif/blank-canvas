@@ -311,11 +311,14 @@ export default function ChatbotPage() {
     setKbMessage(null);
     
     if (mode === "replace") {
-      const clearResponse = await fetch("/api/knowledge/clear", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ businessId }),
-      });
+      const clearResponse = await fetch(
+        "https://ybifjdlelpvgzmzvgwls.supabase.co/functions/v1/knowledge-clear",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ businessId }),
+        }
+      );
       if (!clearResponse.ok) {
         const clearResult = await clearResponse.json().catch(() => null);
         setKbError(clearResult?.error || copy.ingestFail);
@@ -335,7 +338,7 @@ export default function ChatbotPage() {
       if (kbTitle.trim()) formData.append("title", kbTitle.trim());
       formData.append("file", kbFile);
       
-      const response = await fetch("/api/knowledge/ingest-file", { method: "POST", body: formData });
+      const response = await fetch("https://ybifjdlelpvgzmzvgwls.supabase.co/functions/v1/knowledge-ingest-file", { method: "POST", body: formData });
       const result = await response.json().catch(() => null);
       
       if (!response.ok) {
@@ -352,11 +355,14 @@ export default function ChatbotPage() {
       ? { businessId, sourceType: "url", sourceUrl: kbUrl.trim(), title: kbTitle.trim() || undefined }
       : { businessId, sourceType: kbSourceType, content: kbText.trim(), title: kbTitle.trim() || undefined };
       
-    const response = await fetch("/api/knowledge/ingest", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    const response = await fetch(
+      "https://ybifjdlelpvgzmzvgwls.supabase.co/functions/v1/knowledge-ingest",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }
+    );
     const result = await response.json().catch(() => null);
     
     if (!response.ok) {
