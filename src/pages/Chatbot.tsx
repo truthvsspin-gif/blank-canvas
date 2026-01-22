@@ -46,20 +46,6 @@ import { supabase } from "@/lib/supabaseClient";
 import { useCurrentBusiness } from "@/hooks/use-current-business";
 import { FlyerManager } from "@/components/chatbot/FlyerManager";
 
-import { PageHeader } from "@/components/layout/page-header";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { useLanguage } from "@/components/providers/language-provider";
-import { supabase } from "@/lib/supabaseClient";
-import { useCurrentBusiness } from "@/hooks/use-current-business";
-
 // Industry presets for auto-fill
 const INDUSTRY_PRESETS: Record<string, { description: { en: string; es: string }; instructions: { en: string; es: string } }> = {
   general: {
