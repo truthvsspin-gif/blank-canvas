@@ -10,6 +10,10 @@ const corsHeaders = {
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+// Groq API configuration
+const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+const DEFAULT_MODEL = "llama-3.1-8b-instant";
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -326,9 +330,9 @@ async function generateAIResponse(
   message: NormalizedMessage,
   business: any
 ): Promise<string | null> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) {
-    console.error("LOVABLE_API_KEY not configured");
+  const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+  if (!GROQ_API_KEY) {
+    console.error("GROQ_API_KEY not configured");
     return null;
   }
 
@@ -352,10 +356,14 @@ async function generateAIResponse(
 
   const language = business.language_preference === "es" ? "Spanish" : "English";
 
-  const systemPrompt = `You are a helpful AI assistant for a car detailing business responding on Instagram.
+  const systemPrompt = `You are a helpful AI assistant for ${business.name || "a car detailing business"} responding on Instagram.
 Respond in ${language}.
-Be friendly, professional, and helpful.
-Keep responses concise for Instagram messaging format.
+Be friendly, professional, and concise (1-3 sentences max).
+
+Your goals:
+1. Answer questions about services, pricing, and hours
+2. Qualify leads by identifying booking interest
+3. If customer wants to book, ask for preferred date/time and vehicle type
 
 Business Services:
 ${servicesContext}
@@ -363,27 +371,33 @@ ${servicesContext}
 Knowledge Base:
 ${knowledgeContext}
 
-Greeting: ${business.greeting_message || "Hi! How can I help you today?"}`;
+Greeting: ${business.greeting_message || "Hi! How can I help you today?"}
+
+Rules:
+- Keep responses short for Instagram DM format
+- Be direct and actionable
+- If you don't know something, offer to connect them with the team`;
 
   try {
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch(GROQ_API_URL, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: DEFAULT_MODEL,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: message.message_text },
         ],
-        max_tokens: 400,
+        max_tokens: 300,
+        temperature: 0.7,
       }),
     });
 
     if (!response.ok) {
-      console.error("AI Gateway error:", response.status);
+      console.error("Groq API error:", response.status);
       return null;
     }
 
