@@ -40,6 +40,8 @@ type InboxMessage = {
   direction: "inbound" | "outbound"
   message_text: string
   message_timestamp: string
+  message_type?: "text" | "image" | "document"
+  file_url?: string | null
 }
 
 export default function CrmInboxPage() {
@@ -117,7 +119,7 @@ export default function CrmInboxPage() {
     const loadMessages = async () => {
       const { data, error } = await supabase
         .from("inbox_messages")
-        .select("id, direction, message_text, message_timestamp")
+        .select("id, direction, message_text, message_timestamp, message_type, file_url")
         .eq("thread_id", activeThreadId)
         .order("message_timestamp", { ascending: true })
       if (!error) {
@@ -425,6 +427,14 @@ export default function CrmInboxPage() {
                             : "bg-card text-foreground border border-border rounded-bl-sm"
                         }`}
                       >
+                        {message.message_type === "image" && message.file_url ? (
+                          <img 
+                            src={message.file_url} 
+                            alt={message.message_text}
+                            className="max-w-full rounded-lg mb-2 cursor-pointer hover:opacity-90"
+                            onClick={() => window.open(message.file_url!, "_blank")}
+                          />
+                        ) : null}
                         <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
                           {message.message_text}
                         </p>

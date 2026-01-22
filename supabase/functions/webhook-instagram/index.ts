@@ -14,6 +14,9 @@ const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const DEFAULT_MODEL = "llama-3.1-8b-instant";
 
+// Intents that can trigger flyer sending
+const FLYER_INTENTS = ["pricing", "services", "packages", "quote"];
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -53,7 +56,7 @@ serve(async (req: Request) => {
 
       const { data: business } = await supabase
         .from("businesses")
-        .select("chatbot_enabled, ai_reply_enabled, language_preference, greeting_message")
+        .select("chatbot_enabled, ai_reply_enabled, language_preference, greeting_message, flyer_cooldown_hours")
         .eq("id", businessId)
         .single();
 
@@ -92,6 +95,28 @@ serve(async (req: Request) => {
             }, threadId, "outbound", null);
 
             await sendInstagramMessage(supabase, businessId, message.sender_phone_or_handle!, aiResponse);
+
+            // Check if we should send a flyer for this intent
+            if (FLYER_INTENTS.includes(intent)) {
+              const flyerSent = await maybeSendFlyer(
+                supabase, 
+                businessId, 
+                message.sender_phone_or_handle!, 
+                message.conversation_id,
+                threadId,
+                business.flyer_cooldown_hours || 24
+              );
+              
+              if (flyerSent) {
+                results.push({
+                  conversation_id: message.conversation_id,
+                  response_sent: true,
+                  flyer_sent: true,
+                  intent,
+                });
+                continue;
+              }
+            }
 
             results.push({
               conversation_id: message.conversation_id,
@@ -183,8 +208,10 @@ function normalizeTimestamp(value: unknown): string {
 
 function detectIntent(text: string): string {
   const lower = text.toLowerCase();
-  const intents = {
-    pricing: ["price", "pricing", "cost", "quote", "precio", "costo", "cotizacion"],
+  const intents: Record<string, string[]> = {
+    pricing: ["price", "pricing", "cost", "quote", "precio", "costo", "cotizacion", "cuanto", "how much"],
+    services: ["service", "services", "servicio", "servicios", "what do you offer", "que ofrecen", "menu", "menú"],
+    packages: ["package", "packages", "paquete", "paquetes", "combo", "deal", "promocion", "promo"],
     booking: ["book", "booking", "appointment", "reserve", "schedule", "cita", "agendar", "reservar"],
     availability: ["availability", "available", "slots", "open", "hours", "horario", "disponible"],
   };
@@ -248,9 +275,11 @@ async function recordMessage(
   message: NormalizedMessage,
   threadId: string,
   direction: string,
-  _intent: string | null
+  _intent: string | null,
+  options?: { messageType?: string; mediaAssetId?: string; fileUrl?: string }
 ) {
   const threadKey = message.sender_phone_or_handle || message.conversation_id;
+  const messageType = options?.messageType || "text";
 
   await supabase.from("inbox_messages").insert({
     business_id: message.business_id,
@@ -263,6 +292,9 @@ async function recordMessage(
     message_text: message.message_text,
     message_timestamp: message.timestamp,
     metadata: message.metadata,
+    message_type: messageType,
+    media_asset_id: options?.mediaAssetId || null,
+    file_url: options?.fileUrl || null,
   });
 
   await supabase.from("messages").insert({
@@ -273,6 +305,9 @@ async function recordMessage(
     message_text: message.message_text,
     timestamp: message.timestamp,
     channel: message.channel,
+    message_type: messageType,
+    media_asset_id: options?.mediaAssetId || null,
+    file_url: options?.fileUrl || null,
   });
 }
 
@@ -376,7 +411,8 @@ Greeting: ${business.greeting_message || "Hi! How can I help you today?"}
 Rules:
 - Keep responses short for Instagram DM format
 - Be direct and actionable
-- If you don't know something, offer to connect them with the team`;
+- If you don't know something, offer to connect them with the team
+- When discussing services/pricing, mention you can share a visual service menu`;
 
   try {
     const response = await fetch(GROQ_API_URL, {
@@ -406,6 +442,177 @@ Rules:
   } catch (error) {
     console.error("AI response generation failed:", error);
     return null;
+  }
+}
+
+async function maybeSendFlyer(
+  supabase: any,
+  businessId: string,
+  recipientId: string,
+  conversationId: string,
+  threadId: string,
+  cooldownHours: number
+): Promise<boolean> {
+  // Check if flyer was sent recently
+  const cooldownMs = cooldownHours * 60 * 60 * 1000;
+  const cutoff = new Date(Date.now() - cooldownMs).toISOString();
+  
+  const { data: recentSend } = await supabase
+    .from("flyer_send_log")
+    .select("id")
+    .eq("business_id", businessId)
+    .eq("conversation_id", conversationId)
+    .gte("sent_at", cutoff)
+    .limit(1)
+    .maybeSingle();
+
+  if (recentSend) {
+    console.log("Flyer already sent recently, skipping");
+    return false;
+  }
+
+  // Get default active flyer
+  const { data: flyer } = await supabase
+    .from("media_assets")
+    .select("id, file_url, title, mime_type")
+    .eq("business_id", businessId)
+    .eq("asset_type", "services_flyer")
+    .eq("is_active", true)
+    .eq("is_default", true)
+    .maybeSingle();
+
+  if (!flyer) {
+    console.log("No default flyer configured");
+    return false;
+  }
+
+  // Try to send via Instagram image API, fallback to URL link
+  const sent = await sendInstagramImage(supabase, businessId, recipientId, flyer.file_url, flyer.title);
+  
+  if (sent) {
+    // Log the send
+    await supabase.from("flyer_send_log").insert({
+      business_id: businessId,
+      conversation_id: conversationId,
+      media_asset_id: flyer.id,
+      sent_at: new Date().toISOString(),
+    });
+
+    // Record the image message
+    const now = new Date().toISOString();
+    await supabase.from("inbox_messages").insert({
+      business_id: businessId,
+      thread_id: threadId,
+      channel: "instagram",
+      conversation_id: conversationId,
+      direction: "outbound",
+      sender_name: "Chatbot",
+      sender_handle: recipientId,
+      message_text: flyer.title || "Service Menu",
+      message_timestamp: now,
+      metadata: { flyer: true },
+      message_type: "image",
+      media_asset_id: flyer.id,
+      file_url: flyer.file_url,
+    });
+
+    await supabase.from("messages").insert({
+      business_id: businessId,
+      conversation_id: conversationId,
+      direction: "outbound",
+      sender: "Chatbot",
+      message_text: flyer.title || "Service Menu",
+      timestamp: now,
+      channel: "instagram",
+      message_type: "image",
+      media_asset_id: flyer.id,
+      file_url: flyer.file_url,
+    });
+  }
+
+  return sent;
+}
+
+async function sendInstagramImage(
+  supabase: any,
+  businessId: string,
+  recipientId: string,
+  imageUrl: string,
+  caption: string | null
+): Promise<boolean> {
+  const { data: integration } = await supabase
+    .from("business_integrations")
+    .select("instagram_access_token, instagram_business_id")
+    .eq("business_id", businessId)
+    .maybeSingle();
+
+  const token = integration?.instagram_access_token;
+  const igBusinessId = integration?.instagram_business_id;
+
+  if (!token || !igBusinessId) {
+    console.log("Instagram credentials not configured for business:", businessId);
+    return false;
+  }
+
+  const language = caption?.toLowerCase().includes("menú") || caption?.toLowerCase().includes("servicio") ? "es" : "en";
+  const defaultCaption = language === "es" 
+    ? "📋 Aquí está nuestro menú de servicios. ¿En qué paquete estás interesado?"
+    : "📋 Here's our service menu. Which package are you interested in?";
+  const messageCaption = caption || defaultCaption;
+
+  // Instagram Messaging API has limited image sending support
+  // Try image attachment first, fallback to text with link
+  try {
+    // Try sending as image attachment (Instagram Send API)
+    const response = await fetch(
+      `https://graph.facebook.com/v19.0/${igBusinessId}/messages`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          messaging_type: "RESPONSE",
+          recipient: { id: recipientId },
+          message: {
+            attachment: {
+              type: "image",
+              payload: {
+                url: imageUrl,
+                is_reusable: true,
+              },
+            },
+          },
+        }),
+      }
+    );
+
+    if (response.ok) {
+      console.log("Instagram image sent successfully to:", recipientId);
+      // Also send caption as separate text
+      await sendInstagramMessage(supabase, businessId, recipientId, messageCaption);
+      return true;
+    }
+
+    // If image sending fails, fallback to text message with link
+    console.log("Instagram image API failed, sending fallback text with link");
+    const fallbackMessage = `${messageCaption}\n\n🔗 Ver menú: ${imageUrl}`;
+    await sendInstagramMessage(supabase, businessId, recipientId, fallbackMessage);
+    return true;
+
+  } catch (error) {
+    console.error("Failed to send Instagram image, trying fallback:", error);
+    
+    // Fallback: send text with public URL
+    try {
+      const fallbackMessage = `${messageCaption}\n\n🔗 Ver menú: ${imageUrl}`;
+      await sendInstagramMessage(supabase, businessId, recipientId, fallbackMessage);
+      return true;
+    } catch (fallbackError) {
+      console.error("Instagram fallback also failed:", fallbackError);
+      return false;
+    }
   }
 }
 
@@ -460,7 +667,7 @@ async function qualifyLead(
   message: NormalizedMessage,
   intent: string
 ) {
-  if (intent !== "pricing" && intent !== "booking") return;
+  if (intent !== "pricing" && intent !== "booking" && intent !== "services" && intent !== "packages") return;
 
   const emailMatch = message.message_text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
   const phone = message.sender_phone_or_handle;
@@ -491,45 +698,14 @@ async function qualifyLead(
     return;
   }
 
-  const { data: newLead } = await supabase
-    .from("leads")
-    .insert({
-      business_id: message.business_id,
-      email,
-      phone,
-      conversation_id: threadKey,
-      name: message.sender_name,
-      source: "instagram",
-      stage: "qualified",
-      qualification_reason: `intent=${intent}; source=instagram`,
-    })
-    .select("id")
-    .single();
-
-  if (newLead?.id) {
-    const now = new Date();
-    const period = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
-
-    const { data: existing } = await supabase
-      .from("usage_monthly")
-      .select("id, value")
-      .eq("business_id", message.business_id)
-      .eq("metric", "qualified_leads")
-      .eq("period", period)
-      .maybeSingle();
-
-    if (existing?.id) {
-      await supabase
-        .from("usage_monthly")
-        .update({ value: (existing.value ?? 0) + 1, updated_at: new Date().toISOString() })
-        .eq("id", existing.id);
-    } else {
-      await supabase.from("usage_monthly").insert({
-        business_id: message.business_id,
-        metric: "qualified_leads",
-        value: 1,
-        period,
-      });
-    }
-  }
+  await supabase.from("leads").insert({
+    business_id: message.business_id,
+    email,
+    phone,
+    conversation_id: threadKey,
+    name: message.sender_name,
+    source: "instagram",
+    stage: "new",
+    qualification_reason: `intent=${intent}`,
+  });
 }

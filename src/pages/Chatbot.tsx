@@ -11,6 +11,7 @@ import {
   ExternalLink,
   FileText,
   Globe,
+  Image,
   Instagram,
   Link2,
   Loader2,
@@ -29,6 +30,21 @@ import {
   Upload,
   Zap,
 } from "lucide-react";
+
+import { PageHeader } from "@/components/layout/page-header";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { useLanguage } from "@/components/providers/language-provider";
+import { supabase } from "@/lib/supabaseClient";
+import { useCurrentBusiness } from "@/hooks/use-current-business";
+import { FlyerManager } from "@/components/chatbot/FlyerManager";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -1013,6 +1029,30 @@ export default function ChatbotPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Flyer Manager */}
+      {businessId && (
+        <Card>
+          <CardHeader className="border-b">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-pink-100 p-2">
+                <Image className="h-5 w-5 text-pink-600" />
+              </div>
+              <div>
+                <CardTitle>{lang === "es" ? "Flyers de Servicios" : "Service Flyers"}</CardTitle>
+                <CardDescription>
+                  {lang === "es" 
+                    ? "Imágenes automáticas para preguntas de servicios/precios" 
+                    : "Auto-send images for services/pricing questions"}
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-6">
+            <FlyerManager businessId={businessId} lang={lang} />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Webhooks Info */}
       <Card>

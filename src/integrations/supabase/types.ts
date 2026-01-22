@@ -126,6 +126,7 @@ export type Database = {
           chatbot_enabled: boolean
           created_at: string
           domain: string | null
+          flyer_cooldown_hours: number | null
           greeting_message: string | null
           id: string
           industry_type: string | null
@@ -144,6 +145,7 @@ export type Database = {
           chatbot_enabled?: boolean
           created_at?: string
           domain?: string | null
+          flyer_cooldown_hours?: number | null
           greeting_message?: string | null
           id?: string
           industry_type?: string | null
@@ -162,6 +164,7 @@ export type Database = {
           chatbot_enabled?: boolean
           created_at?: string
           domain?: string | null
+          flyer_cooldown_hours?: number | null
           greeting_message?: string | null
           id?: string
           industry_type?: string | null
@@ -300,15 +303,57 @@ export type Database = {
           },
         ]
       }
+      flyer_send_log: {
+        Row: {
+          business_id: string
+          conversation_id: string
+          id: string
+          media_asset_id: string | null
+          sent_at: string
+        }
+        Insert: {
+          business_id: string
+          conversation_id: string
+          id?: string
+          media_asset_id?: string | null
+          sent_at?: string
+        }
+        Update: {
+          business_id?: string
+          conversation_id?: string
+          id?: string
+          media_asset_id?: string | null
+          sent_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flyer_send_log_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flyer_send_log_media_asset_id_fkey"
+            columns: ["media_asset_id"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inbox_messages: {
         Row: {
           business_id: string
           channel: string
           conversation_id: string
           direction: string
+          file_url: string | null
           id: string
+          media_asset_id: string | null
           message_text: string
           message_timestamp: string
+          message_type: string | null
           metadata: Json | null
           sender_handle: string | null
           sender_name: string | null
@@ -319,9 +364,12 @@ export type Database = {
           channel: string
           conversation_id: string
           direction: string
+          file_url?: string | null
           id?: string
+          media_asset_id?: string | null
           message_text: string
           message_timestamp?: string
+          message_type?: string | null
           metadata?: Json | null
           sender_handle?: string | null
           sender_name?: string | null
@@ -332,9 +380,12 @@ export type Database = {
           channel?: string
           conversation_id?: string
           direction?: string
+          file_url?: string | null
           id?: string
+          media_asset_id?: string | null
           message_text?: string
           message_timestamp?: string
+          message_type?: string | null
           metadata?: Json | null
           sender_handle?: string | null
           sender_name?: string | null
@@ -346,6 +397,13 @@ export type Database = {
             columns: ["business_id"]
             isOneToOne: false
             referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inbox_messages_media_asset_id_fkey"
+            columns: ["media_asset_id"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
             referencedColumns: ["id"]
           },
           {
@@ -571,6 +629,56 @@ export type Database = {
           },
         ]
       }
+      media_assets: {
+        Row: {
+          asset_type: string
+          business_id: string
+          created_at: string
+          file_name: string | null
+          file_url: string
+          id: string
+          is_active: boolean
+          is_default: boolean
+          mime_type: string | null
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          asset_type?: string
+          business_id: string
+          created_at?: string
+          file_name?: string | null
+          file_url: string
+          id?: string
+          is_active?: boolean
+          is_default?: boolean
+          mime_type?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          asset_type?: string
+          business_id?: string
+          created_at?: string
+          file_name?: string | null
+          file_url?: string
+          id?: string
+          is_active?: boolean
+          is_default?: boolean
+          mime_type?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_assets_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       memberships: {
         Row: {
           business_id: string
@@ -613,8 +721,11 @@ export type Database = {
           channel: string
           conversation_id: string
           direction: string
+          file_url: string | null
           id: string
+          media_asset_id: string | null
           message_text: string
+          message_type: string | null
           sender: string | null
           timestamp: string
         }
@@ -623,8 +734,11 @@ export type Database = {
           channel: string
           conversation_id: string
           direction: string
+          file_url?: string | null
           id?: string
+          media_asset_id?: string | null
           message_text: string
+          message_type?: string | null
           sender?: string | null
           timestamp?: string
         }
@@ -633,8 +747,11 @@ export type Database = {
           channel?: string
           conversation_id?: string
           direction?: string
+          file_url?: string | null
           id?: string
+          media_asset_id?: string | null
           message_text?: string
+          message_type?: string | null
           sender?: string | null
           timestamp?: string
         }
@@ -644,6 +761,13 @@ export type Database = {
             columns: ["business_id"]
             isOneToOne: false
             referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_media_asset_id_fkey"
+            columns: ["media_asset_id"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
             referencedColumns: ["id"]
           },
         ]
