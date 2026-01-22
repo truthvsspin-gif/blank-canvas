@@ -334,22 +334,45 @@ serve(async (req: Request) => {
       .order("created_at", { ascending: false })
       .limit(10);
     
+    const hasKnowledge = knowledgeChunks && knowledgeChunks.length > 0;
     console.log(`Loaded ${knowledgeChunks?.length || 0} knowledge chunks for business ${businessId}`);
-
-    // Combine all knowledge chunks (up to ~6000 chars to include more context)
-    const knowledgeContext = (knowledgeChunks || []).map((k: any) => k.content).join("\n\n");
-    const truncatedKnowledge = knowledgeContext.slice(0, 6000);
 
     // Detect language and intent
     const language = detectLanguage(userMessage);
     const intent = detectIntent(userMessage);
 
-    // Build messages for Groq
+    // If no knowledge content, return a message prompting to add content
+    if (!hasKnowledge && (!services || services.length === 0)) {
+      const noContentMessage = language === "es"
+        ? "⚠️ Aún no hay contenido configurado para este chatbot. Por favor, ve a la página de configuración del Chatbot y añade contenido a la base de conocimientos para que pueda responder preguntas sobre tu negocio."
+        : "⚠️ No content has been configured for this chatbot yet. Please go to the Chatbot settings page and add content to the knowledge base so I can answer questions about your business.";
+      
+      const response: AIResponse = {
+        success: true,
+        reply: noContentMessage,
+        intent: "no_content",
+        model: "none",
+      };
+
+      return new Response(
+        JSON.stringify(response),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Combine all knowledge chunks (up to ~6000 chars to include more context)
+    const knowledgeContext = (knowledgeChunks || []).map((k: any) => k.content).join("\n\n");
+    const truncatedKnowledge = knowledgeContext.slice(0, 6000);
+
+    // Build messages for Groq - focused on being the business's chatbot
     let systemPrompt = buildSystemPrompt(business, services || [], language);
     
-    // Add knowledge base context if available
+    // Add knowledge base context - this is CRITICAL for responding as the company
     if (truncatedKnowledge) {
-      systemPrompt += `\n\n--- KNOWLEDGE BASE (Use this to answer customer questions) ---\n${truncatedKnowledge}`;
+      systemPrompt += `\n\n--- KNOWLEDGE BASE (IMPORTANT: Use this as your PRIMARY source for answering questions) ---\n${truncatedKnowledge}`;
+      systemPrompt += language === "es" 
+        ? `\n\nIMPORTANTE: Responde SOLO con información de la base de conocimientos y servicios listados arriba. NO inventes información. Si no encuentras la respuesta, indica amablemente que puedes ayudar con lo que está disponible.`
+        : `\n\nIMPORTANT: Respond ONLY with information from the knowledge base and services listed above. Do NOT make up information. If you can't find the answer, kindly indicate what you CAN help with.`;
     }
 
     const messages: ChatMessage[] = [
