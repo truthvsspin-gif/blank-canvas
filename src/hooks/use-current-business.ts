@@ -10,6 +10,7 @@ type State = {
   loading: boolean
   error: string | null
   refresh: () => Promise<void>
+  switchBusiness: (newBusinessId: string) => void
 }
 
 export function useCurrentBusiness(): State {
@@ -28,20 +29,29 @@ export function useCurrentBusiness(): State {
         return
       }
       setLoading(true)
-      const { data, error: err } = await supabase
+      
+      // Check if there's a stored business preference
+      const storedBusinessId = localStorage.getItem("currentBusinessId")
+      
+      // Fetch all memberships ordered by most recent first
+      const { data: memberships, error: err } = await supabase
         .from("memberships")
         .select("business_id")
         .eq("user_id", user.id)
-        .limit(1)
-        .single()
+        .order("created_at", { ascending: false })
+      
       if (!active) return
-      if (err) {
-        setError(err.message)
+      if (err || !memberships?.length) {
+        setError(err?.message || "No hay negocio activo. Crea uno para continuar.")
         setBusinessId(null)
       } else {
-        const id = data?.business_id ?? null
-        setBusinessId(id)
-        setError(id ? null : "No hay negocio activo. Crea uno para continuar.")
+        // Use stored preference if valid, otherwise use most recent
+        const validStoredId = memberships.some(m => m.business_id === storedBusinessId)
+        const selectedId = validStoredId ? storedBusinessId : memberships[0].business_id
+        setBusinessId(selectedId)
+        // Store the selection for consistency
+        if (selectedId) localStorage.setItem("currentBusinessId", selectedId)
+        setError(null)
       }
       setLoading(false)
     }
@@ -55,5 +65,10 @@ export function useCurrentBusiness(): State {
     setRefreshKey((x) => x + 1)
   }
 
-  return { businessId, loading, error, refresh }
+  const switchBusiness = (newBusinessId: string) => {
+    localStorage.setItem("currentBusinessId", newBusinessId)
+    setBusinessId(newBusinessId)
+  }
+
+  return { businessId, loading, error, refresh, switchBusiness }
 }
