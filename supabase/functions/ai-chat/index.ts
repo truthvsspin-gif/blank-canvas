@@ -263,13 +263,17 @@ serve(async (req: Request) => {
       .eq("is_active", true);
 
     // Load knowledge base for context
-    const { data: knowledge } = await supabase
-      .from("knowledge_base")
+    // First try to get all relevant knowledge chunks (for small knowledge bases this is fine)
+    const { data: knowledgeChunks } = await supabase
+      .from("knowledge_chunks")
       .select("content")
       .eq("business_id", businessId)
+      .order("created_at", { ascending: false })
       .limit(5);
+    
+    console.log(`Loaded ${knowledgeChunks?.length || 0} knowledge chunks for business ${businessId}`);
 
-    const knowledgeContext = knowledge?.map((k: any) => k.content).join("\n") || "";
+    const knowledgeContext = knowledgeChunks.map((k: any) => k.content).join("\n\n") || "";
 
     // Detect language and intent
     const language = detectLanguage(userMessage);
