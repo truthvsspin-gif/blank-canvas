@@ -16,69 +16,53 @@ export type KnowledgeChunk = {
 
 const DEFAULT_CHUNK_SIZE = 800
 const DEFAULT_OVERLAP = 120
+const DEFAULT_CANDIDATE_LIMIT = 12
 
 function normalizeWhitespace(text: string) {
   return text.replace(/\s+/g, " ").trim()
 }
 
-const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
-const DEFAULT_CANDIDATE_LIMIT = 12
-
-function cosineSimilarity(vecA: number[], vecB: number[]): number {
-  if (vecA.length !== vecB.length) return 0
-  let dotProduct = 0
-  let normA = 0
-  let normB = 0
-  for (let i = 0; i < vecA.length; i += 1) {
-    dotProduct += vecA[i] * vecB[i]
-    normA += vecA[i] * vecA[i]
-    normB += vecB[i] * vecB[i]
-  }
-  if (normA === 0 || normB === 0) return 0
-  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB))
+/**
+ * Extract keywords from text for better search matching.
+ * Simple keyword extraction without external AI.
+ */
+function extractKeywords(text: string): string[] {
+  const stopWords = new Set([
+    "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
+    "have", "has", "had", "do", "does", "did", "will", "would", "could",
+    "should", "may", "might", "must", "shall", "can", "need", "dare",
+    "ought", "used", "to", "of", "in", "for", "on", "with", "at", "by",
+    "from", "as", "into", "through", "during", "before", "after", "above",
+    "below", "between", "under", "again", "further", "then", "once", "here",
+    "there", "when", "where", "why", "how", "all", "each", "few", "more",
+    "most", "other", "some", "such", "no", "nor", "not", "only", "own",
+    "same", "so", "than", "too", "very", "just", "and", "but", "if", "or",
+    "because", "until", "while", "about", "against", "this", "that", "these",
+    "those", "what", "which", "who", "whom", "whose", "i", "you", "he", "she",
+    "it", "we", "they", "me", "him", "her", "us", "them", "my", "your", "his",
+    "its", "our", "their", "que", "de", "en", "el", "la", "los", "las", "un",
+    "una", "y", "o", "por", "para", "con", "sin", "sobre", "como", "es", "son"
+  ])
+  
+  const words = text.toLowerCase()
+    .replace(/[^\w\sáéíóúñü]/g, " ")
+    .split(/\s+/)
+    .filter(w => w.length > 2 && !stopWords.has(w))
+  
+  // Get unique keywords
+  return [...new Set(words)]
 }
 
-async function generateEmbedding(text: string, model = DEFAULT_EMBEDDING_MODEL) {
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) return null
-  const maxChars = 30000
-  const input = text.length > maxChars ? text.slice(0, maxChars) : text
-  const response = await fetch("https://api.openai.com/v1/embeddings", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      input,
-    }),
-  })
-  if (!response.ok) {
-    return null
+/**
+ * Generate search terms for Postgres text search.
+ */
+function buildSearchQuery(query: string): string {
+  const keywords = extractKeywords(query)
+  if (keywords.length === 0) {
+    return query.trim().split(/\s+/).slice(0, 5).join(" | ")
   }
-  const payload = (await response.json().catch(() => null)) as
-    | { data?: Array<{ embedding?: number[] }> }
-    | null
-  const embedding = payload?.data?.[0]?.embedding
-  return Array.isArray(embedding) ? embedding : null
-}
-
-async function embedChunks(chunks: string[]) {
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) {
-    return chunks.map(() => null)
-  }
-  const embeddings: Array<number[] | null> = []
-  for (const chunk of chunks) {
-    try {
-      const embedding = await generateEmbedding(chunk)
-      embeddings.push(embedding)
-    } catch {
-      embeddings.push(null)
-    }
-  }
-  return embeddings
+  // Use OR matching for flexibility
+  return keywords.slice(0, 8).join(" | ")
 }
 
 export function chunkText(
@@ -98,6 +82,14 @@ export function chunkText(
     start = Math.max(0, end - overlap)
   }
   return chunks
+}
+
+/**
+ * Generate a simple keyword summary for each chunk to improve search.
+ */
+function generateChunkKeywords(content: string): string {
+  const keywords = extractKeywords(content)
+  return keywords.slice(0, 20).join(" ")
 }
 
 export async function ingestKnowledgeSource(input: KnowledgeSourceInput) {
@@ -129,13 +121,13 @@ export async function ingestKnowledgeSource(input: KnowledgeSourceInput) {
     throw new Error("Failed to chunk content.")
   }
 
-  const embeddings = await embedChunks(chunks)
+  // Generate keyword summaries for better search (no AI needed)
   const payload = chunks.map((content, index) => ({
     business_id: input.businessId,
     source_id: source.id,
     chunk_index: index,
     content,
-    embedding: embeddings[index] ?? null,
+    keywords: generateChunkKeywords(content),
   }))
 
   const chunksTable = supabase.from("knowledge_chunks") as any
@@ -147,6 +139,25 @@ export async function ingestKnowledgeSource(input: KnowledgeSourceInput) {
   return { sourceId: source.id, chunkCount: chunks.length }
 }
 
+/**
+ * Score chunk relevance based on keyword overlap.
+ */
+function scoreRelevance(query: string, content: string): number {
+  const queryKeywords = new Set(extractKeywords(query))
+  const contentKeywords = extractKeywords(content)
+  
+  if (queryKeywords.size === 0) return 0
+  
+  let matches = 0
+  for (const keyword of contentKeywords) {
+    if (queryKeywords.has(keyword)) {
+      matches++
+    }
+  }
+  
+  return matches / queryKeywords.size
+}
+
 export async function retrieveKnowledgeChunks(
   businessId: string,
   query: string,
@@ -156,17 +167,19 @@ export async function retrieveKnowledgeChunks(
   const cleaned = normalizeWhitespace(query)
   if (!cleaned) return []
 
-  const embeddingsEnabled = Boolean(process.env.OPENAI_API_KEY)
   const candidateLimit = Math.max(limit * 3, DEFAULT_CANDIDATE_LIMIT)
+  const searchQuery = buildSearchQuery(cleaned)
 
+  // Try text search first
   const { data: candidates, error } = await supabase
     .from("knowledge_chunks")
-    .select("id, content, source_id, embedding")
+    .select("id, content, source_id")
     .eq("business_id", businessId)
-    .textSearch("content_tsv", cleaned, { type: "websearch" })
+    .textSearch("content_tsv", searchQuery, { type: "websearch" })
     .limit(candidateLimit)
 
   if (error) {
+    console.error("Knowledge search error:", error)
     return []
   }
 
@@ -174,12 +187,13 @@ export async function retrieveKnowledgeChunks(
     id: string
     content: string
     source_id: string
-    embedding?: number[] | null
   }>
-  if (rows.length == 0) {
+
+  // Fallback to recent chunks if no text search results
+  if (rows.length === 0) {
     const { data: fallback } = await supabase
       .from("knowledge_chunks")
-      .select("id, content, source_id, embedding")
+      .select("id, content, source_id")
       .eq("business_id", businessId)
       .order("created_at", { ascending: false })
       .limit(candidateLimit)
@@ -187,39 +201,24 @@ export async function retrieveKnowledgeChunks(
       id: string
       content: string
       source_id: string
-      embedding?: number[] | null
     }>
   }
-  if (!embeddingsEnabled) {
-    return rows.slice(0, limit) as KnowledgeChunk[]
+
+  if (rows.length === 0) {
+    return []
   }
 
-  const queryEmbedding = await generateEmbedding(cleaned)
-  if (!queryEmbedding) {
-    return rows.slice(0, limit) as KnowledgeChunk[]
-  }
+  // Score and rank by keyword relevance
+  const scored = rows.map(row => ({
+    ...row,
+    score: scoreRelevance(cleaned, row.content)
+  }))
 
-  const scored = rows
-    .map((row) => {
-      const embedding = Array.isArray(row.embedding) ? row.embedding : null
-      if (!embedding || embedding.length !== queryEmbedding.length) {
-        return null
-      }
-      return {
-        ...row,
-        similarity: cosineSimilarity(queryEmbedding, embedding),
-      }
-    })
-    .filter(Boolean) as Array<KnowledgeChunk & { similarity: number }>
+  // Sort by relevance score
+  scored.sort((a, b) => b.score - a.score)
 
-  if (scored.length === 0) {
-    return rows.slice(0, limit) as KnowledgeChunk[]
-  }
-
-  scored.sort((a, b) => b.similarity - a.similarity)
-  return scored.slice(0, limit).map(({ similarity, ...rest }) => rest)
+  return scored.slice(0, limit).map(({ score, ...rest }) => rest)
 }
-
 
 export async function hasKnowledgeSources(businessId: string) {
   const supabase = getSupabaseAdmin()
