@@ -137,11 +137,21 @@ export default function DevChatbotPage() {
       setError(null);
 
       try {
-        const res = await fetch("/api/dev/chatbot-simulate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ businessId, message: trimmed, channel: selectedChannel }),
-        });
+        const res = await fetch(
+          "https://ybifjdlelpvgzmzvgwls.supabase.co/functions/v1/ai-chat",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              businessId,
+              userMessage: trimmed,
+              conversationHistory: messages.map((m) => ({
+                role: m.role === "user" ? "user" : "assistant",
+                content: m.text,
+              })),
+            }),
+          }
+        );
         const data = await res.json().catch(() => null);
 
         if (!res.ok) {
