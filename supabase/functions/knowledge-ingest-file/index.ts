@@ -1,6 +1,7 @@
 // @ts-nocheck - Deno edge function
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import * as pdfjs from "npm:pdfjs-dist/legacy/build/pdf.mjs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -33,7 +34,7 @@ function chunkText(text: string, chunkSize = DEFAULT_CHUNK_SIZE, overlap = DEFAU
 }
 
 // Simple but robust PDF text extraction
-function extractTextFromPDF(arrayBuffer: ArrayBuffer): string {
+function extractTextFromPDFRaw(arrayBuffer: ArrayBuffer): string {
   const bytes = new Uint8Array(arrayBuffer);
   const textParts: string[] = [];
   
@@ -143,6 +144,31 @@ function extractTextFromPDF(arrayBuffer: ArrayBuffer): string {
   return result;
 }
 
+async function extractTextFromPDF(arrayBuffer: ArrayBuffer): Promise<string> {
+  try {
+    const loadingTask = pdfjs.getDocument({
+      data: new Uint8Array(arrayBuffer),
+      disableWorker: true,
+    });
+    const doc = await loadingTask.promise;
+    const pageTexts: string[] = [];
+    for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
+      const page = await doc.getPage(pageNum);
+      const content = await page.getTextContent();
+      const items = content.items as Array<{ str?: string }>;
+      const line = items.map((item) => item.str || "").join(" ");
+      if (line.trim()) pageTexts.push(line);
+    }
+    const fullText = pageTexts.join(" ");
+    if (fullText.trim().length > 0) {
+      return fullText;
+    }
+  } catch (_err) {
+    // Fall back to raw string scanning below.
+  }
+  return extractTextFromPDFRaw(arrayBuffer);
+}
+
 // Extract text from Word documents (basic DOCX parsing)
 function extractTextFromDocx(arrayBuffer: ArrayBuffer): string {
   const bytes = new Uint8Array(arrayBuffer);
@@ -219,7 +245,7 @@ serve(async (req: Request) => {
 
     // Determine file type and extract text
     if (fileName.endsWith(".pdf") || mimeType === "application/pdf") {
-      rawText = extractTextFromPDF(arrayBuffer);
+      rawText = await extractTextFromPDF(arrayBuffer);
     } else if (fileName.endsWith(".docx") || mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
       rawText = extractTextFromDocx(arrayBuffer);
     } else if (fileName.endsWith(".doc") || mimeType === "application/msword") {
