@@ -1,6 +1,7 @@
 // @ts-nocheck - Deno edge function
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { PDFDocument } from "https://esm.sh/pdf-lib@1.17.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -32,92 +33,154 @@ function chunkText(text: string, chunkSize = DEFAULT_CHUNK_SIZE, overlap = DEFAU
   return chunks;
 }
 
-// Extract text from PDF using pdf-parse library
+// Decode PDF string escapes
+function decodePdfString(str: string): string {
+  return str
+    .replace(/\\n/g, "\n")
+    .replace(/\\r/g, "\r")
+    .replace(/\\t/g, "\t")
+    .replace(/\\\(/g, "(")
+    .replace(/\\\)/g, ")")
+    .replace(/\\\\/g, "\\");
+}
+
+// Extract text from PDF by parsing content streams
 async function extractTextFromPDF(arrayBuffer: ArrayBuffer): Promise<string> {
   try {
-    // Dynamic import of pdf-parse for Deno
-    const pdfParse = (await import("https://esm.sh/pdf-parse@1.1.1")).default;
+    const bytes = new Uint8Array(arrayBuffer);
     
-    // Convert ArrayBuffer to Buffer-like object for pdf-parse
-    const uint8Array = new Uint8Array(arrayBuffer);
+    // Decode to string for text extraction
+    const rawContent = new TextDecoder("latin1").decode(bytes);
+    const textParts: string[] = [];
     
-    const data = await pdfParse(uint8Array);
+    // Method 1: Extract text from stream objects (handles FlateDecode)
+    // Find all stream objects
+    const streamPattern = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+    let streamMatch;
     
-    if (!data.text || data.text.trim().length === 0) {
-      throw new Error("No text content found in PDF");
+    while ((streamMatch = streamPattern.exec(rawContent)) !== null) {
+      const streamData = streamMatch[1];
+      
+      // Check if this might be text content
+      if (streamData.includes("BT") && streamData.includes("ET")) {
+        // Direct text content
+        extractTextOperators(streamData, textParts);
+      } else if (streamData.length > 10 && streamData.charCodeAt(0) === 0x78) {
+        // Compressed stream (starts with zlib header 0x78)
+        try {
+          const compressed = new Uint8Array(streamData.length);
+          for (let i = 0; i < streamData.length; i++) {
+            compressed[i] = streamData.charCodeAt(i);
+          }
+          
+          // Use DecompressionStream for zlib inflate
+          const ds = new DecompressionStream("deflate-raw");
+          
+          // Skip zlib header (2 bytes) and adler32 checksum (4 bytes at end)
+          const deflateData = compressed.slice(2, -4);
+          
+          const writer = ds.writable.getWriter();
+          writer.write(deflateData);
+          writer.close();
+          
+          const reader = ds.readable.getReader();
+          const chunks: Uint8Array[] = [];
+          
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+          }
+          
+          const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+          const result = new Uint8Array(totalLength);
+          let offset = 0;
+          for (const chunk of chunks) {
+            result.set(chunk, offset);
+            offset += chunk.length;
+          }
+          
+          const decompressed = new TextDecoder("latin1").decode(result);
+          
+          if (decompressed.includes("BT") || decompressed.includes("Tj")) {
+            extractTextOperators(decompressed, textParts);
+          }
+        } catch (decompErr) {
+          // Decompression failed, skip this stream
+        }
+      }
     }
     
-    console.log(`PDF parsed: ${data.numpages} pages, ${data.text.length} characters`);
-    return data.text;
+    // Method 2: Look for text in object content directly
+    const objPattern = /(\d+ \d+ obj[\s\S]*?endobj)/g;
+    let objMatch;
+    
+    while ((objMatch = objPattern.exec(rawContent)) !== null) {
+      const objContent = objMatch[1];
+      if (objContent.includes("BT") && objContent.includes("ET")) {
+        extractTextOperators(objContent, textParts);
+      }
+    }
+    
+    // Clean up and deduplicate
+    const uniqueTexts = [...new Set(textParts.filter(t => t.trim().length > 0))];
+    const result = uniqueTexts.join(" ");
+    
+    console.log(`PDF extraction found ${uniqueTexts.length} text segments, ${result.length} chars`);
+    
+    if (result.trim().length < 20) {
+      throw new Error("Insufficient text extracted from PDF");
+    }
+    
+    return result;
   } catch (error) {
     console.error("PDF extraction error:", error);
-    
-    // Fallback: Try basic text extraction for simple PDFs
-    try {
-      console.log("Attempting fallback PDF extraction...");
-      const text = await extractTextFromPDFFallback(arrayBuffer);
-      if (text && text.length > 50) {
-        return text;
-      }
-    } catch (fallbackError) {
-      console.error("Fallback extraction also failed:", fallbackError);
-    }
-    
     throw new Error("Failed to extract text from PDF. The file may be scanned/image-based. Please use 'Paste Text' to manually enter the content.");
   }
 }
 
-// Fallback extraction for simple PDFs
-async function extractTextFromPDFFallback(arrayBuffer: ArrayBuffer): Promise<string> {
-  const bytes = new Uint8Array(arrayBuffer);
-  const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-  
-  const textParts: string[] = [];
-  
-  // Look for text between BT (begin text) and ET (end text) markers
+// Extract text from PDF operators (Tj, TJ, etc.)
+function extractTextOperators(content: string, textParts: string[]): void {
+  // Find BT...ET blocks
   const btPattern = /BT[\s\S]*?ET/g;
-  const matches = text.match(btPattern) || [];
+  const btMatches = content.match(btPattern) || [content];
   
-  for (const match of matches) {
-    // Extract text from Tj and TJ operators
+  for (const block of btMatches) {
+    // Extract Tj strings: (text) Tj
     const tjPattern = /\(([^)]*)\)\s*Tj/g;
     let tjMatch;
-    while ((tjMatch = tjPattern.exec(match)) !== null) {
-      const decoded = tjMatch[1]
-        .replace(/\\n/g, "\n")
-        .replace(/\\r/g, "\r")
-        .replace(/\\t/g, "\t")
-        .replace(/\\\(/g, "(")
-        .replace(/\\\)/g, ")")
-        .replace(/\\\\/g, "\\");
+    while ((tjMatch = tjPattern.exec(block)) !== null) {
+      const decoded = decodePdfString(tjMatch[1]);
       if (decoded.trim()) {
         textParts.push(decoded);
       }
     }
     
-    // Handle TJ arrays
-    const tjArrayPattern = /\[(.*?)\]\s*TJ/g;
+    // Extract TJ arrays: [(text) -kern (text)] TJ
+    const tjArrayPattern = /\[([^\]]*)\]\s*TJ/gi;
     let tjArrayMatch;
-    while ((tjArrayMatch = tjArrayPattern.exec(match)) !== null) {
-      const content = tjArrayMatch[1];
+    while ((tjArrayMatch = tjArrayPattern.exec(block)) !== null) {
+      const arrayContent = tjArrayMatch[1];
       const stringPattern = /\(([^)]*)\)/g;
       let stringMatch;
-      while ((stringMatch = stringPattern.exec(content)) !== null) {
-        const decoded = stringMatch[1]
-          .replace(/\\n/g, "\n")
-          .replace(/\\r/g, "\r")
-          .replace(/\\t/g, "\t")
-          .replace(/\\\(/g, "(")
-          .replace(/\\\)/g, ")")
-          .replace(/\\\\/g, "\\");
+      while ((stringMatch = stringPattern.exec(arrayContent)) !== null) {
+        const decoded = decodePdfString(stringMatch[1]);
         if (decoded.trim()) {
           textParts.push(decoded);
         }
       }
     }
+    
+    // Extract quoted strings: 'text' Tj pattern (less common)
+    const quotedPattern = /'([^']*)'\s*Tj/g;
+    let quotedMatch;
+    while ((quotedMatch = quotedPattern.exec(block)) !== null) {
+      const decoded = decodePdfString(quotedMatch[1]);
+      if (decoded.trim()) {
+        textParts.push(decoded);
+      }
+    }
   }
-  
-  return textParts.join(" ");
 }
 
 // Extract text from Word documents (basic DOCX parsing)
