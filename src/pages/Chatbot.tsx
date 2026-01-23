@@ -528,7 +528,7 @@ export default function ChatbotPage() {
       );
       if (!clearResponse.ok) {
         const clearResult = await clearResponse.json().catch(() => null);
-        setKbError(clearResult?.error || copy.ingestFail);
+        setKbError(clearResult?.error || `${copy.ingestFail} (${clearResponse.status})`);
         setKbLoading(false);
         return;
       }
@@ -556,7 +556,7 @@ export default function ChatbotPage() {
         const result = await response.json().catch(() => null);
         
         if (!response.ok) {
-          setKbError(result?.error || copy.ingestFail);
+          setKbError(result?.error || `${copy.ingestFail} (${response.status})`);
           setKbLoading(false);
           return;
         }
@@ -582,7 +582,7 @@ export default function ChatbotPage() {
       const result = await response.json().catch(() => null);
       
       if (!response.ok) {
-        setKbError(result?.error || copy.ingestFail);
+        setKbError(result?.error || `${copy.ingestFail} (${response.status})`);
         setKbLoading(false);
         return;
       }
@@ -607,7 +607,7 @@ export default function ChatbotPage() {
     const result = await response.json().catch(() => null);
     
     if (!response.ok) {
-      setKbError(result?.error || copy.ingestFail);
+      setKbError(result?.error || `${copy.ingestFail} (${response.status})`);
       setKbLoading(false);
       return;
     }
