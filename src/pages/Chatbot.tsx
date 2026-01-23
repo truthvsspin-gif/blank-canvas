@@ -237,6 +237,8 @@ export default function ChatbotPage() {
         sourceUrl: "Sitio Web",
         sourceText: "Texto Largo",
         sourceDocument: "Documento",
+        pasteText: "Pegar Texto",
+        pasteTextDesc: "Si la extracción de PDF falla, copia y pega el contenido aquí",
         urlLabel: "URL del Sitio",
         urlPlaceholder: "https://tusitio.com",
         textLabel: "Descripción",
@@ -310,6 +312,8 @@ export default function ChatbotPage() {
         sourceUrl: "Website",
         sourceText: "Long Text",
         sourceDocument: "Document",
+        pasteText: "Paste Text",
+        pasteTextDesc: "If PDF extraction fails, copy and paste the content here",
         urlLabel: "Website URL",
         urlPlaceholder: "https://yoursite.com",
         textLabel: "Description",
@@ -531,6 +535,39 @@ export default function ChatbotPage() {
     }
     
     if (kbSourceType === "document") {
+      // If pasted text is provided, use that instead of file upload
+      if (kbText.trim() && kbText.trim().length > 20) {
+        // Use the text ingest endpoint with pasted content
+        const payload = { 
+          businessId, 
+          sourceType: "text", 
+          content: kbText.trim(), 
+          title: kbTitle.trim() || (kbFile?.name || "Pasted Content")
+        };
+        
+        const response = await fetch(
+          "https://ybifjdlelpvgzmzvgwls.supabase.co/functions/v1/knowledge-ingest",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          }
+        );
+        const result = await response.json().catch(() => null);
+        
+        if (!response.ok) {
+          setKbError(result?.error || copy.ingestFail);
+          setKbLoading(false);
+          return;
+        }
+        setKbMessage(copy.ingested(result?.chunkCount ?? 0));
+        setKbFile(null);
+        setKbText("");
+        setKbLoading(false);
+        return;
+      }
+      
+      // Otherwise try file upload
       if (!kbFile) {
         setKbError(copy.selectDoc);
         setKbLoading(false);
@@ -550,6 +587,7 @@ export default function ChatbotPage() {
         return;
       }
       setKbMessage(copy.ingested(result?.chunkCount ?? 0));
+      setKbFile(null);
       setKbLoading(false);
       return;
     }
@@ -967,21 +1005,38 @@ export default function ChatbotPage() {
             )}
             
             {kbSourceType === "document" && (
-              <div className="space-y-2">
-                <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  {copy.sourceDocument}
-                </label>
-                <input
-                  type="file"
-                  accept=".txt,.md,.pdf,.doc,.docx"
-                  className="w-full rounded-lg border bg-background px-4 py-3 text-sm transition-colors focus:border-accent focus:outline-none"
-                  onChange={handleFileSelect}
-                />
+              <div className="space-y-4 sm:col-span-2">
+                <div className="space-y-2">
+                  <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    {copy.sourceDocument}
+                  </label>
+                  <input
+                    type="file"
+                    accept=".txt,.md,.pdf,.doc,.docx"
+                    className="w-full rounded-lg border bg-background px-4 py-3 text-sm transition-colors focus:border-accent focus:outline-none"
+                    onChange={handleFileSelect}
+                  />
+                </div>
+                
+                {/* Paste Text Fallback */}
+                <div className="rounded-lg border border-dashed border-amber-300 bg-amber-50/50 p-4 space-y-2">
+                  <div className="flex items-center gap-2 text-amber-700">
+                    <FileText className="h-4 w-4" />
+                    <span className="text-sm font-medium">{copy.pasteText}</span>
+                  </div>
+                  <p className="text-xs text-amber-600">{copy.pasteTextDesc}</p>
+                  <textarea
+                    className="min-h-[120px] w-full rounded-lg border bg-background px-4 py-3 text-sm transition-colors focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+                    value={kbText}
+                    onChange={(e) => setKbText(e.target.value)}
+                    placeholder={isEs ? "Pega aquí el contenido del documento..." : "Paste document content here..."}
+                  />
+                </div>
               </div>
             )}
           </div>
 
-          {(kbSourceType === "text" || kbSourceType === "document") && (
+          {kbSourceType === "text" && (
             <div className="space-y-2">
               <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 {copy.textLabel}
