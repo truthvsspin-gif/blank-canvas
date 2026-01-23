@@ -1,7 +1,6 @@
 // @ts-nocheck - Deno edge function
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { PDFDocument } from "https://esm.sh/pdf-lib@1.17.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -33,185 +32,141 @@ function chunkText(text: string, chunkSize = DEFAULT_CHUNK_SIZE, overlap = DEFAU
   return chunks;
 }
 
-// Decode PDF string escapes
-function decodePdfString(str: string): string {
-  return str
-    .replace(/\\n/g, "\n")
-    .replace(/\\r/g, "\r")
-    .replace(/\\t/g, "\t")
-    .replace(/\\\(/g, "(")
-    .replace(/\\\)/g, ")")
-    .replace(/\\\\/g, "\\");
-}
-
-// Extract text from PDF by parsing content streams
-async function extractTextFromPDF(arrayBuffer: ArrayBuffer): Promise<string> {
-  try {
-    const bytes = new Uint8Array(arrayBuffer);
-    
-    // Decode to string for text extraction
-    const rawContent = new TextDecoder("latin1").decode(bytes);
-    const textParts: string[] = [];
-    
-    // Method 1: Extract text from stream objects (handles FlateDecode)
-    // Find all stream objects
-    const streamPattern = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
-    let streamMatch;
-    
-    while ((streamMatch = streamPattern.exec(rawContent)) !== null) {
-      const streamData = streamMatch[1];
-      
-      // Check if this might be text content
-      if (streamData.includes("BT") && streamData.includes("ET")) {
-        // Direct text content
-        extractTextOperators(streamData, textParts);
-      } else if (streamData.length > 10 && streamData.charCodeAt(0) === 0x78) {
-        // Compressed stream (starts with zlib header 0x78)
-        try {
-          const compressed = new Uint8Array(streamData.length);
-          for (let i = 0; i < streamData.length; i++) {
-            compressed[i] = streamData.charCodeAt(i);
-          }
-          
-          // Use DecompressionStream for zlib inflate
-          const ds = new DecompressionStream("deflate-raw");
-          
-          // Skip zlib header (2 bytes) and adler32 checksum (4 bytes at end)
-          const deflateData = compressed.slice(2, -4);
-          
-          const writer = ds.writable.getWriter();
-          writer.write(deflateData);
-          writer.close();
-          
-          const reader = ds.readable.getReader();
-          const chunks: Uint8Array[] = [];
-          
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            chunks.push(value);
-          }
-          
-          const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-          const result = new Uint8Array(totalLength);
-          let offset = 0;
-          for (const chunk of chunks) {
-            result.set(chunk, offset);
-            offset += chunk.length;
-          }
-          
-          const decompressed = new TextDecoder("latin1").decode(result);
-          
-          if (decompressed.includes("BT") || decompressed.includes("Tj")) {
-            extractTextOperators(decompressed, textParts);
-          }
-        } catch (decompErr) {
-          // Decompression failed, skip this stream
-        }
-      }
-    }
-    
-    // Method 2: Look for text in object content directly
-    const objPattern = /(\d+ \d+ obj[\s\S]*?endobj)/g;
-    let objMatch;
-    
-    while ((objMatch = objPattern.exec(rawContent)) !== null) {
-      const objContent = objMatch[1];
-      if (objContent.includes("BT") && objContent.includes("ET")) {
-        extractTextOperators(objContent, textParts);
-      }
-    }
-    
-    // Clean up and deduplicate
-    const uniqueTexts = [...new Set(textParts.filter(t => t.trim().length > 0))];
-    const result = uniqueTexts.join(" ");
-    
-    console.log(`PDF extraction found ${uniqueTexts.length} text segments, ${result.length} chars`);
-    
-    if (result.trim().length < 20) {
-      throw new Error("Insufficient text extracted from PDF");
-    }
-    
-    return result;
-  } catch (error) {
-    console.error("PDF extraction error:", error);
-    throw new Error("Failed to extract text from PDF. The file may be scanned/image-based. Please use 'Paste Text' to manually enter the content.");
-  }
-}
-
-// Extract text from PDF operators (Tj, TJ, etc.)
-function extractTextOperators(content: string, textParts: string[]): void {
-  // Find BT...ET blocks
-  const btPattern = /BT[\s\S]*?ET/g;
-  const btMatches = content.match(btPattern) || [content];
+// Simple but robust PDF text extraction
+function extractTextFromPDF(arrayBuffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(arrayBuffer);
+  const textParts: string[] = [];
   
-  for (const block of btMatches) {
-    // Extract Tj strings: (text) Tj
-    const tjPattern = /\(([^)]*)\)\s*Tj/g;
-    let tjMatch;
-    while ((tjMatch = tjPattern.exec(block)) !== null) {
-      const decoded = decodePdfString(tjMatch[1]);
-      if (decoded.trim()) {
-        textParts.push(decoded);
+  // Strategy 1: Extract all parenthesis-enclosed strings (PDF literal strings)
+  // These contain the actual text in most PDFs
+  let i = 0;
+  const len = bytes.length;
+  
+  while (i < len) {
+    // Look for opening parenthesis (
+    if (bytes[i] === 0x28) { // '('
+      let depth = 1;
+      let start = i + 1;
+      i++;
+      
+      // Find matching closing parenthesis, accounting for nesting and escapes
+      while (i < len && depth > 0) {
+        if (bytes[i] === 0x5C) { // backslash - escape next char
+          i += 2;
+          continue;
+        }
+        if (bytes[i] === 0x28) depth++; // (
+        if (bytes[i] === 0x29) depth--; // )
+        i++;
       }
-    }
-    
-    // Extract TJ arrays: [(text) -kern (text)] TJ
-    const tjArrayPattern = /\[([^\]]*)\]\s*TJ/gi;
-    let tjArrayMatch;
-    while ((tjArrayMatch = tjArrayPattern.exec(block)) !== null) {
-      const arrayContent = tjArrayMatch[1];
-      const stringPattern = /\(([^)]*)\)/g;
-      let stringMatch;
-      while ((stringMatch = stringPattern.exec(arrayContent)) !== null) {
-        const decoded = decodePdfString(stringMatch[1]);
-        if (decoded.trim()) {
-          textParts.push(decoded);
+      
+      if (depth === 0) {
+        const strBytes = bytes.slice(start, i - 1);
+        // Decode as latin1 first (handles PDF encoding)
+        let str = "";
+        for (let j = 0; j < strBytes.length; j++) {
+          const b = strBytes[j];
+          // Handle escape sequences
+          if (b === 0x5C && j + 1 < strBytes.length) {
+            const next = strBytes[j + 1];
+            if (next === 0x6E) { str += "\n"; j++; continue; } // \n
+            if (next === 0x72) { str += "\r"; j++; continue; } // \r
+            if (next === 0x74) { str += "\t"; j++; continue; } // \t
+            if (next === 0x28) { str += "("; j++; continue; }  // \(
+            if (next === 0x29) { str += ")"; j++; continue; }  // \)
+            if (next === 0x5C) { str += "\\"; j++; continue; } // \\
+            // Octal escape \ddd
+            if (next >= 0x30 && next <= 0x37) {
+              let octal = String.fromCharCode(next);
+              j++;
+              if (j + 1 < strBytes.length && strBytes[j + 1] >= 0x30 && strBytes[j + 1] <= 0x37) {
+                octal += String.fromCharCode(strBytes[j + 1]);
+                j++;
+              }
+              if (j + 1 < strBytes.length && strBytes[j + 1] >= 0x30 && strBytes[j + 1] <= 0x37) {
+                octal += String.fromCharCode(strBytes[j + 1]);
+                j++;
+              }
+              str += String.fromCharCode(parseInt(octal, 8));
+              continue;
+            }
+          }
+          str += String.fromCharCode(b);
+        }
+        
+        // Filter: only keep strings that look like text (mostly printable)
+        const printable = str.replace(/[^\x20-\x7E\xA0-\xFF\u00C0-\u017F]/g, "");
+        if (printable.length > 2 && printable.length > str.length * 0.5) {
+          textParts.push(printable);
         }
       }
+    } else {
+      i++;
     }
-    
-    // Extract quoted strings: 'text' Tj pattern (less common)
-    const quotedPattern = /'([^']*)'\s*Tj/g;
-    let quotedMatch;
-    while ((quotedMatch = quotedPattern.exec(block)) !== null) {
-      const decoded = decodePdfString(quotedMatch[1]);
-      if (decoded.trim()) {
+  }
+  
+  // Strategy 2: Also look for hex strings < ... >
+  const rawContent = new TextDecoder("latin1").decode(bytes);
+  const hexPattern = /<([0-9A-Fa-f\s]+)>/g;
+  let hexMatch;
+  while ((hexMatch = hexPattern.exec(rawContent)) !== null) {
+    const hex = hexMatch[1].replace(/\s/g, "");
+    if (hex.length >= 4 && hex.length % 2 === 0) {
+      let decoded = "";
+      for (let j = 0; j < hex.length; j += 2) {
+        const charCode = parseInt(hex.substr(j, 2), 16);
+        if (charCode >= 32 && charCode < 127) {
+          decoded += String.fromCharCode(charCode);
+        }
+      }
+      if (decoded.length > 2) {
         textParts.push(decoded);
       }
     }
   }
+  
+  // Clean up: filter out non-text content (PDF operators, etc.)
+  const pdfOperators = new Set(["BT", "ET", "Tj", "TJ", "Tf", "Td", "TD", "Tm", "cm", "q", "Q", "re", "f", "S", "n", "W", "gs"]);
+  const filtered = textParts.filter(s => {
+    const trimmed = s.trim();
+    // Skip PDF operators
+    if (pdfOperators.has(trimmed)) return false;
+    // Skip if mostly numbers/symbols
+    const letterCount = (trimmed.match(/[a-zA-ZáéíóúñüÁÉÍÓÚÑÜàèìòùâêîôû]/g) || []).length;
+    if (letterCount < trimmed.length * 0.3) return false;
+    return trimmed.length > 1;
+  });
+  
+  const result = filtered.join(" ");
+  console.log(`PDF extraction: found ${filtered.length} text segments, ${result.length} chars`);
+  
+  return result;
 }
 
 // Extract text from Word documents (basic DOCX parsing)
-async function extractTextFromDocx(arrayBuffer: ArrayBuffer): Promise<string> {
-  try {
-    const bytes = new Uint8Array(arrayBuffer);
-    const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-    
-    const textParts: string[] = [];
-    
-    // Match w:t elements (Word text elements)
-    const wtPattern = /<w:t[^>]*>([^<]*)<\/w:t>/g;
-    let match;
-    while ((match = wtPattern.exec(text)) !== null) {
-      if (match[1].trim()) {
-        textParts.push(match[1]);
-      }
+function extractTextFromDocx(arrayBuffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(arrayBuffer);
+  const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  
+  const textParts: string[] = [];
+  
+  // Match w:t elements (Word text elements)
+  const wtPattern = /<w:t[^>]*>([^<]*)<\/w:t>/g;
+  let match;
+  while ((match = wtPattern.exec(text)) !== null) {
+    if (match[1].trim()) {
+      textParts.push(match[1]);
     }
-    
-    // Fallback: extract all readable text
-    if (textParts.length === 0) {
-      const readable = text.replace(/<[^>]+>/g, " ").replace(/[^\x20-\x7EáéíóúñüÁÉÍÓÚÑÜ\n\r\t]/g, " ");
-      const words = readable.split(/\s+/).filter(w => w.length > 2);
-      textParts.push(words.join(" "));
-    }
-    
-    return textParts.join(" ");
-  } catch (error) {
-    console.error("DOCX extraction error:", error);
-    throw new Error("Failed to extract text from Word document");
   }
+  
+  // Fallback: extract all readable text
+  if (textParts.length === 0) {
+    const readable = text.replace(/<[^>]+>/g, " ").replace(/[^\x20-\x7EáéíóúñüÁÉÍÓÚÑÜ\n\r\t]/g, " ");
+    const words = readable.split(/\s+/).filter(w => w.length > 2);
+    textParts.push(words.join(" "));
+  }
+  
+  return textParts.join(" ");
 }
 
 // Extract text from plain text files
@@ -264,27 +219,25 @@ serve(async (req: Request) => {
 
     // Determine file type and extract text
     if (fileName.endsWith(".pdf") || mimeType === "application/pdf") {
-      rawText = await extractTextFromPDF(arrayBuffer);
+      rawText = extractTextFromPDF(arrayBuffer);
     } else if (fileName.endsWith(".docx") || mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
-      rawText = await extractTextFromDocx(arrayBuffer);
+      rawText = extractTextFromDocx(arrayBuffer);
     } else if (fileName.endsWith(".doc") || mimeType === "application/msword") {
-      // Old .doc format - try basic extraction
       rawText = extractTextFromPlain(arrayBuffer);
     } else if (fileName.endsWith(".txt") || fileName.endsWith(".md") || mimeType.startsWith("text/")) {
       rawText = extractTextFromPlain(arrayBuffer);
     } else {
-      // Try as plain text for unknown types
       rawText = extractTextFromPlain(arrayBuffer);
     }
 
     const cleaned = normalizeWhitespace(rawText);
     console.log(`Extracted text length: ${cleaned.length} characters`);
-    console.log(`First 200 chars: ${cleaned.slice(0, 200)}`);
+    console.log(`First 300 chars: ${cleaned.slice(0, 300)}`);
 
     if (!cleaned || cleaned.length < 10) {
       return new Response(
         JSON.stringify({ 
-          error: "Could not extract text from document. The file may be encrypted, scanned, or in an unsupported format. Please use 'Paste Text' to manually enter the content instead." 
+          error: "Could not extract text from document. The file may be encrypted, scanned (image-based), or in an unsupported format. Please use 'Paste Text' to manually enter the content." 
         }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -298,7 +251,7 @@ serve(async (req: Request) => {
         source_type: "document",
         source_uri: file.name,
         title: title || file.name,
-        raw_text: cleaned.slice(0, 100000), // Limit stored raw text
+        raw_text: cleaned.slice(0, 100000),
         updated_at: new Date().toISOString(),
       })
       .select("id")
@@ -341,7 +294,7 @@ serve(async (req: Request) => {
       );
     }
 
-    console.log(`Ingested ${chunks.length} chunks from document for business ${businessId}`);
+    console.log(`SUCCESS: Ingested ${chunks.length} chunks from document for business ${businessId}`);
 
     return new Response(
       JSON.stringify({
@@ -349,6 +302,7 @@ serve(async (req: Request) => {
         sourceId: source.id,
         chunkCount: chunks.length,
         fileName: file.name,
+        extractedLength: cleaned.length,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
