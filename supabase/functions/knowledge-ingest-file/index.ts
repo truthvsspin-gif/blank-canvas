@@ -265,23 +265,27 @@ serve(async (req: Request) => {
     console.log(`Extracted text length: ${cleaned.length} characters`);
     console.log(`First 300 chars: ${cleaned.slice(0, 300)}`);
 
-    // Common case: Google Docs "Skia/PDF" exports often embed text in a way that yields garbled extraction.
-    // Fail fast with a clear instruction instead of ingesting unusable chunks.
-    const cleanedLower = cleaned.toLowerCase();
-    if (cleanedLower.includes("google docs renderer") || cleanedLower.includes("skia/pdf")) {
-      return new Response(
-        JSON.stringify({
-          error:
-            "This PDF looks like a Google Docs (Skia/PDF) export. Text extraction in serverless environments is often garbled. Please export as DOCX (recommended) or use 'Paste Text' to ingest the content.",
-        }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
+    // Quality check: ensure we have enough readable text
+    // Count actual letters (not just printable chars) to detect garbled content
+    const letterCount = (cleaned.match(/[a-zA-ZáéíóúñüÁÉÍÓÚÑÜàèìòùâêîôûäëïöüÿ]/g) || []).length;
+    const wordCount = cleaned.split(/\s+/).filter(w => w.length > 2).length;
+    
+    console.log(`Quality check: ${letterCount} letters, ${wordCount} words`);
 
     if (!cleaned || cleaned.length < 10) {
       return new Response(
         JSON.stringify({ 
           error: "Could not extract text from document. The file may be encrypted, scanned (image-based), or in an unsupported format. Please use 'Paste Text' to manually enter the content." 
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Check if content is mostly garbled (low letter-to-total ratio or very few words)
+    if (wordCount < 5 || letterCount < cleaned.length * 0.3) {
+      return new Response(
+        JSON.stringify({ 
+          error: "The extracted text appears garbled or image-based. For Google Docs exports, please download as DOCX instead of PDF. Alternatively, copy the text and use 'Paste Text'." 
         }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
