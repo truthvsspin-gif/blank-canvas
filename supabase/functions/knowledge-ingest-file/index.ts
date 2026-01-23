@@ -1,6 +1,7 @@
 // @ts-nocheck - Deno edge function
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { ZipReader, Uint8ArrayReader, TextWriter } from "https://deno.land/x/zipjs/index.js";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -144,29 +145,57 @@ function extractTextFromPDF(arrayBuffer: ArrayBuffer): string {
 }
 
 // Extract text from Word documents (basic DOCX parsing)
-function extractTextFromDocx(arrayBuffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(arrayBuffer);
-  const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-  
-  const textParts: string[] = [];
-  
-  // Match w:t elements (Word text elements)
-  const wtPattern = /<w:t[^>]*>([^<]*)<\/w:t>/g;
-  let match;
-  while ((match = wtPattern.exec(text)) !== null) {
-    if (match[1].trim()) {
-      textParts.push(match[1]);
+function decodeXmlEntities(input: string): string {
+  return input
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
+}
+
+async function extractTextFromDocx(arrayBuffer: ArrayBuffer): Promise<string> {
+  // DOCX is a ZIP container. We must unzip and read word/document.xml.
+  // The old approach (TextDecoder on raw bytes) yields ZIP metadata like [Content_Types].xml.
+  try {
+    const zipReader = new ZipReader(new Uint8ArrayReader(new Uint8Array(arrayBuffer)));
+    try {
+      const entries = await zipReader.getEntries();
+      const docEntry = entries.find((e) => e.filename === "word/document.xml");
+      if (!docEntry) return "";
+
+      let xmlText = await docEntry.getData(new TextWriter());
+      if (!xmlText) return "";
+
+      // Preserve rough structure (paragraphs/line breaks/tabs)
+      xmlText = xmlText
+        .replace(/<w:tab\s*\/>/g, "\t")
+        .replace(/<w:br\s*\/>/g, "\n")
+        .replace(/<w:cr\s*\/>/g, "\n")
+        .replace(/<\/w:p>/g, "\n");
+
+      const textParts: string[] = [];
+      const wtPattern = /<w:t[^>]*>([\s\S]*?)<\/w:t>/g;
+      let match;
+      while ((match = wtPattern.exec(xmlText)) !== null) {
+        const t = decodeXmlEntities(match[1] || "").trim();
+        if (t) textParts.push(t);
+      }
+
+      return textParts.join(" ");
+    } finally {
+      await zipReader.close();
     }
+  } catch (_err) {
+    // Fallback: best-effort readable extraction (will be worse than the ZIP approach)
+    const bytes = new Uint8Array(arrayBuffer);
+    const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+    const readable = text
+      .replace(/<[^>]+>/g, " ")
+      .replace(/[^\x20-\x7EáéíóúñüÁÉÍÓÚÑÜ\n\r\t]/g, " ");
+    const words = readable.split(/\s+/).filter((w) => w.length > 2);
+    return words.join(" ");
   }
-  
-  // Fallback: extract all readable text
-  if (textParts.length === 0) {
-    const readable = text.replace(/<[^>]+>/g, " ").replace(/[^\x20-\x7EáéíóúñüÁÉÍÓÚÑÜ\n\r\t]/g, " ");
-    const words = readable.split(/\s+/).filter(w => w.length > 2);
-    textParts.push(words.join(" "));
-  }
-  
-  return textParts.join(" ");
 }
 
 // Extract text from plain text files
@@ -223,7 +252,7 @@ serve(async (req: Request) => {
       // Keep extraction Deno-native.
       rawText = extractTextFromPDF(arrayBuffer);
     } else if (fileName.endsWith(".docx") || mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
-      rawText = extractTextFromDocx(arrayBuffer);
+      rawText = await extractTextFromDocx(arrayBuffer);
     } else if (fileName.endsWith(".doc") || mimeType === "application/msword") {
       rawText = extractTextFromPlain(arrayBuffer);
     } else if (fileName.endsWith(".txt") || fileName.endsWith(".md") || mimeType.startsWith("text/")) {
