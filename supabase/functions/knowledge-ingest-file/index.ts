@@ -272,6 +272,32 @@ serve(async (req: Request) => {
     
     console.log(`Quality check: ${letterCount} letters, ${wordCount} words`);
 
+    // Detect PDF internal syntax that may have slipped through (indicates garbled extraction)
+    const pdfSyntaxPatterns = [
+      /\/Type\s*\/Page/i,
+      /\/StructElem/i,
+      /endobj/i,
+      /\d+\s+\d+\s+R/,           // PDF object refs like "42 0 R"
+      /<FEFF[0-9A-F]{8,}>/i,      // PDF hex strings
+      /\/MediaBox\s*\[/i,
+      /\/Contents\s+\d+/i,
+      /Skia\/PDF/i,
+      /Google Docs Renderer/i,
+    ];
+    const pdfSyntaxHits = pdfSyntaxPatterns.filter((p) => p.test(cleaned)).length;
+    const hasPdfJunk = pdfSyntaxHits >= 2;
+
+    if (hasPdfJunk) {
+      console.log(`Detected ${pdfSyntaxHits} PDF syntax patterns – content is garbled`);
+      return new Response(
+        JSON.stringify({
+          error:
+            "This PDF could not be read correctly (text extraction returned internal PDF data). Please export your document as DOCX instead, or copy and paste the text using 'Paste Text'.",
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     if (!cleaned || cleaned.length < 10) {
       return new Response(
         JSON.stringify({ 
