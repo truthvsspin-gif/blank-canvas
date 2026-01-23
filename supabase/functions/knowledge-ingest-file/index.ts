@@ -32,25 +32,78 @@ function chunkText(text: string, chunkSize = DEFAULT_CHUNK_SIZE, overlap = DEFAU
   return chunks;
 }
 
-// Extract text from PDF using basic parsing
+// Extract text from PDF using pdf-parse library
 async function extractTextFromPDF(arrayBuffer: ArrayBuffer): Promise<string> {
   try {
-    const bytes = new Uint8Array(arrayBuffer);
-    const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+    // Dynamic import of pdf-parse for Deno
+    const pdfParse = (await import("https://esm.sh/pdf-parse@1.1.1")).default;
     
-    // Try to extract readable text from PDF binary
-    const textParts: string[] = [];
+    // Convert ArrayBuffer to Buffer-like object for pdf-parse
+    const uint8Array = new Uint8Array(arrayBuffer);
     
-    // Look for text between BT (begin text) and ET (end text) markers
-    const btPattern = /BT[\s\S]*?ET/g;
-    const matches = text.match(btPattern) || [];
+    const data = await pdfParse(uint8Array);
     
-    for (const match of matches) {
-      // Extract text from Tj and TJ operators
-      const tjPattern = /\(([^)]*)\)\s*Tj/g;
-      let tjMatch;
-      while ((tjMatch = tjPattern.exec(match)) !== null) {
-        const decoded = tjMatch[1]
+    if (!data.text || data.text.trim().length === 0) {
+      throw new Error("No text content found in PDF");
+    }
+    
+    console.log(`PDF parsed: ${data.numpages} pages, ${data.text.length} characters`);
+    return data.text;
+  } catch (error) {
+    console.error("PDF extraction error:", error);
+    
+    // Fallback: Try basic text extraction for simple PDFs
+    try {
+      console.log("Attempting fallback PDF extraction...");
+      const text = await extractTextFromPDFFallback(arrayBuffer);
+      if (text && text.length > 50) {
+        return text;
+      }
+    } catch (fallbackError) {
+      console.error("Fallback extraction also failed:", fallbackError);
+    }
+    
+    throw new Error("Failed to extract text from PDF. The file may be scanned/image-based. Please use 'Paste Text' to manually enter the content.");
+  }
+}
+
+// Fallback extraction for simple PDFs
+async function extractTextFromPDFFallback(arrayBuffer: ArrayBuffer): Promise<string> {
+  const bytes = new Uint8Array(arrayBuffer);
+  const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  
+  const textParts: string[] = [];
+  
+  // Look for text between BT (begin text) and ET (end text) markers
+  const btPattern = /BT[\s\S]*?ET/g;
+  const matches = text.match(btPattern) || [];
+  
+  for (const match of matches) {
+    // Extract text from Tj and TJ operators
+    const tjPattern = /\(([^)]*)\)\s*Tj/g;
+    let tjMatch;
+    while ((tjMatch = tjPattern.exec(match)) !== null) {
+      const decoded = tjMatch[1]
+        .replace(/\\n/g, "\n")
+        .replace(/\\r/g, "\r")
+        .replace(/\\t/g, "\t")
+        .replace(/\\\(/g, "(")
+        .replace(/\\\)/g, ")")
+        .replace(/\\\\/g, "\\");
+      if (decoded.trim()) {
+        textParts.push(decoded);
+      }
+    }
+    
+    // Handle TJ arrays
+    const tjArrayPattern = /\[(.*?)\]\s*TJ/g;
+    let tjArrayMatch;
+    while ((tjArrayMatch = tjArrayPattern.exec(match)) !== null) {
+      const content = tjArrayMatch[1];
+      const stringPattern = /\(([^)]*)\)/g;
+      let stringMatch;
+      while ((stringMatch = stringPattern.exec(content)) !== null) {
+        const decoded = stringMatch[1]
           .replace(/\\n/g, "\n")
           .replace(/\\r/g, "\r")
           .replace(/\\t/g, "\t")
@@ -61,71 +114,18 @@ async function extractTextFromPDF(arrayBuffer: ArrayBuffer): Promise<string> {
           textParts.push(decoded);
         }
       }
-      
-      // Handle TJ arrays
-      const tjArrayPattern = /\[(.*?)\]\s*TJ/g;
-      let tjArrayMatch;
-      while ((tjArrayMatch = tjArrayPattern.exec(match)) !== null) {
-        const content = tjArrayMatch[1];
-        const stringPattern = /\(([^)]*)\)/g;
-        let stringMatch;
-        while ((stringMatch = stringPattern.exec(content)) !== null) {
-          const decoded = stringMatch[1]
-            .replace(/\\n/g, "\n")
-            .replace(/\\r/g, "\r")
-            .replace(/\\t/g, "\t")
-            .replace(/\\\(/g, "(")
-            .replace(/\\\)/g, ")")
-            .replace(/\\\\/g, "\\");
-          if (decoded.trim()) {
-            textParts.push(decoded);
-          }
-        }
-      }
     }
-    
-    // Also try to find stream objects with text content
-    const streamPattern = /stream\s*([\s\S]*?)\s*endstream/g;
-    let streamMatch;
-    while ((streamMatch = streamPattern.exec(text)) !== null) {
-      const streamContent = streamMatch[1];
-      // Extract readable ASCII text
-      const readable = streamContent.replace(/[^\x20-\x7E\n\r\t]/g, " ");
-      const words = readable.split(/\s+/).filter(w => w.length > 2 && /^[a-zA-ZáéíóúñüÁÉÍÓÚÑÜ0-9.,!?;:$%@-]+$/.test(w));
-      if (words.length > 5) {
-        textParts.push(words.join(" "));
-      }
-    }
-    
-    // Fallback: extract all printable text
-    if (textParts.length === 0) {
-      const printable = text.replace(/[^\x20-\x7E\n\r\táéíóúñüÁÉÍÓÚÑÜ]/g, " ");
-      const cleanWords = printable.split(/\s+/).filter(w => 
-        w.length > 2 && 
-        /^[a-zA-ZáéíóúñüÁÉÍÓÚÑÜ0-9.,!?;:$%@-]+$/.test(w) &&
-        !/^(obj|endobj|stream|endstream|xref|trailer|startxref)$/i.test(w)
-      );
-      if (cleanWords.length > 10) {
-        textParts.push(cleanWords.join(" "));
-      }
-    }
-    
-    return textParts.join(" ");
-  } catch (error) {
-    console.error("PDF extraction error:", error);
-    throw new Error("Failed to extract text from PDF");
   }
+  
+  return textParts.join(" ");
 }
 
 // Extract text from Word documents (basic DOCX parsing)
 async function extractTextFromDocx(arrayBuffer: ArrayBuffer): Promise<string> {
   try {
-    // DOCX is a ZIP file containing XML
-    // We'll try to find document.xml content
     const bytes = new Uint8Array(arrayBuffer);
     const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
     
-    // Look for text content in the XML
     const textParts: string[] = [];
     
     // Match w:t elements (Word text elements)
@@ -216,11 +216,12 @@ serve(async (req: Request) => {
 
     const cleaned = normalizeWhitespace(rawText);
     console.log(`Extracted text length: ${cleaned.length} characters`);
+    console.log(`First 200 chars: ${cleaned.slice(0, 200)}`);
 
     if (!cleaned || cleaned.length < 10) {
       return new Response(
         JSON.stringify({ 
-          error: "Could not extract text from document. The file may be encrypted, scanned, or in an unsupported format. Please try uploading a text-based PDF or copy-paste the content as text instead." 
+          error: "Could not extract text from document. The file may be encrypted, scanned, or in an unsupported format. Please use 'Paste Text' to manually enter the content instead." 
         }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
