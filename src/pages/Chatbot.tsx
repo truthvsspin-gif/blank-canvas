@@ -46,12 +46,8 @@ import { supabase } from "@/lib/supabaseClient";
 import { useCurrentBusiness } from "@/hooks/use-current-business";
 import { FlyerManager } from "@/components/chatbot/FlyerManager";
 
-// Industry presets for auto-fill
+// Industry presets for auto-fill (automotive/detailing only)
 const INDUSTRY_PRESETS: Record<string, { description: { en: string; es: string }; instructions: { en: string; es: string } }> = {
-  general: {
-    description: { en: "", es: "" },
-    instructions: { en: "", es: "" },
-  },
   automotive: {
     description: { 
       en: "We provide professional car care services including detailing, washing, and maintenance.",
@@ -62,84 +58,34 @@ const INDUSTRY_PRESETS: Record<string, { description: { en: string; es: string }
       es: "Pregunta sobre el tipo de vehículo y horarios preferidos. Recomienda servicios apropiados según la condición del vehículo."
     }
   },
-  retail_clothing: {
-    description: {
-      en: "We sell trendy clothing, accessories, and fashion items for all occasions.",
-      es: "Vendemos ropa de moda, accesorios y artículos de moda para todas las ocasiones."
+  detailing_premium: {
+    description: { 
+      en: "We specialize in premium auto detailing, paint correction, and ceramic coatings for luxury and exotic vehicles.",
+      es: "Nos especializamos en detallado premium, corrección de pintura y recubrimientos cerámicos para vehículos de lujo y exóticos."
     },
     instructions: {
-      en: "Help customers find sizes, styles, and shipping info. Ask about their style preferences and occasions.",
-      es: "Ayuda a los clientes a encontrar tallas, estilos e información de envío. Pregunta sobre sus preferencias de estilo y ocasiones."
+      en: "Focus on quality and attention to detail. Ask about paint condition and protection goals. Emphasize premium results.",
+      es: "Enfócate en calidad y atención al detalle. Pregunta sobre la condición de la pintura y objetivos de protección. Enfatiza resultados premium."
     }
   },
-  retail_electronics: {
-    description: {
-      en: "We sell phones, tablets, computers, and electronic accessories.",
-      es: "Vendemos teléfonos, tablets, computadoras y accesorios electrónicos."
+  car_wash: {
+    description: { 
+      en: "We offer quick and efficient car wash services including exterior wash, interior cleaning, and express details.",
+      es: "Ofrecemos servicios de lavado rápidos y eficientes incluyendo lavado exterior, limpieza interior y detallados express."
     },
     instructions: {
-      en: "Help with product specs, compatibility, and warranty info. Ask about use case and budget.",
-      es: "Ayuda con especificaciones, compatibilidad e información de garantía. Pregunta sobre el uso y presupuesto."
+      en: "Be friendly and efficient. Promote membership packages. Ask about service frequency and vehicle usage.",
+      es: "Sé amable y eficiente. Promociona paquetes de membresía. Pregunta sobre frecuencia de servicio y uso del vehículo."
     }
   },
-  restaurant: {
-    description: {
-      en: "We serve delicious food with a variety of menu options for dine-in and delivery.",
-      es: "Servimos comida deliciosa con variedad de opciones para comer aquí o llevar."
+  mobile_detailing: {
+    description: { 
+      en: "We bring professional detailing services to your location - home, office, or anywhere convenient for you.",
+      es: "Llevamos servicios profesionales de detallado a tu ubicación - casa, oficina o donde sea conveniente para ti."
     },
     instructions: {
-      en: "Help with menu info, hours, reservations, and dietary needs. Be warm and welcoming.",
-      es: "Ayuda con información del menú, horarios, reservaciones y necesidades dietéticas. Sé cálido y acogedor."
-    }
-  },
-  healthcare: {
-    description: {
-      en: "We provide healthcare services focused on patient wellness and care.",
-      es: "Proporcionamos servicios de salud enfocados en el bienestar del paciente."
-    },
-    instructions: {
-      en: "Be empathetic and professional. Help with appointment scheduling and general inquiries. Never provide medical advice.",
-      es: "Sé empático y profesional. Ayuda con citas y consultas generales. Nunca des consejos médicos."
-    }
-  },
-  beauty: {
-    description: {
-      en: "We offer beauty and wellness services including hair, nails, skincare, and spa treatments.",
-      es: "Ofrecemos servicios de belleza y bienestar incluyendo cabello, uñas, cuidado de piel y tratamientos de spa."
-    },
-    instructions: {
-      en: "Help with appointment booking and service recommendations. Ask about preferences and desired outcomes.",
-      es: "Ayuda con reservaciones y recomendaciones de servicios. Pregunta sobre preferencias y resultados deseados."
-    }
-  },
-  real_estate: {
-    description: {
-      en: "We help clients buy, sell, and rent properties in the area.",
-      es: "Ayudamos a clientes a comprar, vender y rentar propiedades en la zona."
-    },
-    instructions: {
-      en: "Qualify leads by asking about budget, location preferences, and timeline. Offer to schedule viewings.",
-      es: "Califica leads preguntando sobre presupuesto, preferencias de ubicación y plazos. Ofrece agendar visitas."
-    }
-  },
-  education: {
-    description: {
-      en: "We provide educational programs and training courses.",
-      es: "Proporcionamos programas educativos y cursos de capacitación."
-    },
-    instructions: {
-      en: "Help with course information, enrollment, and scheduling. Ask about learning goals and experience level.",
-      es: "Ayuda con información de cursos, inscripción y horarios. Pregunta sobre objetivos de aprendizaje y nivel de experiencia."
-    }
-  },
-  professional_services: {
-    description: {
-      en: "We provide professional consulting and business services.",
-      es: "Proporcionamos servicios profesionales de consultoría y negocios."
-    },
-    instructions: {
-      en: "Qualify leads by understanding their needs. Schedule consultations and explain service offerings.",
-      es: "Califica leads entendiendo sus necesidades. Agenda consultas y explica los servicios ofrecidos."
+      en: "Emphasize convenience and flexibility. Ask about preferred location and scheduling. Confirm access to water and power if needed.",
+      es: "Enfatiza conveniencia y flexibilidad. Pregunta sobre ubicación preferida y horarios. Confirma acceso a agua y electricidad si es necesario."
     }
   }
 };
@@ -164,7 +110,7 @@ export default function ChatbotPage() {
   const [greetingMessage, setGreetingMessage] = useState("");
   
   // New industry settings
-  const [industryType, setIndustryType] = useState<IndustryType>("general");
+  const [industryType, setIndustryType] = useState<IndustryType>("automotive");
   const [businessDescription, setBusinessDescription] = useState("");
   const [aiInstructions, setAiInstructions] = useState("");
   const [flyerCooldownHours, setFlyerCooldownHours] = useState(24);
@@ -259,16 +205,10 @@ export default function ChatbotPage() {
         ingestFail: "Error al procesar contenido",
         selectDoc: "Selecciona un documento",
         industries: {
-          general: "General",
           automotive: "Automotriz / Detallado",
-          retail_clothing: "Tienda de Ropa",
-          retail_electronics: "Tienda de Electrónica",
-          restaurant: "Restaurante",
-          healthcare: "Salud / Médico",
-          beauty: "Belleza / Spa",
-          real_estate: "Inmobiliaria",
-          education: "Educación",
-          professional_services: "Servicios Profesionales",
+          detailing_premium: "Detallado Premium",
+          car_wash: "Lavado de Autos",
+          mobile_detailing: "Detallado Móvil",
         }
       }
     : {
@@ -334,16 +274,10 @@ export default function ChatbotPage() {
         ingestFail: "Failed to process content",
         selectDoc: "Please select a document",
         industries: {
-          general: "General",
           automotive: "Automotive / Detailing",
-          retail_clothing: "Clothing Store",
-          retail_electronics: "Electronics Store",
-          restaurant: "Restaurant",
-          healthcare: "Healthcare / Medical",
-          beauty: "Beauty / Spa",
-          real_estate: "Real Estate",
-          education: "Education",
-          professional_services: "Professional Services",
+          detailing_premium: "Premium Detailing",
+          car_wash: "Car Wash",
+          mobile_detailing: "Mobile Detailing",
         }
       };
 
@@ -367,7 +301,7 @@ export default function ChatbotPage() {
             : "en"
         );
         setGreetingMessage(business.greeting_message ?? "");
-        setIndustryType((business.industry_type as IndustryType) || "general");
+        setIndustryType((business.industry_type as IndustryType) || "automotive");
         setBusinessDescription(business.business_description ?? "");
         setAiInstructions(business.ai_instructions ?? "");
         setFlyerCooldownHours(business.flyer_cooldown_hours ?? 24);
