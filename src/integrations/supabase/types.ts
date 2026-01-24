@@ -186,6 +186,7 @@ export type Database = {
       }
       conversations: {
         Row: {
+          ai_model: string | null
           benefit_intent: string | null
           business_id: string
           channel: string | null
@@ -195,6 +196,7 @@ export type Database = {
           handoff_required: boolean | null
           id: string
           intent: string | null
+          is_fallback: boolean | null
           lead_id: string | null
           lead_qualified: boolean | null
           message_direction: string | null
@@ -202,6 +204,7 @@ export type Database = {
           message_timestamp: string | null
           metadata: Json | null
           recommendation_summary: string | null
+          response_time_ms: number | null
           sender_name: string | null
           sender_phone_or_handle: string | null
           status: string
@@ -212,6 +215,7 @@ export type Database = {
           vehicle_info: Json | null
         }
         Insert: {
+          ai_model?: string | null
           benefit_intent?: string | null
           business_id: string
           channel?: string | null
@@ -221,6 +225,7 @@ export type Database = {
           handoff_required?: boolean | null
           id?: string
           intent?: string | null
+          is_fallback?: boolean | null
           lead_id?: string | null
           lead_qualified?: boolean | null
           message_direction?: string | null
@@ -228,6 +233,7 @@ export type Database = {
           message_timestamp?: string | null
           metadata?: Json | null
           recommendation_summary?: string | null
+          response_time_ms?: number | null
           sender_name?: string | null
           sender_phone_or_handle?: string | null
           status?: string
@@ -238,6 +244,7 @@ export type Database = {
           vehicle_info?: Json | null
         }
         Update: {
+          ai_model?: string | null
           benefit_intent?: string | null
           business_id?: string
           channel?: string | null
@@ -247,6 +254,7 @@ export type Database = {
           handoff_required?: boolean | null
           id?: string
           intent?: string | null
+          is_fallback?: boolean | null
           lead_id?: string | null
           lead_qualified?: boolean | null
           message_direction?: string | null
@@ -254,6 +262,7 @@ export type Database = {
           message_timestamp?: string | null
           metadata?: Json | null
           recommendation_summary?: string | null
+          response_time_ms?: number | null
           sender_name?: string | null
           sender_phone_or_handle?: string | null
           status?: string

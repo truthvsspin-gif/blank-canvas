@@ -12,6 +12,10 @@ import {
   Target,
   AlertCircle,
   CheckCircle2,
+  Zap,
+  Clock,
+  AlertTriangle,
+  Activity,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/page-header";
@@ -38,6 +42,8 @@ import {
   PieChart,
   Pie,
   Legend,
+  LineChart,
+  Line,
 } from "recharts";
 
 // State machine states from DetaPRO spec
@@ -59,6 +65,11 @@ type FunnelMetrics = {
   qualifiedLeads: number;
   handoffRequired: number;
   completedFunnels: number;
+  // API Quality metrics
+  avgResponseTimeMs: number;
+  fallbackCount: number;
+  fallbackRate: number;
+  p95ResponseTimeMs: number;
 };
 
 const STATE_COLORS: Record<StateKey, string> = {
@@ -91,6 +102,10 @@ export default function SalesAnalytics() {
     qualifiedLeads: 0,
     handoffRequired: 0,
     completedFunnels: 0,
+    avgResponseTimeMs: 0,
+    fallbackCount: 0,
+    fallbackRate: 0,
+    p95ResponseTimeMs: 0,
   });
   const [dateRange, setDateRange] = useState<"7d" | "30d" | "90d">("30d");
 
@@ -115,6 +130,16 @@ export default function SalesAnalytics() {
         completedHandoffs: "Traspasos Completados",
         dropOffAnalysis: "Análisis de Abandono",
         highestDropOff: "Mayor abandono en",
+        // API Quality
+        apiQuality: "Calidad de Respuesta AI",
+        avgLatency: "Latencia Promedio",
+        p95Latency: "P95 Latencia",
+        fallbackRate: "Tasa de Fallback",
+        fallbacks: "Respuestas Fallback",
+        apiHealthy: "API Saludable",
+        apiDegraded: "API Degradada",
+        apiUnhealthy: "API No Saludable",
+        ms: "ms",
       }
     : {
         title: "Sales Analytics",
@@ -136,6 +161,16 @@ export default function SalesAnalytics() {
         completedHandoffs: "Completed Handoffs",
         dropOffAnalysis: "Drop-off Analysis",
         highestDropOff: "Highest drop-off at",
+        // API Quality
+        apiQuality: "AI Response Quality",
+        avgLatency: "Avg Latency",
+        p95Latency: "P95 Latency",
+        fallbackRate: "Fallback Rate",
+        fallbacks: "Fallback Responses",
+        apiHealthy: "API Healthy",
+        apiDegraded: "API Degraded",
+        apiUnhealthy: "API Unhealthy",
+        ms: "ms",
       };
 
   useEffect(() => {
@@ -151,7 +186,7 @@ export default function SalesAnalytics() {
 
       const { data: conversations, error } = await supabase
         .from("conversations")
-        .select("id, current_state, lead_qualified, handoff_required, created_at")
+        .select("id, current_state, lead_qualified, handoff_required, created_at, response_time_ms, is_fallback, ai_model")
         .eq("business_id", businessId)
         .gte("created_at", startDate.toISOString());
 
@@ -174,6 +209,10 @@ export default function SalesAnalytics() {
 
       let qualifiedLeads = 0;
       let handoffRequired = 0;
+      
+      // API Quality tracking
+      const responseTimes: number[] = [];
+      let fallbackCount = 0;
 
       conversations?.forEach((conv) => {
         const state = conv.current_state as StateKey;
@@ -182,7 +221,30 @@ export default function SalesAnalytics() {
         }
         if (conv.lead_qualified) qualifiedLeads++;
         if (conv.handoff_required) handoffRequired++;
+        
+        // Track API performance
+        if (typeof conv.response_time_ms === "number" && conv.response_time_ms > 0) {
+          responseTimes.push(conv.response_time_ms);
+        }
+        if (conv.is_fallback === true) {
+          fallbackCount++;
+        }
       });
+
+      // Calculate API quality metrics
+      const totalWithResponseTime = responseTimes.length;
+      const avgResponseTimeMs = totalWithResponseTime > 0
+        ? Math.round(responseTimes.reduce((a, b) => a + b, 0) / totalWithResponseTime)
+        : 0;
+      
+      // P95 calculation
+      const sortedTimes = [...responseTimes].sort((a, b) => a - b);
+      const p95Index = Math.floor(sortedTimes.length * 0.95);
+      const p95ResponseTimeMs = sortedTimes[p95Index] || 0;
+      
+      const fallbackRate = conversations?.length > 0
+        ? Math.round((fallbackCount / conversations.length) * 100)
+        : 0;
 
       setMetrics({
         stateCounts,
@@ -190,6 +252,10 @@ export default function SalesAnalytics() {
         qualifiedLeads,
         handoffRequired,
         completedFunnels: stateCounts.STATE_6_HANDOFF,
+        avgResponseTimeMs,
+        fallbackCount,
+        fallbackRate,
+        p95ResponseTimeMs,
       });
 
       setLoading(false);
@@ -342,6 +408,122 @@ export default function SalesAnalytics() {
           </Card>
         ))}
       </div>
+
+      {/* API Response Quality */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="h-5 w-5 text-accent" />
+            {copy.apiQuality}
+          </CardTitle>
+          <CardDescription>
+            {isEs ? "Monitoreo de rendimiento del API de Groq" : "Groq API performance monitoring"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-24 animate-pulse rounded-lg bg-muted" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {/* Avg Latency */}
+              <div className="rounded-lg border bg-gradient-to-br from-blue-500/10 to-transparent p-4">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Clock className="h-4 w-4" />
+                  <span className="text-xs font-medium uppercase">{copy.avgLatency}</span>
+                </div>
+                <div className="mt-2 flex items-baseline gap-1">
+                  <span className="text-2xl font-bold">{metrics.avgResponseTimeMs}</span>
+                  <span className="text-sm text-muted-foreground">{copy.ms}</span>
+                </div>
+                <div className="mt-1">
+                  <Badge 
+                    variant="outline"
+                    className={
+                      metrics.avgResponseTimeMs < 500 
+                        ? "border-emerald-500/50 text-emerald-600 bg-emerald-500/10" 
+                        : metrics.avgResponseTimeMs < 1000 
+                          ? "border-yellow-500/50 text-yellow-600 bg-yellow-500/10" 
+                          : "border-destructive/50 text-destructive bg-destructive/10"
+                    }
+                  >
+                    {metrics.avgResponseTimeMs < 500 
+                      ? copy.apiHealthy 
+                      : metrics.avgResponseTimeMs < 1000 
+                        ? copy.apiDegraded 
+                        : copy.apiUnhealthy}
+                  </Badge>
+                </div>
+              </div>
+
+              {/* P95 Latency */}
+              <div className="rounded-lg border bg-gradient-to-br from-purple-500/10 to-transparent p-4">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Zap className="h-4 w-4" />
+                  <span className="text-xs font-medium uppercase">{copy.p95Latency}</span>
+                </div>
+                <div className="mt-2 flex items-baseline gap-1">
+                  <span className="text-2xl font-bold">{metrics.p95ResponseTimeMs}</span>
+                  <span className="text-sm text-muted-foreground">{copy.ms}</span>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {isEs ? "95% de las respuestas son más rápidas" : "95% of responses are faster"}
+                </p>
+              </div>
+
+              {/* Fallback Rate */}
+              <div className="rounded-lg border bg-gradient-to-br from-orange-500/10 to-transparent p-4">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <AlertTriangle className="h-4 w-4" />
+                  <span className="text-xs font-medium uppercase">{copy.fallbackRate}</span>
+                </div>
+                <div className="mt-2 flex items-baseline gap-1">
+                  <span className="text-2xl font-bold">{metrics.fallbackRate}</span>
+                  <span className="text-sm text-muted-foreground">%</span>
+                </div>
+                <div className="mt-1">
+                  <Badge 
+                    variant="outline"
+                    className={
+                      metrics.fallbackRate < 5 
+                        ? "border-emerald-500/50 text-emerald-600 bg-emerald-500/10" 
+                        : metrics.fallbackRate < 15 
+                          ? "border-yellow-500/50 text-yellow-600 bg-yellow-500/10" 
+                          : "border-destructive/50 text-destructive bg-destructive/10"
+                    }
+                  >
+                    {metrics.fallbackRate < 5 
+                      ? (isEs ? "Excelente" : "Excellent")
+                      : metrics.fallbackRate < 15 
+                        ? (isEs ? "Aceptable" : "Acceptable")
+                        : (isEs ? "Necesita atención" : "Needs attention")}
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Fallback Count */}
+              <div className="rounded-lg border bg-gradient-to-br from-red-500/10 to-transparent p-4">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <AlertCircle className="h-4 w-4" />
+                  <span className="text-xs font-medium uppercase">{copy.fallbacks}</span>
+                </div>
+                <div className="mt-2 flex items-baseline gap-1">
+                  <span className="text-2xl font-bold">{metrics.fallbackCount}</span>
+                  <span className="text-sm text-muted-foreground">
+                    / {metrics.totalConversations}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {isEs ? "Respuestas usando scripted fallback" : "Responses using scripted fallback"}
+                </p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {metrics.totalConversations === 0 && !loading ? (
         <Card className="border-dashed">
