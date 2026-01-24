@@ -218,13 +218,20 @@ function isLowIntent(text: string): boolean {
 }
 
 // ============================================================================
-// GROQ API CALL
+// GROQ API CALL WITH LATENCY TRACKING
 // ============================================================================
+interface GroqAPIResult {
+  content: string;
+  error?: string;
+  latencyMs: number;
+}
+
 async function callGroqAPI(
   messages: ChatMessage[],
   apiKey: string,
   model: string = DEFAULT_MODEL
-): Promise<{ content: string; error?: string }> {
+): Promise<GroqAPIResult> {
+  const startTime = Date.now();
   try {
     console.log(`[GROQ] Calling Groq API with model: ${model}, messages: ${messages.length}`);
     
@@ -244,19 +251,22 @@ async function callGroqAPI(
       }),
     });
 
+    const latencyMs = Date.now() - startTime;
+
     if (!response.ok) {
       const errorText = await response.text();
       console.error("[GROQ] API error:", response.status, errorText);
-      return { content: "", error: `API error: ${response.status}` };
+      return { content: "", error: `API error: ${response.status}`, latencyMs };
     }
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || "";
-    console.log(`[GROQ] Response received: ${content.substring(0, 100)}...`);
-    return { content };
+    console.log(`[GROQ] Response received in ${latencyMs}ms: ${content.substring(0, 100)}...`);
+    return { content, latencyMs };
   } catch (err) {
+    const latencyMs = Date.now() - startTime;
     console.error("[GROQ] API call failed:", err);
-    return { content: "", error: "Failed to connect to AI service." };
+    return { content: "", error: "Failed to connect to AI service.", latencyMs };
   }
 }
 
@@ -362,6 +372,16 @@ Be enthusiastic but brief. Use emoji sparingly (one max).`,
 // ============================================================================
 // STATE TRANSITION LOGIC WITH GROQ
 // ============================================================================
+interface StateMachineResult {
+  reply: string;
+  newContext: ConversationContext;
+  performance: {
+    responseTimeMs: number;
+    isFallback: boolean;
+    aiModel: string;
+  };
+}
+
 async function processStateMachine(
   userMessage: string,
   context: ConversationContext,
@@ -370,8 +390,10 @@ async function processStateMachine(
   services: any[],
   conversationHistory: ChatMessage[],
   apiKey: string
-): Promise<{ reply: string; newContext: ConversationContext }> {
+): Promise<StateMachineResult> {
   const newContext = { ...context };
+  let lastLatencyMs = 0;
+  let usedFallback = false;
   
   console.log(`[STATE MACHINE] Current state: ${context.currentState}, Message: "${userMessage.substring(0, 50)}..."`);
   
@@ -383,14 +405,24 @@ async function processStateMachine(
       { role: "user", content: userMessage }
     ];
     
-    const { content, error } = await callGroqAPI(messages, apiKey);
+    const { content, error, latencyMs } = await callGroqAPI(messages, apiKey);
+    lastLatencyMs = latencyMs;
     if (error || !content) {
+      usedFallback = true;
       const fallback = language === "es"
         ? "No hay problema. Si necesitas ayuda más adelante, con gusto te atiendo. ¡Que tengas buen día! 👋"
         : "No problem at all. If you need help later, feel free to reach out. Have a great day! 👋";
-      return { reply: fallback, newContext };
+      return { 
+        reply: fallback, 
+        newContext,
+        performance: { responseTimeMs: lastLatencyMs, isFallback: true, aiModel: DEFAULT_MODEL }
+      };
     }
-    return { reply: content, newContext };
+    return { 
+      reply: content, 
+      newContext,
+      performance: { responseTimeMs: lastLatencyMs, isFallback: false, aiModel: DEFAULT_MODEL }
+    };
   }
   
   // Check for handoff triggers (after STATE_2)
@@ -409,14 +441,24 @@ async function processStateMachine(
       { role: "user", content: userMessage }
     ];
     
-    const { content, error } = await callGroqAPI(messages, apiKey);
+    const { content, error, latencyMs } = await callGroqAPI(messages, apiKey);
+    lastLatencyMs = latencyMs;
     if (error || !content) {
+      usedFallback = true;
       const fallback = language === "es"
         ? "¡Perfecto! 🎉 Te conecto con la persona encargada para coordinar disponibilidad y confirmar los detalles."
         : "Perfect! 🎉 I'll connect you with the person in charge to coordinate availability and confirm the details.";
-      return { reply: fallback, newContext };
+      return { 
+        reply: fallback, 
+        newContext,
+        performance: { responseTimeMs: lastLatencyMs, isFallback: true, aiModel: DEFAULT_MODEL }
+      };
     }
-    return { reply: content, newContext };
+    return { 
+      reply: content, 
+      newContext,
+      performance: { responseTimeMs: lastLatencyMs, isFallback: false, aiModel: DEFAULT_MODEL }
+    };
   }
   
   // Process based on current state
@@ -485,9 +527,11 @@ async function processStateMachine(
     { role: "user", content: userMessage }
   ];
   
-  const { content, error } = await callGroqAPI(messages, apiKey);
+  const { content, error, latencyMs } = await callGroqAPI(messages, apiKey);
+  lastLatencyMs = latencyMs;
   
   if (error || !content) {
+    usedFallback = true;
     // Fallback responses if Groq fails
     const fallbacks: Record<State, { en: string; es: string }> = {
       STATE_0_OPENING: {
@@ -518,37 +562,61 @@ async function processStateMachine(
     };
     
     const fallback = fallbacks[newContext.currentState] || fallbacks.STATE_0_OPENING;
-    return { reply: fallback[language], newContext };
+    return { 
+      reply: fallback[language], 
+      newContext,
+      performance: { responseTimeMs: lastLatencyMs, isFallback: true, aiModel: DEFAULT_MODEL }
+    };
   }
   
-  return { reply: content, newContext };
+  return { 
+    reply: content, 
+    newContext,
+    performance: { responseTimeMs: lastLatencyMs, isFallback: false, aiModel: DEFAULT_MODEL }
+  };
 }
 
 // ============================================================================
 // STORE CONVERSATION STATE
 // ============================================================================
+interface PerformanceMetrics {
+  responseTimeMs: number;
+  isFallback: boolean;
+  aiModel: string;
+}
+
 async function storeConversationState(
   supabase: any,
   businessId: string,
   conversationId: string | null,
   userMessage: string,
   aiReply: string,
-  context: ConversationContext
+  context: ConversationContext,
+  performance?: PerformanceMetrics
 ): Promise<void> {
   try {
     if (conversationId) {
+      const updateData: Record<string, any> = {
+        current_state: context.currentState,
+        vehicle_info: context.vehicleInfo,
+        benefit_intent: context.benefitIntent,
+        usage_context: context.usageContext,
+        recommendation_summary: context.recommendationSummary,
+        handoff_required: context.handoffRequired,
+        lead_qualified: context.leadQualified,
+        updated_at: new Date().toISOString(),
+      };
+
+      // Add performance metrics if provided
+      if (performance) {
+        updateData.response_time_ms = performance.responseTimeMs;
+        updateData.is_fallback = performance.isFallback;
+        updateData.ai_model = performance.aiModel;
+      }
+
       await supabase
         .from("conversations")
-        .update({
-          current_state: context.currentState,
-          vehicle_info: context.vehicleInfo,
-          benefit_intent: context.benefitIntent,
-          usage_context: context.usageContext,
-          recommendation_summary: context.recommendationSummary,
-          handoff_required: context.handoffRequired,
-          lead_qualified: context.leadQualified,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq("id", conversationId);
     }
 
@@ -674,7 +742,7 @@ serve(async (req: Request) => {
     console.log(`[AI-CHAT] Business: ${business?.name}, State: ${context.currentState}, Language: ${language}, Model: ${DEFAULT_MODEL}`);
 
     // Process through state machine WITH Groq
-    const { reply, newContext } = await processStateMachine(
+    const { reply, newContext, performance } = await processStateMachine(
       userMessage,
       context,
       language,
@@ -684,14 +752,17 @@ serve(async (req: Request) => {
       GROQ_API_KEY
     );
 
-    // Store conversation state
+    console.log(`[AI-CHAT] Response generated in ${performance.responseTimeMs}ms, fallback: ${performance.isFallback}`);
+
+    // Store conversation state with performance metrics
     await storeConversationState(
       supabase,
       businessId,
       conversationId || null,
       userMessage,
       reply,
-      newContext
+      newContext,
+      performance
     );
 
     // Emit events if needed
