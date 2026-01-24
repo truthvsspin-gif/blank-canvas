@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  AlertTriangle,
   Bot,
-  ChevronDown,
+  Car,
+  CheckCircle2,
+  HandMetal,
   Instagram,
   Loader2,
-  MessageSquare,
   Phone,
   RefreshCw,
   Send,
@@ -34,48 +36,51 @@ type Message = {
   timestamp: Date;
 };
 
-// Industry-specific quick prompts
-const industryPrompts: Record<string, { en: string[]; es: string[] }> = {
-  general: {
-    en: ["What services do you offer?", "What are your prices?", "Do you have availability today?", "I want to book an appointment", "What are your hours?"],
-    es: ["¿Qué servicios ofrecen?", "¿Cuáles son sus precios?", "¿Tienen disponibilidad hoy?", "Quiero reservar una cita", "¿Cuál es su horario?"],
-  },
-  "retail/clothing": {
-    en: ["What sizes do you have?", "Do you have this in another color?", "What are your return policies?", "Do you ship internationally?", "What's on sale right now?"],
-    es: ["¿Qué tallas tienen?", "¿Tienen esto en otro color?", "¿Cuál es su política de devoluciones?", "¿Hacen envíos internacionales?", "¿Qué está en oferta?"],
-  },
-  electronics: {
-    en: ["What's the warranty period?", "Do you have this model in stock?", "Can I compare specifications?", "Do you offer installation services?", "What payment plans are available?"],
-    es: ["¿Cuál es el período de garantía?", "¿Tienen este modelo en stock?", "¿Puedo comparar especificaciones?", "¿Ofrecen servicio de instalación?", "¿Qué planes de pago tienen?"],
-  },
-  automotive: {
-    en: ["What detailing packages do you offer?", "How long does service take?", "Do you offer pickup/delivery?", "What's included in a full detail?", "Do you work on motorcycles?"],
-    es: ["¿Qué paquetes de detailing ofrecen?", "¿Cuánto tiempo toma el servicio?", "¿Ofrecen recogida/entrega?", "¿Qué incluye un detallado completo?", "¿Trabajan con motos?"],
-  },
-  restaurant: {
-    en: ["What's on the menu today?", "Do you take reservations?", "Do you have vegetarian options?", "What are your delivery hours?", "Do you cater events?"],
-    es: ["¿Cuál es el menú de hoy?", "¿Aceptan reservaciones?", "¿Tienen opciones vegetarianas?", "¿Cuál es su horario de entrega?", "¿Hacen catering para eventos?"],
-  },
-  healthcare: {
-    en: ["How do I book an appointment?", "What insurance do you accept?", "What are your consultation fees?", "Do you offer telemedicine?", "What services do you provide?"],
-    es: ["¿Cómo reservo una cita?", "¿Qué seguros aceptan?", "¿Cuánto cuesta una consulta?", "¿Ofrecen telemedicina?", "¿Qué servicios ofrecen?"],
-  },
-  "real-estate": {
-    en: ["What properties are available?", "Can I schedule a viewing?", "What's the price range?", "Do you handle rentals?", "What areas do you cover?"],
-    es: ["¿Qué propiedades tienen disponibles?", "¿Puedo agendar una visita?", "¿Cuál es el rango de precios?", "¿Manejan alquileres?", "¿Qué zonas cubren?"],
-  },
-  education: {
-    en: ["What courses do you offer?", "How do I enroll?", "What are the class schedules?", "Do you offer online classes?", "What are the tuition fees?"],
-    es: ["¿Qué cursos ofrecen?", "¿Cómo me inscribo?", "¿Cuáles son los horarios de clase?", "¿Ofrecen clases en línea?", "¿Cuánto cuesta la matrícula?"],
-  },
-  "beauty/spa": {
-    en: ["What treatments do you offer?", "How do I book an appointment?", "What are your prices?", "Do you have package deals?", "What products do you use?"],
-    es: ["¿Qué tratamientos ofrecen?", "¿Cómo reservo una cita?", "¿Cuáles son sus precios?", "¿Tienen paquetes especiales?", "¿Qué productos usan?"],
-  },
-  fitness: {
-    en: ["What membership plans do you have?", "What classes do you offer?", "Do you have personal trainers?", "What are your hours?", "Is there a free trial?"],
-    es: ["¿Qué planes de membresía tienen?", "¿Qué clases ofrecen?", "¿Tienen entrenadores personales?", "¿Cuál es su horario?", "¿Hay prueba gratis?"],
-  },
+type ConversationState = {
+  currentState: string;
+  handoffRequired: boolean;
+  leadQualified: boolean;
+};
+
+// State display names
+const STATE_LABELS: Record<string, { en: string; es: string }> = {
+  STATE_0_OPENING: { en: "Opening", es: "Apertura" },
+  STATE_1_VEHICLE: { en: "Vehicle Info", es: "Info Vehículo" },
+  STATE_2_BENEFIT: { en: "Benefit Discovery", es: "Descubrimiento" },
+  STATE_3_USAGE: { en: "Usage Context", es: "Contexto de Uso" },
+  STATE_4_PRESCRIPTION: { en: "Recommendation", es: "Recomendación" },
+  STATE_5_ACTION: { en: "Closing", es: "Cierre" },
+  STATE_6_HANDOFF: { en: "Human Handoff", es: "Transferencia" },
+};
+
+// Consultative sales quick prompts (aligned with state machine)
+const salesPrompts: { en: string[]; es: string[] } = {
+  en: [
+    "Hi, I need help with my car",
+    "Toyota Camry sedan",
+    "BMW X5 SUV",
+    "Ford F-150 pickup",
+    "I want it to look like new",
+    "I want to protect it long-term",
+    "The interior needs work",
+    "It's my daily driver",
+    "Weekend car only",
+    "Yes, let's move forward",
+    "What about pricing?",
+  ],
+  es: [
+    "Hola, necesito ayuda con mi carro",
+    "Toyota Camry sedán",
+    "BMW X5 SUV",
+    "Ford F-150 pickup",
+    "Quiero que luzca como nuevo",
+    "Quiero protegerlo a largo plazo",
+    "El interior necesita trabajo",
+    "Es mi carro de diario",
+    "Solo de fin de semana",
+    "Sí, avancemos",
+    "¿Cuánto cuesta?",
+  ],
 };
 
 export default function DevChatbotPage() {
@@ -84,35 +89,25 @@ export default function DevChatbotPage() {
   const { businessId, loading: bizLoading } = useCurrentBusiness();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const [industryType, setIndustryType] = useState<string>("general");
+  
+  // State machine tracking
+  const [conversationState, setConversationState] = useState<ConversationState>({
+    currentState: "STATE_0_OPENING",
+    handoffRequired: false,
+    leadQualified: false,
+  });
 
-  // Fetch business industry type
-  useEffect(() => {
-    if (!businessId) return;
-    supabase
-      .from("businesses")
-      .select("industry_type")
-      .eq("id", businessId)
-      .single()
-      .then(({ data }) => {
-        if (data?.industry_type) {
-          setIndustryType(data.industry_type);
-        }
-      });
-  }, [businessId]);
-
-  // Get prompts for current industry
+  // Get prompts for consultative sales flow
   const currentPrompts = useMemo(() => {
-    const prompts = industryPrompts[industryType] || industryPrompts.general;
-    return isEs ? prompts.es : prompts.en;
-  }, [industryType, isEs]);
+    return isEs ? salesPrompts.es : salesPrompts.en;
+  }, [isEs]);
 
   const initialMessage: Message = useMemo(() => ({
     id: "welcome",
     role: "bot" as const,
     text: isEs 
-      ? "¡Hola! 👋 Soy tu asistente virtual. Pregúntame sobre nuestros servicios, precios, horarios o cualquier otra cosa. ¿En qué puedo ayudarte hoy?"
-      : "Hi there! 👋 I'm your virtual assistant. Ask me about our services, pricing, hours, or anything else. How can I help you today?",
+      ? "¡Perfecto, con gusto te ayudo! 🚗\n\nPara orientarte mejor, ¿para qué vehículo es?\n(Marca, modelo, y si es sedán, SUV o pickup)"
+      : "Perfect, happy to help! 🚗\n\nTo guide you properly, what vehicle is this for?\n(Brand, model, and whether it's a sedan, SUV, or pickup)",
     timestamp: new Date(),
   }), [isEs]);
 
@@ -127,42 +122,50 @@ export default function DevChatbotPage() {
     () =>
       isEs
         ? {
-            title: "Simulador de Chatbot",
-            desc: "Prueba las respuestas del chatbot en tiempo real",
+            title: "Simulador de Ventas Consultivas",
+            desc: "Prueba el chatbot de ventas con máquina de estados",
             placeholder: "Escribe un mensaje...",
             send: "Enviar",
             sending: "Enviando...",
             noBusiness: "No hay negocio activo.",
             errorFetch: "Error al enviar el mensaje.",
-            hint: "Las respuestas usan la misma lógica que WhatsApp e Instagram",
-            quickPrompts: "Prueba rápida",
-            clearChat: "Limpiar chat",
+            hint: "Flujo de ventas consultivas - NO es un bot de FAQ",
+            quickPrompts: "Simulador de flujo",
+            clearChat: "Reiniciar conversación",
             typing: "Escribiendo...",
             noMessages: "Inicia una conversación",
             noMessagesDesc: "Envía un mensaje o usa una de las sugerencias rápidas",
-            poweredBy: "Impulsado por IA",
+            poweredBy: "Ventas Consultivas",
             selectChannel: "Canal de prueba",
             whatsapp: "WhatsApp",
             instagram: "Instagram",
+            currentState: "Estado actual",
+            leadQualified: "Lead calificado",
+            handoffReady: "Listo para transferir",
+            handoffMessage: "Conversación transferida a humano. El bot ya no responderá.",
           }
         : {
-            title: "Chatbot Simulator",
-            desc: "Test chatbot responses in real time",
+            title: "Consultative Sales Simulator",
+            desc: "Test the sales chatbot with state machine",
             placeholder: "Type a message...",
             send: "Send",
             sending: "Sending...",
             noBusiness: "No active business.",
             errorFetch: "Failed to send message.",
-            hint: "Responses use the same logic as WhatsApp and Instagram",
-            quickPrompts: "Quick prompts",
-            clearChat: "Clear chat",
+            hint: "Consultative sales flow - NOT an FAQ bot",
+            quickPrompts: "Flow Simulator",
+            clearChat: "Reset conversation",
             typing: "Typing...",
             noMessages: "Start a conversation",
             noMessagesDesc: "Send a message or use one of the quick prompts",
-            poweredBy: "Powered by AI",
+            poweredBy: "Consultative Sales",
             selectChannel: "Test Channel",
             whatsapp: "WhatsApp",
             instagram: "Instagram",
+            currentState: "Current state",
+            leadQualified: "Lead qualified",
+            handoffReady: "Ready for handoff",
+            handoffMessage: "Conversation handed off to human. Bot will no longer respond.",
           },
     [isEs]
   );
@@ -179,6 +182,11 @@ export default function DevChatbotPage() {
     async (messageText?: string) => {
       const trimmed = (messageText || input).trim();
       if (!trimmed || loading) return;
+      
+      // Don't allow sending if handoff is required
+      if (conversationState.handoffRequired) {
+        return;
+      }
 
       if (!businessId) {
         setError(copy.noBusiness);
@@ -219,6 +227,15 @@ export default function DevChatbotPage() {
           throw new Error(data?.error || copy.errorFetch);
         }
 
+        // Update conversation state from response
+        if (data) {
+          setConversationState({
+            currentState: data.currentState || "STATE_0_OPENING",
+            handoffRequired: data.handoffRequired || false,
+            leadQualified: data.leadQualified || false,
+          });
+        }
+
         // Simulate typing delay for better UX
         await new Promise((resolve) => setTimeout(resolve, 500));
 
@@ -236,12 +253,17 @@ export default function DevChatbotPage() {
         setIsTyping(false);
       }
     },
-    [input, loading, businessId, copy, selectedChannel]
+    [input, loading, businessId, copy, conversationState.handoffRequired, messages]
   );
 
   const handleClearChat = () => {
     setMessages([]);
     setError(null);
+    setConversationState({
+      currentState: "STATE_0_OPENING",
+      handoffRequired: false,
+      leadQualified: false,
+    });
   };
 
   const formatTime = (date: Date) => {
@@ -250,6 +272,8 @@ export default function DevChatbotPage() {
       minute: "2-digit",
     });
   };
+
+  const currentStateLabel = STATE_LABELS[conversationState.currentState] || STATE_LABELS.STATE_0_OPENING;
 
   if (bizLoading) {
     return (
@@ -272,13 +296,46 @@ export default function DevChatbotPage() {
         description={copy.desc}
         actions={
           <Badge variant="outline" className="gap-1.5 border-accent/50 text-accent">
-            <Sparkles className="h-3 w-3" />
+            <Car className="h-3 w-3" />
             {copy.poweredBy}
           </Badge>
         }
       />
 
-      {/* Channel Selector - Below header */}
+      {/* State Machine Status Bar */}
+      <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg bg-card border">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-muted-foreground">{copy.currentState}:</span>
+          <Badge 
+            variant="outline" 
+            className={`${
+              conversationState.currentState === "STATE_6_HANDOFF"
+                ? "bg-amber-500/10 text-amber-600 border-amber-500/30"
+                : conversationState.currentState === "STATE_5_ACTION"
+                ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
+                : "bg-accent/10 text-accent border-accent/30"
+            }`}
+          >
+            {isEs ? currentStateLabel.es : currentStateLabel.en}
+          </Badge>
+        </div>
+        
+        {conversationState.leadQualified && (
+          <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 gap-1">
+            <CheckCircle2 className="h-3 w-3" />
+            {copy.leadQualified}
+          </Badge>
+        )}
+        
+        {conversationState.handoffRequired && (
+          <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/30 gap-1">
+            <HandMetal className="h-3 w-3" />
+            {copy.handoffReady}
+          </Badge>
+        )}
+      </div>
+
+      {/* Channel Selector */}
       <div className="flex items-center gap-3">
         <span className="text-sm font-medium text-muted-foreground">{copy.selectChannel}:</span>
         <div className="flex gap-2">
@@ -315,14 +372,19 @@ export default function DevChatbotPage() {
               <Zap className="h-4 w-4 text-accent" />
               {copy.quickPrompts}
             </CardTitle>
+            <CardDescription className="text-xs">
+              {isEs 
+                ? "Sigue el flujo de ventas paso a paso"
+                : "Follow the sales flow step by step"}
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-2 max-h-[400px] overflow-y-auto">
             {currentPrompts.map((prompt: string, idx: number) => (
               <button
                 key={idx}
                 onClick={() => handleSend(prompt)}
-                disabled={loading}
-                className="w-full text-left rounded-lg border border-dashed border-border/60 bg-muted/30 px-3 py-2.5 text-sm transition-all hover:border-accent hover:bg-accent/5 hover:text-accent disabled:opacity-50"
+                disabled={loading || conversationState.handoffRequired}
+                className="w-full text-left rounded-lg border border-dashed border-border/60 bg-muted/30 px-3 py-2 text-xs transition-all hover:border-accent hover:bg-accent/5 hover:text-accent disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {prompt}
               </button>
@@ -367,7 +429,7 @@ export default function DevChatbotPage() {
                 </div>
                 <div>
                   <CardTitle className="text-base flex items-center gap-2">
-                    AI Assistant
+                    {isEs ? "Asistente de Ventas" : "Sales Assistant"}
                     <Badge className={`text-[10px] ${
                       selectedChannel === "whatsapp"
                         ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
@@ -468,6 +530,14 @@ export default function DevChatbotPage() {
             )}
           </div>
 
+          {/* Handoff Warning */}
+          {conversationState.handoffRequired && (
+            <div className="px-4 py-3 bg-amber-500/10 border-t border-amber-500/20 flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              <p className="text-sm text-amber-700">{copy.handoffMessage}</p>
+            </div>
+          )}
+
           {/* Error Message */}
           {error && (
             <div className="px-4 py-2 bg-destructive/10 border-t border-destructive/20">
@@ -482,8 +552,10 @@ export default function DevChatbotPage() {
                 <input
                   ref={inputRef}
                   type="text"
-                  className="w-full rounded-full border bg-muted/50 px-4 py-3 pr-12 text-sm transition-all focus:bg-background focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
-                  placeholder={copy.placeholder}
+                  className="w-full rounded-full border bg-muted/50 px-4 py-3 pr-12 text-sm transition-all focus:bg-background focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  placeholder={conversationState.handoffRequired 
+                    ? (isEs ? "Conversación transferida..." : "Conversation handed off...") 
+                    : copy.placeholder}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => {
@@ -492,14 +564,14 @@ export default function DevChatbotPage() {
                       handleSend();
                     }
                   }}
-                  disabled={loading}
+                  disabled={loading || conversationState.handoffRequired}
                 />
               </div>
               <Button
                 onClick={() => handleSend()}
-                disabled={loading || !input.trim()}
+                disabled={loading || !input.trim() || conversationState.handoffRequired}
                 size="icon"
-                className="h-12 w-12 rounded-full bg-accent text-white hover:bg-accent/90 shadow-lg shadow-accent/25 transition-all hover:shadow-accent/40"
+                className="h-12 w-12 rounded-full bg-accent text-white hover:bg-accent/90 shadow-lg shadow-accent/25 transition-all hover:shadow-accent/40 disabled:opacity-50"
               >
                 {loading ? (
                   <Loader2 className="h-5 w-5 animate-spin" />
