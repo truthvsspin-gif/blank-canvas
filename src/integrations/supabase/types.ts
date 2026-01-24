@@ -186,61 +186,82 @@ export type Database = {
       }
       conversations: {
         Row: {
+          benefit_intent: string | null
           business_id: string
           channel: string | null
           conversation_id: string | null
           created_at: string
+          current_state: string | null
+          handoff_required: boolean | null
           id: string
           intent: string | null
           lead_id: string | null
+          lead_qualified: boolean | null
           message_direction: string | null
           message_text: string | null
           message_timestamp: string | null
           metadata: Json | null
+          recommendation_summary: string | null
           sender_name: string | null
           sender_phone_or_handle: string | null
           status: string
           subject: string | null
           updated_at: string
+          usage_context: string | null
           user_id: string | null
+          vehicle_info: Json | null
         }
         Insert: {
+          benefit_intent?: string | null
           business_id: string
           channel?: string | null
           conversation_id?: string | null
           created_at?: string
+          current_state?: string | null
+          handoff_required?: boolean | null
           id?: string
           intent?: string | null
           lead_id?: string | null
+          lead_qualified?: boolean | null
           message_direction?: string | null
           message_text?: string | null
           message_timestamp?: string | null
           metadata?: Json | null
+          recommendation_summary?: string | null
           sender_name?: string | null
           sender_phone_or_handle?: string | null
           status?: string
           subject?: string | null
           updated_at?: string
+          usage_context?: string | null
           user_id?: string | null
+          vehicle_info?: Json | null
         }
         Update: {
+          benefit_intent?: string | null
           business_id?: string
           channel?: string | null
           conversation_id?: string | null
           created_at?: string
+          current_state?: string | null
+          handoff_required?: boolean | null
           id?: string
           intent?: string | null
           lead_id?: string | null
+          lead_qualified?: boolean | null
           message_direction?: string | null
           message_text?: string | null
           message_timestamp?: string | null
           metadata?: Json | null
+          recommendation_summary?: string | null
           sender_name?: string | null
           sender_phone_or_handle?: string | null
           status?: string
           subject?: string | null
           updated_at?: string
+          usage_context?: string | null
           user_id?: string | null
+          vehicle_info?: Json | null
         }
         Relationships: [
           {
