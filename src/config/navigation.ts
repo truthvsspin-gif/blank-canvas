@@ -9,7 +9,8 @@ import {
   TestTube, 
   Shield, 
   User,
-  Briefcase
+  Briefcase,
+  BarChart3
 } from "lucide-react"
 import { AppSection } from "@/types/navigation"
 
@@ -29,6 +30,17 @@ export const appSections: AppSection[] = [
     },
     badge: { en: "Overview", es: "Resumen" },
     icon: LayoutDashboard,
+    group: "main",
+  },
+  {
+    name: { en: "Sales Analytics", es: "Analíticas de Ventas" },
+    href: "/sales-analytics",
+    summary: {
+      en: "Conversion funnel metrics and lead qualification rates.",
+      es: "Métricas de embudo de conversión y tasas de calificación.",
+    },
+    badge: { en: "Funnel", es: "Embudo" },
+    icon: BarChart3,
     group: "main",
   },
   {

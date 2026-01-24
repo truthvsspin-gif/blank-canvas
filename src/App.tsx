@@ -7,6 +7,7 @@ import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Dashboard from "./pages/Dashboard";
+import SalesAnalytics from "./pages/SalesAnalytics";
 import CRM from "./pages/CRM";
 import Customers from "./pages/crm/Customers";
 import CustomerDetail from "./pages/crm/CustomerDetail";
@@ -48,6 +49,7 @@ function App() {
               }
             >
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/sales-analytics" element={<SalesAnalytics />} />
               <Route path="/crm" element={<CRM />} />
               <Route path="/crm/customers" element={<Customers />} />
               <Route path="/crm/customers/new" element={<CustomerNew />} />
