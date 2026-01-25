@@ -205,53 +205,78 @@ export default function DevChatbotPage() {
       setIsTyping(true);
       setError(null);
 
-      try {
-        const res = await fetch(
-          "https://ybifjdlelpvgzmzvgwls.supabase.co/functions/v1/ai-chat",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              businessId,
-              userMessage: trimmed,
-              conversationHistory: messages.map((m) => ({
-                role: m.role === "user" ? "user" : "assistant",
-                content: m.text,
-              })),
-            }),
+      // Retry logic for cold-start issues
+      const maxRetries = 2;
+      let lastError: Error | null = null;
+
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
+          const res = await fetch(
+            "https://ybifjdlelpvgzmzvgwls.supabase.co/functions/v1/ai-chat",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                businessId,
+                userMessage: trimmed,
+                conversationHistory: messages.map((m) => ({
+                  role: m.role === "user" ? "user" : "assistant",
+                  content: m.text,
+                })),
+              }),
+              signal: controller.signal,
+            }
+          );
+          clearTimeout(timeoutId);
+
+          const data = await res.json().catch(() => null);
+
+          if (!res.ok) {
+            throw new Error(data?.error || copy.errorFetch);
           }
-        );
-        const data = await res.json().catch(() => null);
 
-        if (!res.ok) {
-          throw new Error(data?.error || copy.errorFetch);
+          // Update conversation state from response
+          if (data) {
+            setConversationState({
+              currentState: data.currentState || "STATE_0_OPENING",
+              handoffRequired: data.handoffRequired || false,
+              leadQualified: data.leadQualified || false,
+            });
+          }
+
+          // Simulate typing delay for better UX
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
+          const botMsg: Message = {
+            id: crypto.randomUUID(),
+            role: "bot",
+            text: data?.reply || "...",
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, botMsg]);
+          setLoading(false);
+          setIsTyping(false);
+          return; // Success - exit loop
+        } catch (err) {
+          lastError = err instanceof Error ? err : new Error(copy.errorFetch);
+          
+          // If it's a timeout or network error and we have retries left, wait and retry
+          if (attempt < maxRetries && (err instanceof Error && (err.name === 'AbortError' || err.message === 'Failed to fetch'))) {
+            console.log(`[Retry ${attempt + 1}/${maxRetries}] Edge function call failed, retrying...`);
+            await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait 1s before retry
+            continue;
+          }
+          break;
         }
-
-        // Update conversation state from response
-        if (data) {
-          setConversationState({
-            currentState: data.currentState || "STATE_0_OPENING",
-            handoffRequired: data.handoffRequired || false,
-            leadQualified: data.leadQualified || false,
-          });
-        }
-
-        // Simulate typing delay for better UX
-        await new Promise((resolve) => setTimeout(resolve, 500));
-
-        const botMsg: Message = {
-          id: crypto.randomUUID(),
-          role: "bot",
-          text: data?.reply || "...",
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, botMsg]);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : copy.errorFetch);
-      } finally {
-        setLoading(false);
-        setIsTyping(false);
       }
+
+      // All retries exhausted
+      setError(lastError?.message || copy.errorFetch);
+      setLoading(false);
+      setIsTyping(false);
     },
     [input, loading, businessId, copy, conversationState.handoffRequired, messages]
   );
