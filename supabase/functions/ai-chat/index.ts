@@ -51,6 +51,9 @@ interface AIRequest {
   businessId: string;
   conversationId?: string;
   customerId?: string;
+  customerIdentifier?: string; // phone or handle for memory lookup
+  customerName?: string;
+  channel?: string;
   userMessage: string;
   conversationHistory?: ChatMessage[];
 }
@@ -63,7 +66,17 @@ interface AIResponse {
   currentState: string;
   handoffRequired: boolean;
   leadQualified: boolean;
+  returningCustomer: boolean;
   error?: string;
+}
+
+interface CustomerMemory {
+  vehicleInfo: ConversationContext["vehicleInfo"];
+  preferredBenefit?: string;
+  usagePattern?: string;
+  customerName?: string;
+  conversationCount: number;
+  lastInteractionAt: string;
 }
 
 // ============================================================================
@@ -858,6 +871,106 @@ async function storeConversationState(
 }
 
 // ============================================================================
+// CUSTOMER MEMORY - LOAD
+// ============================================================================
+async function loadCustomerMemory(
+  supabase: any,
+  businessId: string,
+  customerIdentifier: string | null
+): Promise<CustomerMemory | null> {
+  if (!customerIdentifier) return null;
+
+  try {
+    const { data } = await supabase
+      .from("customer_memory")
+      .select("*")
+      .eq("business_id", businessId)
+      .eq("customer_identifier", customerIdentifier)
+      .maybeSingle();
+
+    if (data) {
+      console.log(`[MEMORY] Found returning customer: ${customerIdentifier}, visits: ${data.conversation_count}`);
+      return {
+        vehicleInfo: data.vehicle_info || {},
+        preferredBenefit: data.preferred_benefit,
+        usagePattern: data.usage_pattern,
+        customerName: data.customer_name,
+        conversationCount: data.conversation_count || 1,
+        lastInteractionAt: data.last_interaction_at,
+      };
+    }
+  } catch (err) {
+    console.error("[MEMORY] Failed to load customer memory:", err);
+  }
+
+  return null;
+}
+
+// ============================================================================
+// CUSTOMER MEMORY - SAVE/UPDATE
+// ============================================================================
+async function saveCustomerMemory(
+  supabase: any,
+  businessId: string,
+  customerIdentifier: string | null,
+  customerName: string | null,
+  channel: string | null,
+  context: ConversationContext,
+  isReturning: boolean
+): Promise<void> {
+  if (!customerIdentifier) return;
+
+  try {
+    const memoryData = {
+      business_id: businessId,
+      customer_identifier: customerIdentifier,
+      channel: channel || "unknown",
+      customer_name: customerName,
+      vehicle_info: context.vehicleInfo,
+      preferred_benefit: context.benefitIntent,
+      usage_pattern: context.usageContext,
+      last_state: context.currentState,
+      last_interaction_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    if (isReturning) {
+      // Update existing memory
+      const { data: existing } = await supabase
+        .from("customer_memory")
+        .select("conversation_count")
+        .eq("business_id", businessId)
+        .eq("customer_identifier", customerIdentifier)
+        .maybeSingle();
+
+      await supabase
+        .from("customer_memory")
+        .update({
+          ...memoryData,
+          conversation_count: (existing?.conversation_count || 1) + 1,
+        })
+        .eq("business_id", businessId)
+        .eq("customer_identifier", customerIdentifier);
+
+      console.log(`[MEMORY] Updated memory for returning customer: ${customerIdentifier}`);
+    } else {
+      // Insert new memory
+      await supabase
+        .from("customer_memory")
+        .insert({
+          ...memoryData,
+          conversation_count: 1,
+          created_at: new Date().toISOString(),
+        });
+
+      console.log(`[MEMORY] Created new memory for customer: ${customerIdentifier}`);
+    }
+  } catch (err) {
+    console.error("[MEMORY] Failed to save customer memory:", err);
+  }
+}
+
+// ============================================================================
 // LOAD CONVERSATION CONTEXT
 // ============================================================================
 async function loadConversationContext(
@@ -901,6 +1014,63 @@ async function loadConversationContext(
 }
 
 // ============================================================================
+// MERGE CUSTOMER MEMORY INTO CONTEXT
+// ============================================================================
+function mergeMemoryIntoContext(
+  context: ConversationContext,
+  memory: CustomerMemory | null
+): { context: ConversationContext; isReturning: boolean } {
+  if (!memory) {
+    return { context, isReturning: false };
+  }
+
+  // Only merge if context is empty (new conversation)
+  const hasVehicle = context.vehicleInfo?.brand || context.vehicleInfo?.model || context.vehicleInfo?.type;
+  const hasBenefit = !!context.benefitIntent;
+  const hasUsage = !!context.usageContext;
+
+  const mergedContext = { ...context };
+  let wasEnhanced = false;
+
+  // Pre-populate vehicle info if not in current context
+  if (!hasVehicle && (memory.vehicleInfo?.brand || memory.vehicleInfo?.model)) {
+    mergedContext.vehicleInfo = memory.vehicleInfo;
+    wasEnhanced = true;
+    console.log("[MEMORY] Pre-populated vehicle info from memory");
+  }
+
+  // Pre-populate benefit intent
+  if (!hasBenefit && memory.preferredBenefit) {
+    mergedContext.benefitIntent = memory.preferredBenefit;
+    wasEnhanced = true;
+    console.log("[MEMORY] Pre-populated benefit intent from memory");
+  }
+
+  // Pre-populate usage pattern
+  if (!hasUsage && memory.usagePattern) {
+    mergedContext.usageContext = memory.usagePattern;
+    wasEnhanced = true;
+    console.log("[MEMORY] Pre-populated usage pattern from memory");
+  }
+
+  // Advance state if we have pre-populated data
+  if (wasEnhanced) {
+    if (mergedContext.usageContext && mergedContext.benefitIntent) {
+      mergedContext.currentState = STATES.STATE_4_PRESCRIPTION;
+    } else if (mergedContext.benefitIntent) {
+      mergedContext.currentState = STATES.STATE_3_USAGE;
+    } else if (mergedContext.vehicleInfo?.brand || mergedContext.vehicleInfo?.model) {
+      mergedContext.currentState = STATES.STATE_2_BENEFIT;
+    }
+  }
+
+  return { 
+    context: mergedContext, 
+    isReturning: memory.conversationCount > 0 
+  };
+}
+
+// ============================================================================
 // MAIN HANDLER
 // ============================================================================
 serve(async (req: Request) => {
@@ -927,7 +1097,15 @@ serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body: AIRequest = await req.json();
-    const { businessId, conversationId, userMessage, conversationHistory = [] } = body;
+    const { 
+      businessId, 
+      conversationId, 
+      customerIdentifier, 
+      customerName,
+      channel,
+      userMessage, 
+      conversationHistory = [] 
+    } = body;
 
     if (!businessId || !userMessage) {
       return new Response(
@@ -953,9 +1131,18 @@ serve(async (req: Request) => {
     const language = detectLanguage(userMessage);
 
     // Load conversation context (state machine state)
-    const context = await loadConversationContext(supabase, conversationId || null);
+    let context = await loadConversationContext(supabase, conversationId || null);
     
-    console.log(`[AI-CHAT] Business: ${business?.name}, State: ${context.currentState}, Language: ${language}, Model: ${DEFAULT_MODEL}`);
+    // Load customer memory and merge into context
+    const customerMemory = await loadCustomerMemory(supabase, businessId, customerIdentifier || null);
+    const { context: enrichedContext, isReturning } = mergeMemoryIntoContext(context, customerMemory);
+    context = enrichedContext;
+
+    if (isReturning && customerMemory) {
+      console.log(`[AI-CHAT] Returning customer detected! Visits: ${customerMemory.conversationCount}, Last: ${customerMemory.lastInteractionAt}`);
+    }
+    
+    console.log(`[AI-CHAT] Business: ${business?.name}, State: ${context.currentState}, Language: ${language}, Returning: ${isReturning}`);
 
     // Process through state machine WITH Groq
     const { reply, newContext, performance } = await processStateMachine(
@@ -981,6 +1168,17 @@ serve(async (req: Request) => {
       performance
     );
 
+    // Save/update customer memory
+    await saveCustomerMemory(
+      supabase,
+      businessId,
+      customerIdentifier || null,
+      customerName || null,
+      channel || null,
+      newContext,
+      isReturning
+    );
+
     // Emit events if needed
     if (newContext.leadQualified && !context.leadQualified) {
       console.log(`[EVENT] lead_qualified for business ${businessId}`);
@@ -997,6 +1195,7 @@ serve(async (req: Request) => {
       currentState: newContext.currentState,
       handoffRequired: newContext.handoffRequired,
       leadQualified: newContext.leadQualified,
+      returningCustomer: isReturning,
     };
 
     return new Response(
