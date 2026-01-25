@@ -289,6 +289,54 @@ export type Database = {
           },
         ]
       }
+      customer_memory: {
+        Row: {
+          business_id: string
+          channel: string | null
+          conversation_count: number | null
+          created_at: string
+          customer_identifier: string
+          customer_name: string | null
+          id: string
+          last_interaction_at: string | null
+          last_state: string | null
+          preferred_benefit: string | null
+          updated_at: string
+          usage_pattern: string | null
+          vehicle_info: Json | null
+        }
+        Insert: {
+          business_id: string
+          channel?: string | null
+          conversation_count?: number | null
+          created_at?: string
+          customer_identifier: string
+          customer_name?: string | null
+          id?: string
+          last_interaction_at?: string | null
+          last_state?: string | null
+          preferred_benefit?: string | null
+          updated_at?: string
+          usage_pattern?: string | null
+          vehicle_info?: Json | null
+        }
+        Update: {
+          business_id?: string
+          channel?: string | null
+          conversation_count?: number | null
+          created_at?: string
+          customer_identifier?: string
+          customer_name?: string | null
+          id?: string
+          last_interaction_at?: string | null
+          last_state?: string | null
+          preferred_benefit?: string | null
+          updated_at?: string
+          usage_pattern?: string | null
+          vehicle_info?: Json | null
+        }
+        Relationships: []
+      }
       customers: {
         Row: {
           business_id: string
