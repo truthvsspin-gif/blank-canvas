@@ -271,6 +271,90 @@ async function callGroqAPI(
 }
 
 // ============================================================================
+// BUILD CONFIRMED FACTS BLOCK (Context Lock)
+// ============================================================================
+function buildConfirmedFactsBlock(context: ConversationContext, language: "en" | "es"): string {
+  const facts: string[] = [];
+  
+  if (context.vehicleInfo?.brand || context.vehicleInfo?.model || context.vehicleInfo?.type) {
+    const vehicleParts = [
+      context.vehicleInfo.brand,
+      context.vehicleInfo.model,
+      context.vehicleInfo.type ? `(${context.vehicleInfo.type})` : null,
+      context.vehicleInfo.sizeClass ? `- ${context.vehicleInfo.sizeClass} size` : null
+    ].filter(Boolean).join(" ");
+    facts.push(`🚗 VEHICLE: ${vehicleParts}`);
+  }
+  
+  if (context.benefitIntent) {
+    const intentMap: Record<string, { en: string; es: string }> = {
+      shine: { en: "Make it look like new / shine", es: "Hacerlo lucir como nuevo / brillo" },
+      protection: { en: "Long-term protection", es: "Protección a largo plazo" },
+      interior: { en: "Interior refresh/cleaning", es: "Renovación/limpieza interior" },
+      unsure: { en: "Not sure yet - needs guidance", es: "No está seguro - necesita orientación" }
+    };
+    const intentText = intentMap[context.benefitIntent]?.[language] || context.benefitIntent;
+    facts.push(`🎯 CUSTOMER GOAL: ${intentText}`);
+  }
+  
+  if (context.usageContext) {
+    const usageMap: Record<string, { en: string; es: string }> = {
+      daily: { en: "Daily driver (frequent use)", es: "Uso diario (frecuente)" },
+      occasional: { en: "Occasional/weekend use", es: "Uso ocasional/fin de semana" }
+    };
+    const usageText = usageMap[context.usageContext]?.[language] || context.usageContext;
+    facts.push(`📅 USAGE PATTERN: ${usageText}`);
+  }
+  
+  if (facts.length === 0) {
+    return language === "es"
+      ? "===== INFORMACIÓN CONFIRMADA =====\nNinguna aún - pregunta por el vehículo.\n=================================="
+      : "===== CONFIRMED INFORMATION =====\nNone collected yet - ask for vehicle info.\n==================================";
+  }
+  
+  const header = language === "es"
+    ? "===== INFORMACIÓN CONFIRMADA (NO PREGUNTAR DE NUEVO) ====="
+    : "===== CONFIRMED FACTS (DO NOT ASK ABOUT THESE AGAIN) =====";
+  
+  const footer = "=".repeat(header.length);
+  
+  return `${header}\n${facts.join("\n")}\n${footer}`;
+}
+
+// ============================================================================
+// BUILD NEGATIVE CONSTRAINTS (What NOT to ask)
+// ============================================================================
+function buildNegativeConstraints(context: ConversationContext, language: "en" | "es"): string {
+  const constraints: string[] = [];
+  
+  if (context.vehicleInfo?.brand || context.vehicleInfo?.model || context.vehicleInfo?.type) {
+    constraints.push(language === "es"
+      ? "❌ YA SABES el vehículo. NO preguntes qué carro/vehículo/tipo tienen."
+      : "❌ You ALREADY KNOW the vehicle. DO NOT ask what car/vehicle/type they have."
+    );
+  }
+  
+  if (context.benefitIntent) {
+    constraints.push(language === "es"
+      ? "❌ YA SABES su objetivo. NO preguntes qué buscan o qué les gustaría lograr."
+      : "❌ You ALREADY KNOW their goal. DO NOT ask what they're looking for or want to achieve."
+    );
+  }
+  
+  if (context.usageContext) {
+    constraints.push(language === "es"
+      ? "❌ YA SABES el uso. NO preguntes si es de uso diario u ocasional."
+      : "❌ You ALREADY KNOW the usage. DO NOT ask if daily or occasional use."
+    );
+  }
+  
+  if (constraints.length === 0) return "";
+  
+  const header = language === "es" ? "⚠️ RESTRICCIONES CRÍTICAS:" : "⚠️ CRITICAL RESTRICTIONS:";
+  return `${header}\n${constraints.join("\n")}`;
+}
+
+// ============================================================================
 // BUILD SYSTEM PROMPT FOR STATE
 // ============================================================================
 function buildSystemPrompt(
@@ -287,14 +371,25 @@ function buildSystemPrompt(
     ? services.map(s => `${s.name}${s.base_price ? ` ($${s.base_price})` : ""}`).join(", ")
     : "various detailing services";
 
-  const vehicleDesc = context.vehicleInfo?.brand
-    ? `${context.vehicleInfo.brand} ${context.vehicleInfo.model || ""} (${context.vehicleInfo.type || "vehicle"})`.trim()
-    : "their vehicle";
+  // Build context blocks
+  const confirmedFacts = buildConfirmedFactsBlock(context, language);
+  const negativeConstraints = buildNegativeConstraints(context, language);
 
-  const basePrompt = `You are a consultative sales assistant for ${businessName}, an automotive detailing business.
-${businessDesc ? `Business description: ${businessDesc}` : ""}
+  const vehicleRef = context.vehicleInfo?.brand
+    ? `${context.vehicleInfo.brand} ${context.vehicleInfo.model || ""} ${context.vehicleInfo.type || ""}`.trim()
+    : null;
 
-CORE RULES (NEVER BREAK):
+  const coreRules = language === "es"
+    ? `REGLAS PRINCIPALES (NUNCA ROMPER):
+- UNA sola pregunta a la vez
+- Respuestas CORTAS (1-3 oraciones máximo)
+- NUNCA dar información de paquetes o precios adelantados
+- NUNCA pedir fotos o depósitos
+- NUNCA presionar al cliente
+- Sé cálido, profesional y humano
+- Enfócate en beneficios, no en procesos técnicos
+- Responde en Español`
+    : `CORE RULES (NEVER BREAK):
 - ONE question at a time only
 - SHORT responses (1-3 sentences max)
 - NEVER dump information or list packages upfront
@@ -302,71 +397,93 @@ CORE RULES (NEVER BREAK):
 - NEVER pressure the customer
 - Be warm, professional, and human
 - Focus on benefits, not technical processes
-- Reply in ${language === "es" ? "Spanish" : "English"}
+- Reply in English`;
 
+  const businessContext = `You are a consultative sales assistant for ${businessName}.
+${businessDesc ? `Business: ${businessDesc}` : ""}
 Available services: ${serviceList}`;
 
-  const statePrompts: Record<State, string> = {
-    STATE_0_OPENING: `${basePrompt}
-
-CURRENT GOAL: Get vehicle information from the customer.
+  // State-specific goals
+  let stateGoal = "";
+  switch (state) {
+    case STATES.STATE_0_OPENING:
+      stateGoal = language === "es"
+        ? `OBJETIVO ACTUAL: Obtener información del vehículo.
+Pregunta amablemente qué vehículo tienen (marca, modelo, tipo como sedán/SUV/pickup).
+Sé amigable y acogedor.`
+        : `CURRENT GOAL: Get vehicle information.
 Ask what vehicle this is for (brand, model, type like sedan/SUV/pickup).
-Be friendly and welcoming. Don't ask multiple questions.`,
-
-    STATE_1_VEHICLE: basePrompt,
-
-    STATE_2_BENEFIT: `${basePrompt}
-
-Customer's vehicle: ${vehicleDesc}
-
-CURRENT GOAL: Understand what benefit/problem they want to solve.
-Ask what they're mainly looking to achieve with their vehicle. Suggest options like:
-- Make it look like new / increase shine
-- Protect it and keep it looking good over time
-- Improve or renew the interior
-- If they're not sure, that's okay too`,
-
-    STATE_3_USAGE: `${basePrompt}
-
-Customer's vehicle: ${vehicleDesc}
-Their priority: ${context.benefitIntent || "not specified"}
-
-CURRENT GOAL: Understand usage pattern (just one quick question).
-Ask if this is a daily-use vehicle or more occasional.`,
-
-    STATE_4_PRESCRIPTION: `${basePrompt}
-
-Customer's vehicle: ${vehicleDesc}
-Their priority: ${context.benefitIntent || "not specified"}
-Usage: ${context.usageContext || "not specified"}
-
-CURRENT GOAL: Make ONE clear recommendation.
-Structure your response:
+Be friendly and welcoming.`;
+      break;
+      
+    case STATES.STATE_2_BENEFIT:
+      stateGoal = language === "es"
+        ? `OBJETIVO ACTUAL: Entender qué beneficio/problema quieren resolver.
+${vehicleRef ? `Menciona su ${vehicleRef} para mostrar que escuchaste.` : ""}
+Pregunta qué buscan lograr: brillo como nuevo, protección, o interior.`
+        : `CURRENT GOAL: Understand what benefit/problem they want to solve.
+${vehicleRef ? `Reference their ${vehicleRef} to show you listened.` : ""}
+Ask what they're mainly looking to achieve: new-look shine, protection, or interior.`;
+      break;
+      
+    case STATES.STATE_3_USAGE:
+      stateGoal = language === "es"
+        ? `OBJETIVO ACTUAL: Entender patrón de uso (una pregunta rápida).
+${vehicleRef ? `Referencia su ${vehicleRef}.` : ""}
+Pregunta si es de uso diario o más ocasional.`
+        : `CURRENT GOAL: Understand usage pattern (just one quick question).
+${vehicleRef ? `Reference their ${vehicleRef}.` : ""}
+Ask if this is a daily-use vehicle or more occasional.`;
+      break;
+      
+    case STATES.STATE_4_PRESCRIPTION:
+      stateGoal = language === "es"
+        ? `OBJETIVO ACTUAL: Hacer UNA recomendación clara.
+1. Breve resumen mostrando que entiendes su situación
+2. Enmarca el valor/beneficio (no proceso técnico)
+3. Haz UNA recomendación conceptual
+4. Sugiere revisar disponibilidad como siguiente paso`
+        : `CURRENT GOAL: Make ONE clear recommendation.
 1. Brief summary showing you understand their situation
 2. Frame the value/benefit (not technical process)
-3. Make ONE conceptual recommendation (not package names)
-4. Transition: suggest checking availability as next step
+3. Make ONE conceptual recommendation
+4. Suggest checking availability as next step`;
+      break;
+      
+    case STATES.STATE_5_ACTION:
+      stateGoal = language === "es"
+        ? `OBJETIVO ACTUAL: Cierre suave - mover hacia acción.
+Pregunta si les gustaría avanzar y revisar disponibilidad.
+Si tienen objeciones, aborda UNA objeción, luego redirige a acción.`
+        : `CURRENT GOAL: Soft close - move toward action.
+Ask if they'd like to move forward and check availability.
+If they have objections, address ONE objection only, then redirect to action.`;
+      break;
+      
+    case STATES.STATE_6_HANDOFF:
+      stateGoal = language === "es"
+        ? `OBJETIVO ACTUAL: Confirmar traspaso a humano.
+Hazles saber que los conectarás con el equipo para coordinar.
+Sé entusiasta pero breve. Usa máximo un emoji.`
+        : `CURRENT GOAL: Confirm handoff to human.
+Let them know you'll connect them with the team to coordinate.
+Be enthusiastic but brief. Use one emoji max.`;
+      break;
+      
+    default:
+      stateGoal = "";
+  }
 
-Be confident but not pushy.`,
+  // Assemble final prompt with context lock at the TOP
+  return `${confirmedFacts}
 
-    STATE_5_ACTION: `${basePrompt}
+${negativeConstraints}
 
-Customer's vehicle: ${vehicleDesc}
-Their priority: ${context.benefitIntent || "not specified"}
-Usage: ${context.usageContext || "not specified"}
+${businessContext}
 
-CURRENT GOAL: Soft close - move toward action.
-Ask if they'd like to move forward and check availability, or if they have questions first.
-If they have objections, address ONE objection only, then redirect to action.`,
+${coreRules}
 
-    STATE_6_HANDOFF: `${basePrompt}
-
-CURRENT GOAL: Confirm handoff to human.
-Let them know you'll connect them with the team to coordinate availability and confirm details.
-Be enthusiastic but brief. Use emoji sparingly (one max).`,
-  };
-
-  return statePrompts[state] || basePrompt;
+${stateGoal}`.trim();
 }
 
 // ============================================================================
@@ -519,16 +636,45 @@ async function processStateMachine(
     }
   }
   
+  // Build context summary for conversation history
+  const contextSummary = buildContextSummary(newContext, language);
+  
   // Build prompt for current/new state and call Groq
   const systemPrompt = buildSystemPrompt(newContext.currentState, newContext, language, business, services);
+  
+  // Inject context summary at the start of history
+  const historyWithContext: ChatMessage[] = contextSummary
+    ? [{ role: "assistant" as const, content: contextSummary }, ...conversationHistory.slice(-6)]
+    : conversationHistory.slice(-6);
+  
   const messages: ChatMessage[] = [
     { role: "system", content: systemPrompt },
-    ...conversationHistory.slice(-6),
+    ...historyWithContext,
     { role: "user", content: userMessage }
   ];
   
-  const { content, error, latencyMs } = await callGroqAPI(messages, apiKey);
+  let { content, error, latencyMs } = await callGroqAPI(messages, apiKey);
   lastLatencyMs = latencyMs;
+  
+  // Validate response - catch context amnesia
+  if (content && !validateResponse(content, newContext)) {
+    console.warn("[VALIDATION] Response failed validation, regenerating with stronger constraints");
+    const reinforcedPrompt = `${systemPrompt}\n\n⚠️ CRITICAL: Your previous response asked about information we already have. DO NOT repeat this mistake. Check CONFIRMED FACTS above.`;
+    const retryMessages: ChatMessage[] = [
+      { role: "system", content: reinforcedPrompt },
+      ...historyWithContext,
+      { role: "user", content: userMessage }
+    ];
+    const retry = await callGroqAPI(retryMessages, apiKey);
+    if (retry.content && validateResponse(retry.content, newContext)) {
+      content = retry.content;
+      lastLatencyMs = retry.latencyMs;
+    } else {
+      // Use fallback if retry also fails validation
+      usedFallback = true;
+      content = "";
+    }
+  }
   
   if (error || !content) {
     usedFallback = true;
@@ -574,6 +720,76 @@ async function processStateMachine(
     newContext,
     performance: { responseTimeMs: lastLatencyMs, isFallback: false, aiModel: DEFAULT_MODEL }
   };
+}
+
+// ============================================================================
+// BUILD CONTEXT SUMMARY (Injected into conversation history)
+// ============================================================================
+function buildContextSummary(context: ConversationContext, language: "en" | "es"): string | null {
+  const parts: string[] = [];
+  
+  if (context.vehicleInfo?.brand || context.vehicleInfo?.model) {
+    const vehicle = `${context.vehicleInfo.brand || ""} ${context.vehicleInfo.model || ""} ${context.vehicleInfo.type || ""}`.trim();
+    parts.push(language === "es" ? `vehículo: ${vehicle}` : `vehicle: ${vehicle}`);
+  }
+  
+  if (context.benefitIntent) {
+    parts.push(language === "es" ? `objetivo: ${context.benefitIntent}` : `goal: ${context.benefitIntent}`);
+  }
+  
+  if (context.usageContext) {
+    parts.push(language === "es" ? `uso: ${context.usageContext}` : `usage: ${context.usageContext}`);
+  }
+  
+  if (parts.length === 0) return null;
+  
+  return language === "es"
+    ? `[CONTEXTO] Cliente tiene ${parts.join(", ")}.`
+    : `[CONTEXT] Customer has ${parts.join(", ")}.`;
+}
+
+// ============================================================================
+// VALIDATE RESPONSE (Catch context amnesia)
+// ============================================================================
+function validateResponse(response: string, context: ConversationContext): boolean {
+  const lowerResponse = response.toLowerCase();
+  
+  // If we have vehicle info, the response should NOT ask about vehicle
+  if (context.vehicleInfo?.brand || context.vehicleInfo?.model || context.vehicleInfo?.type) {
+    const asksVehicle = /what (type|kind|make|model|year)?\s*(of\s*)?(vehicle|car|truck|suv|carro|veh[ií]culo|coche)/i.test(response) ||
+                        /qu[ée]\s*(tipo|marca|modelo)\s*(de\s*)?(veh[ií]culo|carro|coche|auto)/i.test(response) ||
+                        /what.*do you (have|drive|own)/i.test(response) ||
+                        /tell me about your (car|vehicle)/i.test(response);
+    if (asksVehicle) {
+      console.warn("[VALIDATION] Response asks about vehicle despite having info");
+      return false;
+    }
+  }
+  
+  // If we have benefit intent, should NOT ask what they're looking for
+  if (context.benefitIntent) {
+    const asksIntent = /what are you (looking|trying|hoping|wanting) to (achieve|do|accomplish|get)/i.test(response) ||
+                       /what would you like to/i.test(response) ||
+                       /qu[ée] (buscas?|quieres?|te gustar[ií]a)/i.test(response) ||
+                       /what('s| is) your (main )?goal/i.test(response);
+    if (asksIntent) {
+      console.warn("[VALIDATION] Response asks about intent despite having info");
+      return false;
+    }
+  }
+  
+  // If we have usage context, should NOT ask about usage
+  if (context.usageContext) {
+    const asksUsage = /is (this|it) (a )?(daily|everyday|regular|occasional|weekend)/i.test(response) ||
+                      /how often do you (use|drive)/i.test(response) ||
+                      /es de uso (diario|ocasional)/i.test(response);
+    if (asksUsage) {
+      console.warn("[VALIDATION] Response asks about usage despite having info");
+      return false;
+    }
+  }
+  
+  return true;
 }
 
 // ============================================================================
