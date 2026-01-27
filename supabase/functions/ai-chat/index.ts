@@ -1336,6 +1336,74 @@ async function saveCustomerMemory(
 }
 
 // ============================================================================
+// FOLLOW-UP QUEUE - Schedule re-engagement messages (DetaPRO v1.2 Phase 3)
+// ============================================================================
+async function queueFollowUps(
+  supabase: any,
+  businessId: string,
+  conversationId: string | null,
+  leadId: string | null
+): Promise<void> {
+  if (!conversationId) return;
+
+  const now = new Date();
+  
+  // Schedule follow-up windows per DetaPRO v1.2 spec
+  const followUps = [
+    { type: "24h", delay: 24 * 60 * 60 * 1000 },
+    { type: "48h", delay: 48 * 60 * 60 * 1000 },
+    { type: "5d", delay: 5 * 24 * 60 * 60 * 1000 },
+    { type: "7d", delay: 7 * 24 * 60 * 60 * 1000 },
+  ];
+
+  try {
+    for (const { type, delay } of followUps) {
+      const scheduledFor = new Date(now.getTime() + delay);
+      
+      await supabase
+        .from("follow_up_queue")
+        .upsert({
+          business_id: businessId,
+          conversation_id: conversationId,
+          lead_id: leadId,
+          follow_up_type: type,
+          scheduled_for: scheduledFor.toISOString(),
+          status: "pending",
+        }, {
+          onConflict: "conversation_id,follow_up_type",
+          ignoreDuplicates: true,
+        });
+    }
+    
+    console.log(`[FOLLOWUP] Queued follow-ups for conversation ${conversationId}`);
+  } catch (err) {
+    console.error("[FOLLOWUP] Failed to queue follow-ups:", err);
+  }
+}
+
+// Cancel pending follow-ups when user re-engages
+async function cancelPendingFollowUps(
+  supabase: any,
+  businessId: string,
+  conversationId: string | null
+): Promise<void> {
+  if (!conversationId) return;
+
+  try {
+    await supabase
+      .from("follow_up_queue")
+      .update({ status: "cancelled" })
+      .eq("business_id", businessId)
+      .eq("conversation_id", conversationId)
+      .eq("status", "pending");
+      
+    console.log(`[FOLLOWUP] Cancelled pending follow-ups for ${conversationId}`);
+  } catch (err) {
+    console.error("[FOLLOWUP] Failed to cancel follow-ups:", err);
+  }
+}
+
+// ============================================================================
 // LOAD CONVERSATION CONTEXT
 // ============================================================================
 async function loadConversationContext(
@@ -1583,6 +1651,29 @@ serve(async (req: Request) => {
       newContext,
       isReturning
     );
+
+    // Cancel pending follow-ups since user re-engaged
+    if (isReturning && conversationId) {
+      await cancelPendingFollowUps(supabase, businessId, conversationId);
+    }
+
+    // Queue follow-ups when conversation goes cold or recovery exhausted
+    const shouldQueueFollowUps = 
+      newContext.recoveryAttemptCount >= 2 || // Recovery attempts exhausted
+      newContext.handoffRequired || // Handoff triggered
+      newContext.currentState === STATES.STATE_6_HANDOFF;
+    
+    if (shouldQueueFollowUps && conversationId) {
+      // Fetch lead_id if exists for this conversation
+      const { data: leadData } = await supabase
+        .from("leads")
+        .select("id")
+        .eq("business_id", businessId)
+        .eq("conversation_id", conversationId)
+        .maybeSingle();
+      
+      await queueFollowUps(supabase, businessId, conversationId, leadData?.id || null);
+    }
 
     // Emit events if needed
     if (newContext.leadQualified && !context.leadQualified) {

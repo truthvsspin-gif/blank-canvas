@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.knowledge-ingest-file]
 verify_jwt = false
+
+[functions.scheduled-followup]
+verify_jwt = false

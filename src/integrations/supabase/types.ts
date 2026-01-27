@@ -423,6 +423,63 @@ export type Database = {
           },
         ]
       }
+      follow_up_queue: {
+        Row: {
+          business_id: string
+          conversation_id: string
+          created_at: string
+          error_message: string | null
+          follow_up_type: string
+          id: string
+          lead_id: string | null
+          message_sent: string | null
+          scheduled_for: string
+          sent_at: string | null
+          status: string
+        }
+        Insert: {
+          business_id: string
+          conversation_id: string
+          created_at?: string
+          error_message?: string | null
+          follow_up_type: string
+          id?: string
+          lead_id?: string | null
+          message_sent?: string | null
+          scheduled_for: string
+          sent_at?: string | null
+          status?: string
+        }
+        Update: {
+          business_id?: string
+          conversation_id?: string
+          created_at?: string
+          error_message?: string | null
+          follow_up_type?: string
+          id?: string
+          lead_id?: string | null
+          message_sent?: string | null
+          scheduled_for?: string
+          sent_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "follow_up_queue_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "follow_up_queue_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inbox_messages: {
         Row: {
           business_id: string
