@@ -10,7 +10,8 @@ import {
   Shield, 
   User,
   Briefcase,
-  BarChart3
+  BarChart3,
+  Send
 } from "lucide-react"
 import { AppSection } from "@/types/navigation"
 
@@ -96,6 +97,17 @@ export const appSections: AppSection[] = [
     },
     badge: { en: "Leads", es: "Leads" },
     icon: Target,
+    group: "crm",
+  },
+  {
+    name: { en: "Follow-ups", es: "Seguimientos" },
+    href: "/crm/follow-ups",
+    summary: {
+      en: "Automated follow-up message queue.",
+      es: "Cola de mensajes de seguimiento automático.",
+    },
+    badge: { en: "Auto", es: "Auto" },
+    icon: Send,
     group: "crm",
   },
   {

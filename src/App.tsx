@@ -16,6 +16,7 @@ import Bookings from "./pages/crm/Bookings";
 import BookingDetail from "./pages/crm/BookingDetail";
 import BookingNew from "./pages/crm/BookingNew";
 import Leads from "./pages/crm/Leads";
+import FollowUps from "./pages/crm/FollowUps";
 import Inbox from "./pages/crm/Inbox";
 import Services from "./pages/crm/Services";
 import Chatbot from "./pages/Chatbot";
@@ -58,6 +59,7 @@ function App() {
               <Route path="/crm/bookings/new" element={<BookingNew />} />
               <Route path="/crm/bookings/:id" element={<BookingDetail />} />
               <Route path="/crm/leads" element={<Leads />} />
+              <Route path="/crm/follow-ups" element={<FollowUps />} />
               <Route path="/crm/inbox" element={<Inbox />} />
               <Route path="/crm/services" element={<Services />} />
               <Route path="/chatbot" element={<Chatbot />} />
