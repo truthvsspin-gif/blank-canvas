@@ -368,117 +368,131 @@ function buildNegativeConstraints(context: ConversationContext, language: "en" |
 }
 
 // ============================================================================
-// BUILD SYSTEM PROMPT FOR STATE
+// AGENT BRAIN - STATIC BEHAVIOR RULES (DetaPRO Sales Agent v1)
 // ============================================================================
-function buildSystemPrompt(
+interface AgentBrainPrompt {
+  coreRules: string;
+  stateGoal: string;
+}
+
+function buildAgentBrain(
   state: State,
   context: ConversationContext,
-  language: "en" | "es",
-  business: any,
-  services: any[]
-): string {
-  const businessName = business?.name || "the business";
-  const businessDesc = business?.business_description || "automotive detailing";
-  
-  const serviceList = services?.length > 0
-    ? services.map(s => `${s.name}${s.base_price ? ` ($${s.base_price})` : ""}`).join(", ")
-    : "various detailing services";
-
-  // Build context blocks
-  const confirmedFacts = buildConfirmedFactsBlock(context, language);
-  const negativeConstraints = buildNegativeConstraints(context, language);
-
+  language: "en" | "es"
+): AgentBrainPrompt {
   const vehicleRef = context.vehicleInfo?.brand
     ? `${context.vehicleInfo.brand} ${context.vehicleInfo.model || ""} ${context.vehicleInfo.type || ""}`.trim()
     : null;
 
   const coreRules = language === "es"
-    ? `REGLAS PRINCIPALES (NUNCA ROMPER):
-- UNA sola pregunta a la vez
-- Respuestas CORTAS (1-3 oraciones máximo)
-- NUNCA dar información de paquetes o precios adelantados
-- NUNCA pedir fotos o depósitos
-- NUNCA presionar al cliente
-- Sé cálido, profesional y humano
-- Enfócate en beneficios, no en procesos técnicos
-- Responde en Español`
-    : `CORE RULES (NEVER BREAK):
-- ONE question at a time only
-- SHORT responses (1-3 sentences max)
-- NEVER dump information or list packages upfront
-- NEVER ask for photos or deposits
-- NEVER pressure the customer
-- Be warm, professional, and human
-- Focus on benefits, not technical processes
-- Reply in English`;
+    ? `=== AGENTE DE VENTAS CONSULTIVO - REGLAS PRINCIPALES ===
+IDENTIDAD: Eres un asesor de ventas consultivo, NO un bot informativo.
+Tu trabajo es DIAGNOSTICAR necesidades y PRESCRIBIR UNA solución, no listar opciones.
 
-  const businessContext = `You are a consultative sales assistant for ${businessName}.
-${businessDesc ? `Business: ${businessDesc}` : ""}
-Available services: ${serviceList}`;
+REGLAS ABSOLUTAS (NUNCA ROMPER):
+1. UNA sola pregunta a la vez - SIEMPRE
+2. Respuestas CORTAS (1-3 oraciones máximo)
+3. NUNCA listar servicios, paquetes o menús
+4. NUNCA dar precios sin contexto de valor primero
+5. NUNCA usar jerga técnica con el cliente
+6. NUNCA pedir fotos ni depósitos
+7. NUNCA presionar - sé consultivo, no vendedor agresivo
+8. SOLO recomienda servicios que existen en tu CONTEXTO DE NEGOCIO
+9. Si no hay servicio que aplique, guía hacia handoff humano
+10. Sé cálido, profesional y humano - responde en Español`
+    : `=== CONSULTATIVE SALES AGENT - CORE RULES ===
+IDENTITY: You are a consultative sales advisor, NOT an informational bot.
+Your job is to DIAGNOSE needs and PRESCRIBE ONE solution, not list options.
+
+ABSOLUTE RULES (NEVER BREAK):
+1. ONE question at a time - ALWAYS
+2. SHORT responses (1-3 sentences max)
+3. NEVER list services, packages, or menus
+4. NEVER give prices without value context first
+5. NEVER use technical jargon with customers
+6. NEVER ask for photos or deposits
+7. NEVER pressure - be consultative, not pushy
+8. ONLY recommend services that exist in your BUSINESS CONTEXT
+9. If no service applies, guide toward human handoff
+10. Be warm, professional, and human - reply in English`;
 
   // State-specific goals
   let stateGoal = "";
   switch (state) {
     case STATES.STATE_0_OPENING:
       stateGoal = language === "es"
-        ? `OBJETIVO ACTUAL: Obtener información del vehículo.
+        ? `OBJETIVO: Obtener información del vehículo.
 Pregunta amablemente qué vehículo tienen (marca, modelo, tipo como sedán/SUV/pickup).
 Sé amigable y acogedor.`
-        : `CURRENT GOAL: Get vehicle information.
+        : `GOAL: Get vehicle information.
 Ask what vehicle this is for (brand, model, type like sedan/SUV/pickup).
 Be friendly and welcoming.`;
       break;
       
     case STATES.STATE_2_BENEFIT:
       stateGoal = language === "es"
-        ? `OBJETIVO ACTUAL: Entender qué beneficio/problema quieren resolver.
+        ? `OBJETIVO: Entender qué beneficio/problema quieren resolver.
 ${vehicleRef ? `Menciona su ${vehicleRef} para mostrar que escuchaste.` : ""}
-Pregunta qué buscan lograr: brillo como nuevo, protección, o interior.`
-        : `CURRENT GOAL: Understand what benefit/problem they want to solve.
+Pregunta qué buscan lograr: brillo como nuevo, protección, o interior.
+NO listes servicios - pregunta por el RESULTADO que desean.`
+        : `GOAL: Understand what benefit/problem they want to solve.
 ${vehicleRef ? `Reference their ${vehicleRef} to show you listened.` : ""}
-Ask what they're mainly looking to achieve: new-look shine, protection, or interior.`;
+Ask what they're mainly looking to achieve: new-look shine, protection, or interior.
+DO NOT list services - ask about the OUTCOME they want.`;
       break;
       
     case STATES.STATE_3_USAGE:
       stateGoal = language === "es"
-        ? `OBJETIVO ACTUAL: Entender patrón de uso (una pregunta rápida).
+        ? `OBJETIVO: Entender patrón de uso (una pregunta rápida).
 ${vehicleRef ? `Referencia su ${vehicleRef}.` : ""}
 Pregunta si es de uso diario o más ocasional.`
-        : `CURRENT GOAL: Understand usage pattern (just one quick question).
+        : `GOAL: Understand usage pattern (just one quick question).
 ${vehicleRef ? `Reference their ${vehicleRef}.` : ""}
 Ask if this is a daily-use vehicle or more occasional.`;
       break;
       
     case STATES.STATE_4_PRESCRIPTION:
       stateGoal = language === "es"
-        ? `OBJETIVO ACTUAL: Hacer UNA recomendación clara.
+        ? `OBJETIVO: Hacer UNA recomendación conceptual basada en el CONTEXTO DE NEGOCIO.
 1. Breve resumen mostrando que entiendes su situación
 2. Enmarca el valor/beneficio (no proceso técnico)
-3. Haz UNA recomendación conceptual
-4. Sugiere revisar disponibilidad como siguiente paso`
-        : `CURRENT GOAL: Make ONE clear recommendation.
+3. Haz UNA recomendación del servicio que MEJOR APLICA de tu contexto
+4. Si hay rango de precio, menciona como "generalmente entre X-Y"
+5. Sugiere revisar disponibilidad como siguiente paso
+
+IMPORTANTE: Selecciona el servicio que mejor encaja basándote en:
+- Vehículo del cliente (tamaño, tipo)
+- Objetivo deseado (brillo, protección, interior)
+- Patrón de uso (diario vs ocasional)`
+        : `GOAL: Make ONE conceptual recommendation based on BUSINESS CONTEXT.
 1. Brief summary showing you understand their situation
 2. Frame the value/benefit (not technical process)
-3. Make ONE conceptual recommendation
-4. Suggest checking availability as next step`;
+3. Make ONE recommendation for the BEST MATCHING service from your context
+4. If price range exists, mention as "typically between X-Y"
+5. Suggest checking availability as next step
+
+IMPORTANT: Select the service that best fits based on:
+- Customer's vehicle (size, type)
+- Desired outcome (shine, protection, interior)
+- Usage pattern (daily vs occasional)`;
       break;
       
     case STATES.STATE_5_ACTION:
       stateGoal = language === "es"
-        ? `OBJETIVO ACTUAL: Cierre suave - mover hacia acción.
+        ? `OBJETIVO: Cierre suave - mover hacia acción.
 Pregunta si les gustaría avanzar y revisar disponibilidad.
 Si tienen objeciones, aborda UNA objeción, luego redirige a acción.`
-        : `CURRENT GOAL: Soft close - move toward action.
+        : `GOAL: Soft close - move toward action.
 Ask if they'd like to move forward and check availability.
 If they have objections, address ONE objection only, then redirect to action.`;
       break;
       
     case STATES.STATE_6_HANDOFF:
       stateGoal = language === "es"
-        ? `OBJETIVO ACTUAL: Confirmar traspaso a humano.
+        ? `OBJETIVO: Confirmar traspaso a humano.
 Hazles saber que los conectarás con el equipo para coordinar.
 Sé entusiasta pero breve. Usa máximo un emoji.`
-        : `CURRENT GOAL: Confirm handoff to human.
+        : `GOAL: Confirm handoff to human.
 Let them know you'll connect them with the team to coordinate.
 Be enthusiastic but brief. Use one emoji max.`;
       break;
@@ -487,15 +501,179 @@ Be enthusiastic but brief. Use one emoji max.`;
       stateGoal = "";
   }
 
-  // Assemble final prompt with context lock at the TOP
+  return { coreRules, stateGoal };
+}
+
+// ============================================================================
+// DYNAMIC BUSINESS CONTEXT BLOCK (Generated from DB on each request)
+// ============================================================================
+interface ServiceContext {
+  name: string;
+  description: string | null;
+  base_price: number | null;
+  duration_minutes: number | null;
+  ideal_for?: string;
+  exclusions?: string;
+}
+
+function buildBusinessContextBlock(
+  business: any,
+  services: ServiceContext[],
+  language: "en" | "es"
+): string {
+  const businessName = business?.name || "the business";
+  const businessDesc = business?.business_description || "";
+  const customInstructions = business?.ai_instructions || "";
+
+  // If no services are configured, return empty context with warning
+  if (!services || services.length === 0) {
+    return language === "es"
+      ? `=== CONTEXTO DE NEGOCIO (SOLO INTERNO) ===
+⚠️ ADVERTENCIA: No hay servicios configurados para este negocio.
+NO intentes vender ni recomendar servicios específicos.
+Guía al cliente hacia contacto humano para asistencia.
+===========================================`
+      : `=== BUSINESS CONTEXT (INTERNAL ONLY) ===
+⚠️ WARNING: No services configured for this business.
+DO NOT attempt to sell or recommend specific services.
+Guide customer toward human contact for assistance.
+=========================================`;
+  }
+
+  // Build compressed service reasoning context
+  const serviceBlocks = services.map((service, idx) => {
+    const parts: string[] = [];
+    parts.push(`${idx + 1}. ${service.name}`);
+    
+    if (service.description) {
+      // Extract benefit-focused description
+      parts.push(`   • Benefit: ${service.description}`);
+    }
+    
+    // Infer ideal use cases from name/description
+    const idealFor = inferIdealFor(service.name, service.description || "");
+    if (idealFor) {
+      parts.push(`   • Ideal when: ${idealFor}`);
+    }
+    
+    if (service.base_price) {
+      parts.push(`   • Price range: ~$${service.base_price}`);
+    }
+    
+    if (service.duration_minutes) {
+      parts.push(`   • Duration: ~${service.duration_minutes} min`);
+    }
+    
+    return parts.join("\n");
+  }).join("\n\n");
+
+  const header = language === "es"
+    ? "=== CONTEXTO DE NEGOCIO (SOLO INTERNO - NUNCA MOSTRAR AL CLIENTE) ==="
+    : "=== BUSINESS CONTEXT (INTERNAL ONLY - NEVER SHOW TO CUSTOMER) ===";
+
+  const rulesBlock = language === "es"
+    ? `REGLAS DE USO:
+- SOLO puedes recomendar servicios listados aquí
+- NUNCA inventes servicios, paquetes o precios
+- NUNCA listes todos los servicios al cliente
+- Selecciona UNA mejor opción basada en su situación
+- Si nada aplica, guía hacia handoff humano
+- Los precios son rangos, nunca cotizaciones exactas
+- Solo menciona precios DESPUÉS de establecer valor`
+    : `USAGE RULES:
+- You may ONLY recommend services listed here
+- NEVER invent services, packages, or prices
+- NEVER list all services to the customer
+- Select ONE best option based on their situation
+- If nothing fits, guide toward human handoff
+- Prices are ranges, never exact quotes
+- Only mention prices AFTER establishing value`;
+
+  let contextBlock = `${header}
+Business: ${businessName}
+${businessDesc ? `Description: ${businessDesc}` : ""}
+
+AVAILABLE SERVICES:
+${serviceBlocks}
+
+${rulesBlock}`;
+
+  if (customInstructions) {
+    contextBlock += `\n\nCUSTOM BUSINESS INSTRUCTIONS:\n${customInstructions}`;
+  }
+
+  contextBlock += "\n" + "=".repeat(header.length);
+
+  return contextBlock;
+}
+
+// ============================================================================
+// INFER IDEAL USE CASES FROM SERVICE NAME/DESCRIPTION
+// ============================================================================
+function inferIdealFor(name: string, description: string): string {
+  const lowerName = name.toLowerCase();
+  const lowerDesc = description.toLowerCase();
+  const combined = `${lowerName} ${lowerDesc}`;
+  
+  // Shine/polish related
+  if (/polish|shine|brillo|correction|scratch|swirl|enhancement/.test(combined)) {
+    return "customer wants vehicle to look new, remove scratches/swirls";
+  }
+  
+  // Protection related
+  if (/ceramic|coating|protection|protección|sealant|wax|durability/.test(combined)) {
+    return "customer wants long-term protection, durability";
+  }
+  
+  // Interior related
+  if (/interior|inside|leather|seats|upholstery|carpet|smell|odor/.test(combined)) {
+    return "customer wants interior refresh, cleaning, odor removal";
+  }
+  
+  // Full detail
+  if (/full|complete|completo|detail|total/.test(combined)) {
+    return "customer wants comprehensive service, inside and out";
+  }
+  
+  // Maintenance/wash
+  if (/wash|maintenance|basic|express|quick|lavado/.test(combined)) {
+    return "customer wants quick maintenance wash";
+  }
+  
+  return "";
+}
+
+// ============================================================================
+// ASSEMBLE COMPLETE SYSTEM PROMPT (Agent Brain + Business Context)
+// ============================================================================
+function buildSystemPrompt(
+  state: State,
+  context: ConversationContext,
+  language: "en" | "es",
+  business: any,
+  services: ServiceContext[]
+): string {
+  // Build context blocks
+  const confirmedFacts = buildConfirmedFactsBlock(context, language);
+  const negativeConstraints = buildNegativeConstraints(context, language);
+
+  // Static agent brain (behavior rules)
+  const { coreRules, stateGoal } = buildAgentBrain(state, context, language);
+
+  // Dynamic business context (from DB)
+  const businessContext = buildBusinessContextBlock(business, services, language);
+
+  // Assemble final prompt with clear separation
+  // ORDER: Confirmed Facts → Constraints → Agent Brain → Business Context → State Goal
   return `${confirmedFacts}
 
 ${negativeConstraints}
 
-${businessContext}
-
 ${coreRules}
 
+${businessContext}
+
+CURRENT STATE: ${state}
 ${stateGoal}`.trim();
 }
 
@@ -1115,20 +1293,55 @@ serve(async (req: Request) => {
     }
 
     // Load business context
-    const { data: business } = await supabase
+    const { data: business, error: bizError } = await supabase
       .from("businesses")
       .select("name, language_preference, greeting_message, industry_type, business_description, ai_instructions")
       .eq("id", businessId)
       .single();
 
-    const { data: services } = await supabase
+    if (bizError) {
+      console.error("[AI-CHAT] Failed to load business:", bizError);
+    }
+
+    // Load services dynamically (this is the key for real-time updates)
+    const { data: services, error: svcError } = await supabase
       .from("services")
       .select("name, description, base_price, duration_minutes")
       .eq("business_id", businessId)
-      .eq("is_active", true);
+      .eq("is_active", true)
+      .order("name", { ascending: true });
+
+    if (svcError) {
+      console.error("[AI-CHAT] Failed to load services:", svcError);
+    }
+
+    // Log service count for debugging real-time updates
+    const serviceCount = services?.length || 0;
+    console.log(`[AI-CHAT] Loaded ${serviceCount} active services for business ${businessId}`);
 
     // Detect language
     const language = detectLanguage(userMessage);
+
+    // FAIL-SAFE: If no business found, return neutral handoff message
+    if (!business) {
+      const failsafeMsg = language === "es"
+        ? "Quiero asegurarme de darte la orientación correcta. Permíteme conectarte con el equipo para asistirte mejor."
+        : "I want to make sure you get the right guidance. Let me connect you with the team to assist you properly.";
+      
+      return new Response(
+        JSON.stringify({
+          success: true,
+          reply: failsafeMsg,
+          intent: null,
+          model: DEFAULT_MODEL,
+          currentState: STATES.STATE_6_HANDOFF,
+          handoffRequired: true,
+          leadQualified: false,
+          returningCustomer: false,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Load conversation context (state machine state)
     let context = await loadConversationContext(supabase, conversationId || null);
@@ -1142,9 +1355,10 @@ serve(async (req: Request) => {
       console.log(`[AI-CHAT] Returning customer detected! Visits: ${customerMemory.conversationCount}, Last: ${customerMemory.lastInteractionAt}`);
     }
     
-    console.log(`[AI-CHAT] Business: ${business?.name}, State: ${context.currentState}, Language: ${language}, Returning: ${isReturning}`);
+    console.log(`[AI-CHAT] Business: ${business?.name}, Services: ${serviceCount}, State: ${context.currentState}, Language: ${language}, Returning: ${isReturning}`);
 
     // Process through state machine WITH Groq
+    // Services are fetched fresh on every request - no caching needed for real-time updates
     const { reply, newContext, performance } = await processStateMachine(
       userMessage,
       context,
