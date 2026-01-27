@@ -160,7 +160,7 @@ export default function ChatbotPage() {
         knowledgeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
         break;
       case 3: // Test flow
-        navigate("/chatbot/dev");
+        navigate("/dev-chatbot");
         break;
     }
   };
