@@ -40,6 +40,7 @@ interface ConversationContext {
   recommendationSummary?: string;
   handoffRequired: boolean;
   leadQualified: boolean;
+  recoveryAttemptCount: number; // Intent Recovery Window (0-2)
 }
 
 interface ChatMessage {
@@ -228,6 +229,106 @@ function isLowIntent(text: string): boolean {
   ];
   
   return lowIntentPatterns.some(p => p.test(text));
+}
+
+// ============================================================================
+// STALL DETECTION - Detects when customer is passive/non-advancing
+// ============================================================================
+function isStallResponse(text: string, state: State): boolean {
+  const lowerText = text.toLowerCase().trim();
+  
+  // Very short/vague responses after recommendation states
+  if (state === STATES.STATE_4_PRESCRIPTION || state === STATES.STATE_5_ACTION) {
+    const vaguePatterns = [
+      /^(ok|okay|hmm|mhm|alright|sure|bien|bueno|está bien|ya|ah|oh|uh huh)\.?$/i,
+      /^(i see|i understand|entiendo|ya veo)\.?$/i,
+      /^(interesting|interesante)\.?$/i,
+      /^(let me think|déjame pensar|lo pienso)\.?$/i,
+      /\b(not sure|no sé|no estoy seguro)$/i,
+    ];
+    
+    // Also check for just asking about price without committing
+    const priceOnlyPatterns = [
+      /^(how much|cuánto|what.*price|precio).*\?$/i,
+      /^(price|precio)\??$/i,
+    ];
+    
+    if (vaguePatterns.some(p => p.test(lowerText))) {
+      return true;
+    }
+    
+    if (priceOnlyPatterns.some(p => p.test(lowerText))) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+// ============================================================================
+// BUILD INTENT RECOVERY PROMPT (Value Reframe or Friction Reduction)
+// ============================================================================
+function buildRecoveryPrompt(
+  attemptNumber: number,
+  context: ConversationContext,
+  language: "en" | "es"
+): string {
+  const vehicleRef = context.vehicleInfo?.brand
+    ? `${context.vehicleInfo.brand} ${context.vehicleInfo.model || ""}`.trim()
+    : null;
+  const benefitRef = context.benefitIntent || "your needs";
+  
+  if (attemptNumber === 1) {
+    // ATTEMPT 1: Value Reframe - Reinforce recommendation, maintain direction
+    return language === "es"
+      ? `RECUPERACIÓN DE INTENCIÓN - INTENTO 1 (Reencuadre de Valor):
+El cliente parece dudar. Tu objetivo es REFORZAR el valor de tu recomendación.
+
+INSTRUCCIONES:
+1. Reconoce brevemente que entiendes su situación ${vehicleRef ? `con su ${vehicleRef}` : ""}
+2. Reenmarca el BENEFICIO principal (no características técnicas)
+3. Ofrece revisar disponibilidad como siguiente paso natural
+4. NO preguntes si quieren algo diferente
+5. NO ofrezcas alternativas
+6. Mantén el tono confiado pero no agresivo
+7. Respuesta CORTA (2-3 oraciones máximo)`
+      : `INTENT RECOVERY - ATTEMPT 1 (Value Reframe):
+Customer seems hesitant. Your goal is to REINFORCE the value of your recommendation.
+
+INSTRUCTIONS:
+1. Briefly acknowledge you understand their situation ${vehicleRef ? `with their ${vehicleRef}` : ""}
+2. Reframe the PRIMARY BENEFIT (not technical features)
+3. Offer to check availability as natural next step
+4. DO NOT ask if they want something different
+5. DO NOT offer alternatives
+6. Keep tone confident but not pushy
+7. SHORT response (2-3 sentences max)`;
+  } else {
+    // ATTEMPT 2: Friction Reduction - Simplify choice, binary option
+    return language === "es"
+      ? `RECUPERACIÓN DE INTENCIÓN - INTENTO 2 (Reducción de Fricción):
+El cliente sigue dudando. Este es tu ÚLTIMO intento antes de cerrar educadamente.
+
+INSTRUCCIONES:
+1. Simplifica radicalmente la elección
+2. Ofrece UNA opción binaria clara: "¿Buscas [beneficio principal] o algo más básico por ahora?"
+3. Esta pregunta les permite comprometerse O autoseleccionarse
+4. Si dicen básico, sugiere un punto de entrada simple
+5. Si siguen vagos después de esto, saldrás educadamente
+6. NO presiones - sé consultivo
+7. Respuesta CORTA (2 oraciones máximo)`
+      : `INTENT RECOVERY - ATTEMPT 2 (Friction Reduction):
+Customer still hesitant. This is your LAST attempt before gracefully closing.
+
+INSTRUCTIONS:
+1. Radically simplify the choice
+2. Offer ONE clear binary option: "Are you looking for [main benefit] or something more basic for now?"
+3. This question lets them commit OR self-select out
+4. If they say basic, suggest a simple entry point
+5. If still vague after this, you'll exit gracefully
+6. DO NOT pressure - be consultative
+7. SHORT response (2 sentences max)`;
+  }
 }
 
 // ============================================================================
@@ -705,32 +806,97 @@ async function processStateMachine(
   
   console.log(`[STATE MACHINE] Current state: ${context.currentState}, Message: "${userMessage.substring(0, 50)}..."`);
   
-  // Check for low intent exit
+  // Check for low intent exit (only after recovery attempts exhausted)
   if (isLowIntent(userMessage)) {
-    const exitPrompt = buildSystemPrompt(context.currentState, context, language, business, services);
+    // If we still have recovery attempts, don't exit yet
+    if (context.recoveryAttemptCount < 2 && 
+        (context.currentState === STATES.STATE_4_PRESCRIPTION || context.currentState === STATES.STATE_5_ACTION)) {
+      console.log(`[RECOVERY] Low intent detected but attempting recovery (attempt ${context.recoveryAttemptCount + 1})`);
+      newContext.recoveryAttemptCount = context.recoveryAttemptCount + 1;
+      // Fall through to recovery logic below
+    } else {
+      // Exhausted recovery or early stage - exit gracefully
+      console.log(`[EXIT] Low intent with ${context.recoveryAttemptCount} recovery attempts - exiting gracefully`);
+      const exitPrompt = buildSystemPrompt(context.currentState, context, language, business, services);
+      const messages: ChatMessage[] = [
+        { role: "system", content: `${exitPrompt}\n\nThe customer shows low intent and recovery attempts are exhausted. Exit gracefully:\n- Be warm and professional\n- Leave the door open for future contact\n- Do NOT pressure or try to recover\n- Keep it to 1-2 sentences` },
+        { role: "user", content: userMessage }
+      ];
+      
+      const { content, error, latencyMs } = await callGroqAPI(messages, apiKey);
+      lastLatencyMs = latencyMs;
+      if (error || !content) {
+        usedFallback = true;
+        const fallback = language === "es"
+          ? "Perfecto, cuando quieras retomarlo estaré aquí. ¡Que tengas buen día! 👋"
+          : "Perfect, whenever you want to revisit it I'll be happy to help. Have a great day! 👋";
+        return { 
+          reply: fallback, 
+          newContext,
+          performance: { responseTimeMs: lastLatencyMs, isFallback: true, aiModel: DEFAULT_MODEL }
+        };
+      }
+      return { 
+        reply: content, 
+        newContext,
+        performance: { responseTimeMs: lastLatencyMs, isFallback: false, aiModel: DEFAULT_MODEL }
+      };
+    }
+  }
+  
+  // ============================================================================
+  // INTENT RECOVERY WINDOW (DetaPRO v1.2)
+  // Check for stalled/passive responses in recommendation states
+  // ============================================================================
+  if ((context.currentState === STATES.STATE_4_PRESCRIPTION || context.currentState === STATES.STATE_5_ACTION) &&
+      isStallResponse(userMessage, context.currentState) &&
+      context.recoveryAttemptCount < 2) {
+    
+    const attemptNumber = context.recoveryAttemptCount + 1;
+    newContext.recoveryAttemptCount = attemptNumber;
+    
+    console.log(`[RECOVERY] Stall detected in ${context.currentState}, triggering recovery attempt ${attemptNumber}`);
+    
+    const basePrompt = buildSystemPrompt(context.currentState, context, language, business, services);
+    const recoveryInstructions = buildRecoveryPrompt(attemptNumber, context, language);
+    
     const messages: ChatMessage[] = [
-      { role: "system", content: `${exitPrompt}\n\nThe customer seems to have low intent. Politely exit the conversation. Be gracious and leave the door open for future contact.` },
+      { role: "system", content: `${basePrompt}\n\n${recoveryInstructions}` },
+      ...conversationHistory.slice(-4),
       { role: "user", content: userMessage }
     ];
     
     const { content, error, latencyMs } = await callGroqAPI(messages, apiKey);
     lastLatencyMs = latencyMs;
+    
     if (error || !content) {
       usedFallback = true;
-      const fallback = language === "es"
-        ? "No hay problema. Si necesitas ayuda más adelante, con gusto te atiendo. ¡Que tengas buen día! 👋"
-        : "No problem at all. If you need help later, feel free to reach out. Have a great day! 👋";
+      // Fallback recovery messages
+      const recoveryFallback = attemptNumber === 1
+        ? (language === "es"
+            ? "Basándome en lo que me compartiste, esta opción realmente se adapta a tu situación. ¿Te gustaría revisar disponibilidad?"
+            : "Based on what you've shared, this option really fits your situation. Would you like to check availability?")
+        : (language === "es"
+            ? "Para simplificarlo: ¿buscas el resultado completo que mencionamos, o algo más básico por ahora?"
+            : "To simplify: are you looking for the full result we discussed, or something more basic for now?");
       return { 
-        reply: fallback, 
+        reply: recoveryFallback, 
         newContext,
         performance: { responseTimeMs: lastLatencyMs, isFallback: true, aiModel: DEFAULT_MODEL }
       };
     }
+    
     return { 
       reply: content, 
       newContext,
       performance: { responseTimeMs: lastLatencyMs, isFallback: false, aiModel: DEFAULT_MODEL }
     };
+  }
+  
+  // Reset recovery count if customer engages meaningfully
+  if (context.recoveryAttemptCount > 0 && !isStallResponse(userMessage, context.currentState)) {
+    newContext.recoveryAttemptCount = 0;
+    console.log(`[RECOVERY] Customer engaged meaningfully, resetting recovery count`);
   }
   
   // Check for handoff triggers (after STATE_2)
@@ -1011,6 +1177,7 @@ async function storeConversationState(
         recommendation_summary: context.recommendationSummary,
         handoff_required: context.handoffRequired,
         lead_qualified: context.leadQualified,
+        recovery_attempt_count: context.recoveryAttemptCount,
         updated_at: new Date().toISOString(),
       };
 
@@ -1160,6 +1327,7 @@ async function loadConversationContext(
     vehicleInfo: {},
     handoffRequired: false,
     leadQualified: false,
+    recoveryAttemptCount: 0,
   };
 
   if (!conversationId) {
@@ -1169,7 +1337,7 @@ async function loadConversationContext(
   try {
     const { data } = await supabase
       .from("conversations")
-      .select("current_state, vehicle_info, benefit_intent, usage_context, recommendation_summary, handoff_required, lead_qualified")
+      .select("current_state, vehicle_info, benefit_intent, usage_context, recommendation_summary, handoff_required, lead_qualified, recovery_attempt_count")
       .eq("id", conversationId)
       .single();
 
@@ -1182,6 +1350,7 @@ async function loadConversationContext(
         recommendationSummary: data.recommendation_summary,
         handoffRequired: data.handoff_required || false,
         leadQualified: data.lead_qualified || false,
+        recoveryAttemptCount: data.recovery_attempt_count || 0,
       };
     }
   } catch (err) {
