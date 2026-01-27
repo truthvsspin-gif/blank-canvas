@@ -53,35 +53,55 @@ const STATE_LABELS: Record<string, { en: string; es: string }> = {
   STATE_6_HANDOFF: { en: "Human Handoff", es: "Transferencia" },
 };
 
-// Consultative sales quick prompts (aligned with state machine)
-const salesPrompts: { en: string[]; es: string[] } = {
-  en: [
-    "Hi, I need help with my car",
-    "Toyota Camry sedan",
-    "BMW X5 SUV",
-    "Ford F-150 pickup",
-    "I want it to look like new",
-    "I want to protect it long-term",
-    "The interior needs work",
-    "It's my daily driver",
-    "Weekend car only",
-    "Yes, let's move forward",
-    "What about pricing?",
-  ],
-  es: [
-    "Hola, necesito ayuda con mi carro",
-    "Toyota Camry sedán",
-    "BMW X5 SUV",
-    "Ford F-150 pickup",
-    "Quiero que luzca como nuevo",
-    "Quiero protegerlo a largo plazo",
-    "El interior necesita trabajo",
-    "Es mi carro de diario",
-    "Solo de fin de semana",
-    "Sí, avancemos",
-    "¿Cuánto cuesta?",
-  ],
+// Base prompts (vehicle types and generic)
+const basePrompts = {
+  en: {
+    opening: ["Hi, I need help with my car", "Hello, what services do you offer?"],
+    vehicles: ["Toyota Camry sedan", "BMW X5 SUV", "Ford F-150 pickup"],
+    benefits: ["I want it to look like new", "I want to protect it long-term", "The interior needs work"],
+    usage: ["It's my daily driver", "Weekend car only"],
+    closing: ["Yes, let's move forward", "What about pricing?"],
+  },
+  es: {
+    opening: ["Hola, necesito ayuda con mi carro", "Hola, ¿qué servicios ofrecen?"],
+    vehicles: ["Toyota Camry sedán", "BMW X5 SUV", "Ford F-150 pickup"],
+    benefits: ["Quiero que luzca como nuevo", "Quiero protegerlo a largo plazo", "El interior necesita trabajo"],
+    usage: ["Es mi carro de diario", "Solo de fin de semana"],
+    closing: ["Sí, avancemos", "¿Cuánto cuesta?"],
+  },
 };
+
+type ServiceRecord = {
+  id: string;
+  name: string;
+  description: string | null;
+};
+
+// Generate service-specific prompts
+function generateServicePrompts(services: ServiceRecord[], isEs: boolean): string[] {
+  if (services.length === 0) return [];
+  
+  const prompts: string[] = [];
+  
+  services.slice(0, 3).forEach((service) => {
+    const name = service.name.toLowerCase();
+    
+    // Generate intent-based prompts from service names
+    if (isEs) {
+      prompts.push(`¿Ofrecen ${service.name}?`);
+      if (service.description) {
+        prompts.push(`Necesito algo para ${service.description.slice(0, 30).toLowerCase()}`);
+      }
+    } else {
+      prompts.push(`Do you offer ${service.name}?`);
+      if (service.description) {
+        prompts.push(`I need something for ${service.description.slice(0, 30).toLowerCase()}`);
+      }
+    }
+  });
+  
+  return prompts.slice(0, 4); // Limit to 4 service-specific prompts
+}
 
 export default function DevChatbotPage() {
   const { lang } = useLanguage();
@@ -90,6 +110,10 @@ export default function DevChatbotPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   
+  // Services state for dynamic prompts
+  const [services, setServices] = useState<ServiceRecord[]>([]);
+  const [servicesLoading, setServicesLoading] = useState(true);
+  
   // State machine tracking
   const [conversationState, setConversationState] = useState<ConversationState>({
     currentState: "STATE_0_OPENING",
@@ -97,10 +121,42 @@ export default function DevChatbotPage() {
     leadQualified: false,
   });
 
-  // Get prompts for consultative sales flow
+  // Fetch services for dynamic prompts
+  useEffect(() => {
+    async function fetchServices() {
+      if (!businessId) return;
+      
+      setServicesLoading(true);
+      const { data } = await supabase
+        .from("services")
+        .select("id, name, description")
+        .eq("business_id", businessId)
+        .eq("is_active", true)
+        .order("name");
+      
+      setServices(data || []);
+      setServicesLoading(false);
+    }
+    
+    fetchServices();
+  }, [businessId]);
+
+  // Build dynamic prompts based on services
   const currentPrompts = useMemo(() => {
-    return isEs ? salesPrompts.es : salesPrompts.en;
-  }, [isEs]);
+    const lang = isEs ? "es" : "en";
+    const base = basePrompts[lang];
+    const servicePrompts = generateServicePrompts(services, isEs);
+    
+    // Combine: opening + service-specific + vehicles + benefits + usage + closing
+    return [
+      ...base.opening,
+      ...servicePrompts,
+      ...base.vehicles,
+      ...base.benefits,
+      ...base.usage,
+      ...base.closing,
+    ];
+  }, [isEs, services]);
 
   const initialMessage: Message = useMemo(() => ({
     id: "welcome",
