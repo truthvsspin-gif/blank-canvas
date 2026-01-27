@@ -40,6 +40,7 @@ type ConversationState = {
   currentState: string;
   handoffRequired: boolean;
   leadQualified: boolean;
+  recoveryAttemptCount: number;
 };
 
 // State display names
@@ -119,6 +120,7 @@ export default function DevChatbotPage() {
     currentState: "STATE_0_OPENING",
     handoffRequired: false,
     leadQualified: false,
+    recoveryAttemptCount: 0,
   });
 
   // Fetch services for dynamic prompts
@@ -199,6 +201,7 @@ export default function DevChatbotPage() {
             leadQualified: "Lead calificado",
             handoffReady: "Listo para transferir",
             handoffMessage: "Conversación transferida a humano. El bot ya no responderá.",
+            recoveryAttempt: "Intento de recuperación",
           }
         : {
             title: "Consultative Sales Simulator",
@@ -222,6 +225,7 @@ export default function DevChatbotPage() {
             leadQualified: "Lead qualified",
             handoffReady: "Ready for handoff",
             handoffMessage: "Conversation handed off to human. Bot will no longer respond.",
+            recoveryAttempt: "Recovery attempt",
           },
     [isEs]
   );
@@ -300,6 +304,7 @@ export default function DevChatbotPage() {
               currentState: data.currentState || "STATE_0_OPENING",
               handoffRequired: data.handoffRequired || false,
               leadQualified: data.leadQualified || false,
+              recoveryAttemptCount: data.recoveryAttemptCount || 0,
             });
           }
 
@@ -344,6 +349,7 @@ export default function DevChatbotPage() {
       currentState: "STATE_0_OPENING",
       handoffRequired: false,
       leadQualified: false,
+      recoveryAttemptCount: 0,
     });
   };
 
@@ -412,6 +418,13 @@ export default function DevChatbotPage() {
           <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/30 gap-1">
             <HandMetal className="h-3 w-3" />
             {copy.handoffReady}
+          </Badge>
+        )}
+        
+        {conversationState.recoveryAttemptCount > 0 && (
+          <Badge className="bg-orange-500/10 text-orange-600 border-orange-500/30 gap-1">
+            <RefreshCw className="h-3 w-3" />
+            {copy.recoveryAttempt} {conversationState.recoveryAttemptCount}/2
           </Badge>
         )}
       </div>

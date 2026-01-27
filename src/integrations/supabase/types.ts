@@ -204,6 +204,7 @@ export type Database = {
           message_timestamp: string | null
           metadata: Json | null
           recommendation_summary: string | null
+          recovery_attempt_count: number
           response_time_ms: number | null
           sender_name: string | null
           sender_phone_or_handle: string | null
@@ -233,6 +234,7 @@ export type Database = {
           message_timestamp?: string | null
           metadata?: Json | null
           recommendation_summary?: string | null
+          recovery_attempt_count?: number
           response_time_ms?: number | null
           sender_name?: string | null
           sender_phone_or_handle?: string | null
@@ -262,6 +264,7 @@ export type Database = {
           message_timestamp?: string | null
           metadata?: Json | null
           recommendation_summary?: string | null
+          recovery_attempt_count?: number
           response_time_ms?: number | null
           sender_name?: string | null
           sender_phone_or_handle?: string | null
