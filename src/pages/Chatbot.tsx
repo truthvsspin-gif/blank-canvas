@@ -1,5 +1,5 @@
-import { Link } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState, useRef } from "react";
 import {
   ArrowRight,
   Bot,
@@ -103,6 +103,12 @@ export default function ChatbotPage() {
   const { lang } = useLanguage();
   const isEs = lang === "es";
   const { businessId } = useCurrentBusiness();
+  const navigate = useNavigate();
+
+  // Section refs for scrolling
+  const industryRef = useRef<HTMLDivElement>(null);
+  const languageRef = useRef<HTMLDivElement>(null);
+  const knowledgeRef = useRef<HTMLDivElement>(null);
 
   // Settings state
   const [chatbotEnabled, setChatbotEnabled] = useState(true);
@@ -140,6 +146,24 @@ export default function ChatbotPage() {
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [integrationsLoading, setIntegrationsLoading] = useState(false);
+
+  // Quick Start step handlers
+  const handleQuickStartStep = (stepIndex: number) => {
+    switch (stepIndex) {
+      case 0: // Select industry
+        industryRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        break;
+      case 1: // Set language
+        languageRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        break;
+      case 2: // Add knowledge
+        knowledgeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        break;
+      case 3: // Test flow
+        navigate("/chatbot/dev");
+        break;
+    }
+  };
 
   const copy = isEs
     ? {
@@ -594,21 +618,24 @@ export default function ChatbotPage() {
         <CardContent>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {copy.steps.map((step, idx) => (
-              <div
+              <button
                 key={idx}
-                className="group relative flex items-start gap-3 rounded-xl border bg-card p-4 transition-all hover:border-accent hover:shadow-md"
+                onClick={() => handleQuickStartStep(idx)}
+                className="group relative flex items-start gap-3 rounded-xl border bg-card p-4 transition-all hover:border-accent hover:shadow-md text-left cursor-pointer"
               >
-                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-accent text-white font-bold text-sm">
+                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground font-bold text-sm">
                   {idx + 1}
                 </div>
                 <div>
                   <p className="font-medium">{step.title}</p>
                   <p className="text-xs text-muted-foreground">{step.desc}</p>
                 </div>
-                {idx < 3 && (
+                {idx < 3 ? (
                   <ChevronRight className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity lg:block hidden" />
+                ) : (
+                  <Play className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-accent opacity-0 group-hover:opacity-100 transition-opacity" />
                 )}
-              </div>
+              </button>
             ))}
           </div>
         </CardContent>
@@ -653,10 +680,10 @@ export default function ChatbotPage() {
             </div>
 
             {/* Industry Type Selection */}
-            <div className="space-y-3 rounded-xl border bg-gradient-to-br from-purple-50/50 to-transparent p-4">
+            <div ref={industryRef} className="space-y-3 rounded-xl border bg-gradient-to-br from-primary/5 to-transparent p-4">
               <div className="flex items-center gap-2">
-                <Building2 className="h-4 w-4 text-purple-600" />
-                <span className="font-medium text-purple-700">{copy.industry}</span>
+                <Building2 className="h-4 w-4 text-primary" />
+                <span className="font-medium text-primary">{copy.industry}</span>
               </div>
               <p className="text-xs text-muted-foreground">{copy.industryDesc}</p>
               <div className="flex gap-2">
@@ -709,7 +736,7 @@ export default function ChatbotPage() {
             </div>
 
             {/* Language & Greeting */}
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div ref={languageRef} className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   {copy.language}
@@ -829,11 +856,11 @@ export default function ChatbotPage() {
       </div>
 
       {/* Knowledge Base */}
-      <Card>
+      <Card ref={knowledgeRef}>
         <CardHeader className="border-b">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-purple-100 p-2">
-              <Database className="h-5 w-5 text-purple-600" />
+            <div className="rounded-lg bg-primary/10 p-2">
+              <Database className="h-5 w-5 text-primary" />
             </div>
             <div>
               <CardTitle>{copy.knowledge}</CardTitle>
