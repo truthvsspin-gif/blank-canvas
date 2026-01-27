@@ -18,7 +18,9 @@ import {
   Plus,
   Inbox,
   Wrench,
-  ChevronRight
+  ChevronRight,
+  Star,
+  Zap
 } from "lucide-react";
 import {
   AreaChart,
@@ -62,6 +64,12 @@ type ServiceData = {
   color: string;
 };
 
+type TrojanHorseStats = {
+  trojanHorseLeads: number;
+  regularLeads: number;
+  trojanHorseServiceName: string | null;
+};
+
 const COLORS = [
   "hsl(350, 80%, 60%)",
   "hsl(160, 60%, 45%)",
@@ -88,6 +96,11 @@ export default function Dashboard() {
   const [weeklyTrend, setWeeklyTrend] = useState<TrendData[]>([]);
   const [serviceDistribution, setServiceDistribution] = useState<ServiceData[]>([]);
   const [recentBookings, setRecentBookings] = useState<any[]>([]);
+  const [trojanHorseStats, setTrojanHorseStats] = useState<TrojanHorseStats>({
+    trojanHorseLeads: 0,
+    regularLeads: 0,
+    trojanHorseServiceName: null,
+  });
 
   useEffect(() => {
     if (!businessId) {
@@ -110,6 +123,8 @@ export default function Dashboard() {
         conversationsRes,
         recentBookingsRes,
         servicesRes,
+        trojanHorseServiceRes,
+        allLeadsRes,
       ] = await Promise.all([
         supabase
           .from("customers")
@@ -148,6 +163,18 @@ export default function Dashboard() {
           .from("bookings")
           .select("service_name")
           .eq("business_id", businessId),
+        // Fetch Trojan Horse service
+        supabase
+          .from("services")
+          .select("name")
+          .eq("business_id", businessId)
+          .eq("is_trojan_horse", true)
+          .maybeSingle(),
+        // Fetch all leads with their conversation recommendation info
+        supabase
+          .from("leads")
+          .select("id, conversation_id")
+          .eq("business_id", businessId),
       ]);
 
       setMetrics({
@@ -181,6 +208,40 @@ export default function Dashboard() {
       if (recentBookingsRes.data) {
         setRecentBookings(recentBookingsRes.data);
       }
+
+      // Calculate Trojan Horse vs Regular leads
+      const trojanHorseServiceName = trojanHorseServiceRes.data?.name || null;
+      const totalLeads = allLeadsRes.data?.length || 0;
+      
+      // For now, we estimate based on conversation recommendation_summary containing the trojan horse service name
+      // In production, you might want to track this directly in the leads table
+      let trojanHorseLeadCount = 0;
+      
+      if (trojanHorseServiceName && allLeadsRes.data && allLeadsRes.data.length > 0) {
+        // Fetch conversations to check recommendation_summary
+        const conversationIds = allLeadsRes.data
+          .map(lead => lead.conversation_id)
+          .filter(Boolean);
+        
+        if (conversationIds.length > 0) {
+          const { data: convos } = await supabase
+            .from("conversations")
+            .select("recommendation_summary")
+            .in("conversation_id", conversationIds);
+          
+          if (convos) {
+            trojanHorseLeadCount = convos.filter(c => 
+              c.recommendation_summary?.toLowerCase().includes(trojanHorseServiceName.toLowerCase())
+            ).length;
+          }
+        }
+      }
+      
+      setTrojanHorseStats({
+        trojanHorseLeads: trojanHorseLeadCount,
+        regularLeads: totalLeads - trojanHorseLeadCount,
+        trojanHorseServiceName,
+      });
 
       const days = isEs 
         ? ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
@@ -555,7 +616,95 @@ export default function Dashboard() {
       </div>
 
       {/* Bottom Row */}
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-4">
+        {/* Trojan Horse Lead Source Widget */}
+        <Card className="lg:col-span-1 overflow-hidden rounded-2xl border-border/50 shadow-sm">
+          <CardHeader className="border-b border-border/50 bg-gradient-to-r from-yellow-500/5 via-amber-500/5 to-transparent">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-gradient-to-br from-yellow-500 to-amber-500 p-2.5 shadow-lg shadow-yellow-500/20">
+                <Star className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">
+                  {isEs ? "Leads por Fuente" : "Lead Sources"}
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  {isEs ? "Trojan Horse vs Regular" : "Trojan Horse vs Regular"}
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-6">
+            {isLoading ? (
+              <div className="space-y-4">
+                <div className="h-20 animate-pulse rounded-xl bg-muted/30" />
+                <div className="h-20 animate-pulse rounded-xl bg-muted/30" />
+              </div>
+            ) : trojanHorseStats.trojanHorseServiceName ? (
+              <div className="space-y-4">
+                {/* Trojan Horse Leads */}
+                <div className="group flex items-center justify-between rounded-2xl bg-gradient-to-r from-yellow-50 to-amber-50 p-4 transition-all duration-300 hover:shadow-md">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-xl bg-gradient-to-br from-yellow-500 to-amber-500 p-2 shadow-lg">
+                      <Star className="h-4 w-4 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">Trojan Horse</p>
+                      <p className="text-xs text-muted-foreground truncate max-w-[100px]">
+                        {trojanHorseStats.trojanHorseServiceName}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-2xl font-bold bg-gradient-to-r from-yellow-500 to-amber-500 bg-clip-text text-transparent">
+                    {trojanHorseStats.trojanHorseLeads}
+                  </span>
+                </div>
+                
+                {/* Regular Leads */}
+                <div className="group flex items-center justify-between rounded-2xl bg-gradient-to-r from-slate-50 to-gray-50 p-4 transition-all duration-300 hover:shadow-md">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-xl bg-gradient-to-br from-slate-500 to-gray-500 p-2 shadow-lg">
+                      <Zap className="h-4 w-4 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">
+                        {isEs ? "Otros Servicios" : "Other Services"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {isEs ? "Leads regulares" : "Regular leads"}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-2xl font-bold bg-gradient-to-r from-slate-500 to-gray-500 bg-clip-text text-transparent">
+                    {trojanHorseStats.regularLeads}
+                  </span>
+                </div>
+
+                {/* Conversion insight */}
+                {(trojanHorseStats.trojanHorseLeads + trojanHorseStats.regularLeads) > 0 && (
+                  <div className="mt-2 rounded-xl bg-muted/30 p-3 text-center">
+                    <p className="text-xs text-muted-foreground">
+                      {isEs ? "Tasa Trojan Horse" : "Trojan Horse Rate"}
+                    </p>
+                    <p className="text-lg font-bold text-foreground">
+                      {Math.round((trojanHorseStats.trojanHorseLeads / (trojanHorseStats.trojanHorseLeads + trojanHorseStats.regularLeads)) * 100)}%
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex h-40 flex-col items-center justify-center gap-3 text-muted-foreground">
+                <Star className="h-10 w-10 text-muted-foreground/30" />
+                <div className="text-center">
+                  <p className="text-sm font-medium">{isEs ? "Sin Trojan Horse" : "No Trojan Horse"}</p>
+                  <p className="text-xs">{isEs ? "Marca un servicio como entrada" : "Mark a service as entry-level"}</p>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Status Cards */}
         {/* Status Cards */}
         <Card className="lg:col-span-1 overflow-hidden rounded-2xl border-border/50 shadow-sm">
           <CardHeader className="border-b border-border/50 bg-gradient-to-r from-blue-500/5 via-indigo-500/5 to-transparent">
