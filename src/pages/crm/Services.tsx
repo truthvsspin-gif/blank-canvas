@@ -33,6 +33,7 @@ export default function ServicesPage() {
     base_price: "",
     duration_minutes: "",
     is_active: true,
+    is_trojan_horse: false,
   })
 
   const copy = isEs
@@ -48,6 +49,8 @@ export default function ServicesPage() {
         desc: "Descripción",
         duration: "Duración (min)",
         active: "Servicio activo",
+        trojanHorse: "Servicio de entrada",
+        trojanHorseHint: "Recomendar primero para consultas generales",
         saveChanges: "Guardar cambios",
         create: "Crear servicio",
         cancel: "Cancelar",
@@ -69,6 +72,7 @@ export default function ServicesPage() {
         activeServices: "servicios activos",
         pageLabel: "Mostrando",
         of: "de",
+        entryLevel: "Entrada",
       }
     : {
         title: "Services",
@@ -82,6 +86,8 @@ export default function ServicesPage() {
         desc: "Description",
         duration: "Duration (min)",
         active: "Service active",
+        trojanHorse: "Entry-level service",
+        trojanHorseHint: "Recommend first for general inquiries",
         saveChanges: "Save changes",
         create: "Create service",
         cancel: "Cancel",
@@ -103,6 +109,7 @@ export default function ServicesPage() {
         activeServices: "active services",
         pageLabel: "Showing",
         of: "of",
+        entryLevel: "Entry",
       }
 
   useEffect(() => {
@@ -139,6 +146,7 @@ export default function ServicesPage() {
       base_price: "",
       duration_minutes: "",
       is_active: true,
+      is_trojan_horse: false,
     })
     setShowForm(false)
   }
@@ -158,6 +166,7 @@ export default function ServicesPage() {
       base_price: form.base_price ? Number(form.base_price) : null,
       duration_minutes: form.duration_minutes ? Number(form.duration_minutes) : null,
       is_active: form.is_active,
+      is_trojan_horse: form.is_trojan_horse,
     }
     if (form.id) {
       const { error: err, data } = await supabase
@@ -193,6 +202,7 @@ export default function ServicesPage() {
       base_price: service.base_price?.toString() ?? "",
       duration_minutes: service.duration_minutes?.toString() ?? "",
       is_active: service.is_active,
+      is_trojan_horse: service.is_trojan_horse ?? false,
     })
     setShowForm(true)
   }
@@ -360,6 +370,30 @@ export default function ServicesPage() {
                   <span className="text-sm font-medium text-foreground">{copy.active}</span>
                 </div>
               </div>
+              {/* Trojan Horse toggle */}
+              <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={form.is_trojan_horse}
+                  onClick={() => setForm((f) => ({ ...f, is_trojan_horse: !f.is_trojan_horse }))}
+                  className={cn(
+                    "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                    form.is_trojan_horse ? "bg-amber-500" : "bg-muted"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform",
+                      form.is_trojan_horse ? "translate-x-5" : "translate-x-0"
+                    )}
+                  />
+                </button>
+                <div className="flex-1">
+                  <span className="text-sm font-medium text-amber-900">⭐ {copy.trojanHorse}</span>
+                  <p className="text-xs text-amber-700">{copy.trojanHorseHint}</p>
+                </div>
+              </div>
               <div className="flex items-center justify-end gap-3 pt-2">
                 <Button variant="ghost" type="button" onClick={resetForm} disabled={saving}>
                   {copy.cancel}
@@ -452,17 +486,27 @@ export default function ServicesPage() {
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              "text-xs",
-                              service.is_active
-                                ? "bg-emerald-100 text-emerald-700 border-emerald-200"
-                                : "bg-slate-100 text-slate-600 border-slate-200"
+                          <div className="flex items-center gap-1.5">
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "text-xs",
+                                service.is_active
+                                  ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                                  : "bg-slate-100 text-slate-600 border-slate-200"
+                              )}
+                            >
+                              {service.is_active ? copy.active : copy.inactive}
+                            </Badge>
+                            {service.is_trojan_horse && (
+                              <Badge
+                                variant="outline"
+                                className="text-xs bg-amber-100 text-amber-700 border-amber-200"
+                              >
+                                ⭐ {copy.entryLevel}
+                              </Badge>
                             )}
-                          >
-                            {service.is_active ? copy.active : copy.inactive}
-                          </Badge>
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-1">

@@ -613,6 +613,7 @@ interface ServiceContext {
   description: string | null;
   base_price: number | null;
   duration_minutes: number | null;
+  is_trojan_horse?: boolean;
   ideal_for?: string;
   exclusions?: string;
 }
@@ -641,10 +642,16 @@ Guide customer toward human contact for assistance.
 =========================================`;
   }
 
+  // Find the Trojan Horse service (if any)
+  const trojanHorse = services.find(s => s.is_trojan_horse);
+
   // Build compressed service reasoning context
   const serviceBlocks = services.map((service, idx) => {
     const parts: string[] = [];
-    parts.push(`${idx + 1}. ${service.name}`);
+    const isTrojan = service.is_trojan_horse;
+    
+    // Mark Trojan Horse prominently
+    parts.push(`${idx + 1}. ${service.name}${isTrojan ? " ⭐ [ENTRY-LEVEL SERVICE]" : ""}`);
     
     if (service.description) {
       // Extract benefit-focused description
@@ -655,6 +662,10 @@ Guide customer toward human contact for assistance.
     const idealFor = inferIdealFor(service.name, service.description || "");
     if (idealFor) {
       parts.push(`   • Ideal when: ${idealFor}`);
+    }
+    
+    if (isTrojan) {
+      parts.push(`   • ⭐ DEFAULT for general inquiries or unclear needs`);
     }
     
     if (service.base_price) {
@@ -672,6 +683,15 @@ Guide customer toward human contact for assistance.
     ? "=== CONTEXTO DE NEGOCIO (SOLO INTERNO - NUNCA MOSTRAR AL CLIENTE) ==="
     : "=== BUSINESS CONTEXT (INTERNAL ONLY - NEVER SHOW TO CUSTOMER) ===";
 
+  // Trojan Horse rule (DetaPRO v1.2)
+  const trojanHorseRule = trojanHorse
+    ? language === "es"
+      ? `\n⭐ REGLA TROJAN HORSE: Para consultas generales ("qué servicios tienen", "cuánto cuesta", "información") 
+      SIEMPRE recomienda SOLO "${trojanHorse.name}" como punto de entrada. NO listes otros servicios.`
+      : `\n⭐ TROJAN HORSE RULE: For general inquiries ("what services", "how much", "information")
+      ALWAYS recommend ONLY "${trojanHorse.name}" as the entry point. DO NOT list other services.`
+    : "";
+
   const rulesBlock = language === "es"
     ? `REGLAS DE USO:
 - SOLO puedes recomendar servicios listados aquí
@@ -680,7 +700,7 @@ Guide customer toward human contact for assistance.
 - Selecciona UNA mejor opción basada en su situación
 - Si nada aplica, guía hacia handoff humano
 - Los precios son rangos, nunca cotizaciones exactas
-- Solo menciona precios DESPUÉS de establecer valor`
+- Solo menciona precios DESPUÉS de establecer valor${trojanHorseRule}`
     : `USAGE RULES:
 - You may ONLY recommend services listed here
 - NEVER invent services, packages, or prices
@@ -688,7 +708,7 @@ Guide customer toward human contact for assistance.
 - Select ONE best option based on their situation
 - If nothing fits, guide toward human handoff
 - Prices are ranges, never exact quotes
-- Only mention prices AFTER establishing value`;
+- Only mention prices AFTER establishing value${trojanHorseRule}`;
 
   let contextBlock = `${header}
 Business: ${businessName}
@@ -1473,11 +1493,13 @@ serve(async (req: Request) => {
     }
 
     // Load services dynamically (this is the key for real-time updates)
+    // Include is_trojan_horse to identify entry-level service for general inquiries
     const { data: services, error: svcError } = await supabase
       .from("services")
-      .select("name, description, base_price, duration_minutes")
+      .select("name, description, base_price, duration_minutes, is_trojan_horse")
       .eq("business_id", businessId)
       .eq("is_active", true)
+      .order("is_trojan_horse", { ascending: false }) // Trojan Horse first
       .order("name", { ascending: true });
 
     if (svcError) {

@@ -907,6 +907,7 @@ export type Database = {
           duration_minutes: number | null
           id: string
           is_active: boolean
+          is_trojan_horse: boolean
           name: string
         }
         Insert: {
@@ -917,6 +918,7 @@ export type Database = {
           duration_minutes?: number | null
           id?: string
           is_active?: boolean
+          is_trojan_horse?: boolean
           name: string
         }
         Update: {
@@ -927,6 +929,7 @@ export type Database = {
           duration_minutes?: number | null
           id?: string
           is_active?: boolean
+          is_trojan_horse?: boolean
           name?: string
         }
         Relationships: [

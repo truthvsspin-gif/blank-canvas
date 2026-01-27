@@ -30,6 +30,7 @@ export type Service = {
   base_price: number | null
   duration_minutes: number | null
   is_active: boolean
+  is_trojan_horse: boolean
   created_at: string
 }
 
