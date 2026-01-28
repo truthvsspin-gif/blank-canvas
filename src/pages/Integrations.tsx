@@ -320,6 +320,32 @@ export default function Integrations() {
             </p>
           </div>
 
+          {/* Save to Secrets Button */}
+          <Button
+            type="button"
+            variant="default"
+            className="w-full gap-2"
+            onClick={() => {
+              const input = document.getElementById('verify-token') as HTMLInputElement
+              if (input.value) {
+                navigator.clipboard.writeText(input.value)
+                window.open('https://supabase.com/dashboard/project/ybifjdlelpvgzmzvgwls/settings/functions', '_blank')
+              } else {
+                // Generate token first if empty
+                const token = `verify_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}`
+                input.value = token
+                navigator.clipboard.writeText(token)
+                window.open('https://supabase.com/dashboard/project/ybifjdlelpvgzmzvgwls/settings/functions', '_blank')
+              }
+            }}
+          >
+            <ExternalLink className="h-4 w-4" />
+            Save to Supabase Secrets
+          </Button>
+          <p className="text-xs text-muted-foreground text-center">
+            Copies token to clipboard and opens Supabase secrets page. Add as <code className="bg-muted px-1 rounded">WHATSAPP_VERIFY_TOKEN</code>
+          </p>
+
           <div className="space-y-3">
             <p className="text-sm font-medium">Setup Steps:</p>
             <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
