@@ -14,7 +14,10 @@ import {
   CheckCircle2, 
   AlertCircle,
   ExternalLink,
-  Loader2
+  Loader2,
+  Copy,
+  RefreshCw,
+  Shield
 } from "lucide-react"
 
 type IntegrationData = {
@@ -248,6 +251,83 @@ export default function Integrations() {
             <p className="text-xs text-muted-foreground mt-2">
               Configure this URL in your Meta App → WhatsApp → Configuration → Webhooks
             </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Webhook Verification Token */}
+      <Card className="mb-6">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-blue-500/10">
+              <Shield className="h-5 w-5 text-blue-600" />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-lg">Webhook Verification Token</CardTitle>
+              <CardDescription>Secure token used by Meta to verify your webhook endpoints</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/30">
+            <p className="text-sm text-amber-700 dark:text-amber-400">
+              <strong>Important:</strong> This token must be set as a Supabase Edge Function secret named <code className="bg-background px-1 rounded">WHATSAPP_VERIFY_TOKEN</code> and also entered in your Meta App webhook configuration.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Verification Token</label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  id="verify-token"
+                  defaultValue=""
+                  placeholder="e.g., my_secure_verify_token_123"
+                  className="w-full px-4 py-2 rounded-lg border bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => {
+                  const input = document.getElementById('verify-token') as HTMLInputElement
+                  const token = `verify_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}`
+                  input.value = token
+                }}
+                title="Generate random token"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => {
+                  const input = document.getElementById('verify-token') as HTMLInputElement
+                  if (input.value) {
+                    navigator.clipboard.writeText(input.value)
+                  }
+                }}
+                title="Copy token"
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Generate a secure token, copy it, and add it to both Supabase secrets and Meta webhook settings
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-sm font-medium">Setup Steps:</p>
+            <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
+              <li>Generate or enter a secure verification token above</li>
+              <li>Copy the token and add it as <code className="bg-muted px-1 rounded">WHATSAPP_VERIFY_TOKEN</code> in <a href="https://supabase.com/dashboard/project/ybifjdlelpvgzmzvgwls/settings/functions" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Supabase Edge Function Secrets</a></li>
+              <li>Enter the same token in Meta Developer Portal when configuring your webhook</li>
+              <li>Subscribe to the <code className="bg-muted px-1 rounded">messages</code> field in webhook subscriptions</li>
+            </ol>
           </div>
         </CardContent>
       </Card>
