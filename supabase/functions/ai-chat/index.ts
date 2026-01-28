@@ -232,6 +232,109 @@ function isLowIntent(text: string): boolean {
 }
 
 // ============================================================================
+// CONTACT INFO EXTRACTION FOR LEAD CREATION
+// ============================================================================
+function extractEmail(text: string): string | null {
+  const match = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  return match ? match[0].toLowerCase() : null;
+}
+
+function extractPhone(text: string): string | null {
+  const match = text.match(/(?:\+?\d[\d\s().-]{6,}\d)/);
+  if (!match) return null;
+  const digits = match[0].replace(/[^\d+]/g, "");
+  return digits.length >= 8 ? digits : null;
+}
+
+// ============================================================================
+// LEAD CREATION/UPDATE
+// ============================================================================
+async function createOrUpdateLead(
+  supabase: ReturnType<typeof createClient>,
+  params: {
+    businessId: string;
+    conversationId: string;
+    customerName: string | null;
+    customerIdentifier: string | null;
+    channel: string | null;
+    messageText: string;
+    context: ConversationContext;
+  }
+): Promise<string | null> {
+  const { businessId, conversationId, customerName, customerIdentifier, channel, messageText, context } = params;
+  
+  // Extract contact info from message
+  const emailFromMessage = extractEmail(messageText);
+  const phoneFromMessage = extractPhone(messageText);
+  const phone = phoneFromMessage || (customerIdentifier?.startsWith("+") ? customerIdentifier : null);
+  
+  // Build qualification reason
+  const qualificationParts = [];
+  if (context.benefitIntent) qualificationParts.push(`intent=${context.benefitIntent}`);
+  if (emailFromMessage) qualificationParts.push("contact=email");
+  if (phone) qualificationParts.push("contact=phone");
+  if (context.handoffRequired) qualificationParts.push("handoff=true");
+  const qualificationReason = qualificationParts.join("; ");
+
+  try {
+    // Check if lead already exists for this conversation
+    const { data: existingLead } = await supabase
+      .from("leads")
+      .select("id")
+      .eq("business_id", businessId)
+      .eq("conversation_id", conversationId)
+      .maybeSingle();
+
+    if (existingLead?.id) {
+      // Update existing lead
+      await supabase
+        .from("leads")
+        .update({
+          stage: "qualified",
+          qualification_reason: qualificationReason,
+          email: emailFromMessage || undefined,
+          phone: phone || undefined,
+          name: customerName || undefined,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existingLead.id);
+      
+      console.log(`[LEAD] Updated existing lead ${existingLead.id}`);
+      return existingLead.id;
+    }
+
+    // Create new lead
+    const { data: newLead, error } = await supabase
+      .from("leads")
+      .insert({
+        business_id: businessId,
+        conversation_id: conversationId,
+        name: customerName || "Unknown",
+        email: emailFromMessage,
+        phone: phone,
+        source: channel || "simulator",
+        stage: "qualified",
+        qualification_reason: qualificationReason,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+
+    if (error) {
+      console.error("[LEAD] Failed to create lead:", error);
+      return null;
+    }
+
+    console.log(`[LEAD] Created new lead ${newLead?.id}`);
+    return newLead?.id || null;
+  } catch (err) {
+    console.error("[LEAD] Error in createOrUpdateLead:", err);
+    return null;
+  }
+}
+
+// ============================================================================
 // STALL DETECTION - Detects when customer is passive/non-advancing
 // ============================================================================
 function isStallResponse(text: string, state: State): boolean {
@@ -1657,6 +1760,28 @@ serve(async (req: Request) => {
       await cancelPendingFollowUps(supabase, businessId, conversationId);
     }
 
+    // Create/update lead when qualified (BEFORE follow-up queue so we have lead_id)
+    let createdLeadId: string | null = null;
+    if (newContext.leadQualified && conversationId) {
+      createdLeadId = await createOrUpdateLead(supabase, {
+        businessId,
+        conversationId,
+        customerName: customerName || null,
+        customerIdentifier: customerIdentifier || null,
+        channel: channel || null,
+        messageText: userMessage,
+        context: newContext,
+      });
+      
+      if (createdLeadId) {
+        console.log(`[EVENT] lead_qualified for business ${businessId}, leadId: ${createdLeadId}`);
+      }
+    }
+    
+    if (newContext.handoffRequired && !context.handoffRequired) {
+      console.log(`[EVENT] handoff_required for business ${businessId}`);
+    }
+
     // Queue follow-ups when conversation goes cold or recovery exhausted
     const shouldQueueFollowUps = 
       newContext.recoveryAttemptCount >= 2 || // Recovery attempts exhausted
@@ -1664,23 +1789,19 @@ serve(async (req: Request) => {
       newContext.currentState === STATES.STATE_6_HANDOFF;
     
     if (shouldQueueFollowUps && conversationId) {
-      // Fetch lead_id if exists for this conversation
-      const { data: leadData } = await supabase
-        .from("leads")
-        .select("id")
-        .eq("business_id", businessId)
-        .eq("conversation_id", conversationId)
-        .maybeSingle();
+      // Use created lead_id or fetch existing one
+      let leadIdForFollowUp = createdLeadId;
+      if (!leadIdForFollowUp) {
+        const { data: leadData } = await supabase
+          .from("leads")
+          .select("id")
+          .eq("business_id", businessId)
+          .eq("conversation_id", conversationId)
+          .maybeSingle();
+        leadIdForFollowUp = leadData?.id || null;
+      }
       
-      await queueFollowUps(supabase, businessId, conversationId, leadData?.id || null);
-    }
-
-    // Emit events if needed
-    if (newContext.leadQualified && !context.leadQualified) {
-      console.log(`[EVENT] lead_qualified for business ${businessId}`);
-    }
-    if (newContext.handoffRequired && !context.handoffRequired) {
-      console.log(`[EVENT] handoff_required for business ${businessId}`);
+      await queueFollowUps(supabase, businessId, conversationId, leadIdForFollowUp);
     }
 
     const response: AIResponse = {
