@@ -23,6 +23,7 @@ import Chatbot from "./pages/Chatbot";
 import DevChatbot from "./pages/DevChatbot";
 import Profile from "./pages/Profile";
 import Admin from "./pages/Admin";
+import Integrations from "./pages/Integrations";
 import AppLayout from "./layouts/AppLayout";
 import AuthLayout from "./layouts/AuthLayout";
 
@@ -65,6 +66,7 @@ function App() {
               <Route path="/chatbot" element={<Chatbot />} />
               <Route path="/dev-chatbot" element={<DevChatbot />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/integrations" element={<Integrations />} />
               <Route path="/admin" element={<Admin />} />
             </Route>
             

@@ -11,7 +11,8 @@ import {
   User,
   Briefcase,
   BarChart3,
-  Send
+  Send,
+  Plug
 } from "lucide-react"
 import { AppSection } from "@/types/navigation"
 
@@ -142,6 +143,17 @@ export const appSections: AppSection[] = [
     badge: { en: "Test", es: "Test" },
     icon: TestTube,
     group: "messaging",
+  },
+  {
+    name: { en: "Integrations", es: "Integraciones" },
+    href: "/integrations",
+    summary: {
+      en: "WhatsApp and Instagram API credentials.",
+      es: "Credenciales de API de WhatsApp e Instagram.",
+    },
+    badge: { en: "API", es: "API" },
+    icon: Plug,
+    group: "settings",
   },
   {
     name: { en: "Admin", es: "Admin" },
