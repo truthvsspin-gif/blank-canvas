@@ -29,7 +29,23 @@ serve(async (req: Request) => {
     const mode = url.searchParams.get("hub.mode");
     const token = url.searchParams.get("hub.verify_token");
     const challenge = url.searchParams.get("hub.challenge");
-    const verifyToken = Deno.env.get("META_VERIFY_TOKEN") || "eldetailerpro_verify_token";
+    const businessId = url.searchParams.get("business_id");
+
+    // Get verify token from database or fallback to env
+    let verifyToken = Deno.env.get("META_VERIFY_TOKEN") || "eldetailerpro_verify_token";
+    
+    if (businessId) {
+      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+      const { data: integration } = await supabase
+        .from("business_integrations")
+        .select("webhook_verify_token")
+        .eq("business_id", businessId)
+        .maybeSingle();
+      
+      if (integration?.webhook_verify_token) {
+        verifyToken = integration.webhook_verify_token;
+      }
+    }
 
     if (mode === "subscribe" && token === verifyToken) {
       console.log("Instagram webhook verified successfully");
