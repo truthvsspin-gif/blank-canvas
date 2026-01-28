@@ -29,29 +29,36 @@ serve(async (req: Request) => {
     const mode = url.searchParams.get("hub.mode");
     const token = url.searchParams.get("hub.verify_token");
     const challenge = url.searchParams.get("hub.challenge");
-    const businessId = url.searchParams.get("business_id");
 
-    // Get verify token from database or fallback to env
-    let verifyToken = Deno.env.get("META_VERIFY_TOKEN") || "eldetailerpro_verify_token";
-    
-    if (businessId) {
+    console.log("Instagram verification request - mode:", mode, "token:", token);
+
+    if (mode === "subscribe" && token) {
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
-      const { data: integration } = await supabase
+      
+      // Search for ANY business with this verification token
+      const { data: integration, error } = await supabase
         .from("business_integrations")
-        .select("webhook_verify_token")
-        .eq("business_id", businessId)
+        .select("business_id, webhook_verify_token")
+        .eq("webhook_verify_token", token)
         .maybeSingle();
       
-      if (integration?.webhook_verify_token) {
-        verifyToken = integration.webhook_verify_token;
+      console.log("Token lookup result:", integration ? "found" : "not found", error?.message || "");
+
+      if (integration?.webhook_verify_token === token) {
+        console.log("Instagram webhook verified for business:", integration.business_id);
+        return new Response(challenge, { status: 200 });
+      }
+      
+      // Fallback to env variable for legacy support
+      const envToken = Deno.env.get("META_VERIFY_TOKEN");
+      if (envToken && token === envToken) {
+        console.log("Instagram webhook verified via env token");
+        return new Response(challenge, { status: 200 });
       }
     }
-
-    if (mode === "subscribe" && token === verifyToken) {
-      console.log("Instagram webhook verified successfully");
-      return new Response(challenge, { status: 200, headers: corsHeaders });
-    }
-    return new Response("Forbidden", { status: 403, headers: corsHeaders });
+    
+    console.log("Instagram webhook verification failed");
+    return new Response("Forbidden", { status: 403 });
   }
 
   if (req.method === "POST") {
