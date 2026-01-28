@@ -2,6 +2,7 @@ import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { supabase } from "@/integrations/supabase/client"
 import { useCurrentBusiness } from "@/hooks/use-current-business"
+import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -30,6 +31,7 @@ type IntegrationData = {
 export default function Integrations() {
   const navigate = useNavigate()
   const { businessId, loading: businessLoading } = useCurrentBusiness()
+  const { toasts, toast, dismiss } = useToast()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [showWhatsAppToken, setShowWhatsAppToken] = useState(false)
@@ -134,7 +136,31 @@ export default function Integrations() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-4xl">
+    <>
+      {/* Toast notifications */}
+      {toasts.map((t) => (
+        <div
+          key={t.id}
+          className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-lg border px-4 py-3 shadow-lg ${
+            t.variant === "success"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+              : "border-rose-200 bg-rose-50 text-rose-800"
+          }`}
+          role="status"
+          aria-live="polite"
+        >
+          <span className="text-sm font-medium">{t.message}</span>
+          <button
+            type="button"
+            onClick={() => dismiss(t.id)}
+            className="text-xs font-semibold opacity-70 hover:opacity-100"
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+      
+      <div className="container mx-auto py-8 px-4 max-w-4xl">
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-foreground mb-2">Integrations</h1>
@@ -308,6 +334,9 @@ export default function Integrations() {
                   const input = document.getElementById('verify-token') as HTMLInputElement
                   if (input.value) {
                     navigator.clipboard.writeText(input.value)
+                    toast({ message: "Token copied to clipboard!", variant: "success" })
+                  } else {
+                    toast({ message: "Please generate a token first", variant: "error" })
                   }
                 }}
                 title="Copy token"
@@ -329,12 +358,14 @@ export default function Integrations() {
               const input = document.getElementById('verify-token') as HTMLInputElement
               if (input.value) {
                 navigator.clipboard.writeText(input.value)
+                toast({ message: "Token copied! Opening Supabase secrets...", variant: "success" })
                 window.open('https://supabase.com/dashboard/project/ybifjdlelpvgzmzvgwls/settings/functions', '_blank')
               } else {
                 // Generate token first if empty
                 const token = `verify_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}`
                 input.value = token
                 navigator.clipboard.writeText(token)
+                toast({ message: "Token generated and copied! Opening Supabase secrets...", variant: "success" })
                 window.open('https://supabase.com/dashboard/project/ybifjdlelpvgzmzvgwls/settings/functions', '_blank')
               }
             }}
@@ -464,7 +495,8 @@ export default function Integrations() {
           <p>4. Generate permanent access tokens using System Users</p>
           <p>5. Enter your credentials above and save</p>
         </CardContent>
-      </Card>
-    </div>
+        </Card>
+      </div>
+    </>
   )
 }
