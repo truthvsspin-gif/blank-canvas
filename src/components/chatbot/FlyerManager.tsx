@@ -12,6 +12,8 @@ import {
   FileText,
   DollarSign,
   Briefcase,
+  Pencil,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -42,6 +44,12 @@ const FLYER_TYPES: { value: FlyerType; labelEn: string; labelEs: string; icon: t
   { value: "menu", labelEn: "Menu", labelEs: "Menú", icon: FileText },
 ];
 
+interface EditingFlyer {
+  id: string;
+  title: string;
+  asset_type: FlyerType;
+}
+
 export function FlyerManager({ businessId, lang }: FlyerManagerProps) {
   const isEs = lang === "es";
   const [flyers, setFlyers] = useState<MediaAsset[]>([]);
@@ -52,6 +60,8 @@ export function FlyerManager({ businessId, lang }: FlyerManagerProps) {
   const [flyerTitle, setFlyerTitle] = useState("");
   const [selectedType, setSelectedType] = useState<FlyerType>("services_flyer");
   const [filterType, setFilterType] = useState<FlyerType | "all">("all");
+  const [editingFlyer, setEditingFlyer] = useState<EditingFlyer | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const copy = isEs
     ? {
@@ -70,6 +80,10 @@ export function FlyerManager({ businessId, lang }: FlyerManagerProps) {
         titlePlaceholder: "Ej: Menú de Servicios",
         typeLabel: "Tipo de Flyer",
         filterAll: "Todos",
+        edit: "Editar",
+        save: "Guardar",
+        cancel: "Cancelar",
+        editTitle: "Editar Flyer",
         typeTriggers: {
           menu: "Se activa con: menú, comida, plato, desayuno...",
           price_list: "Se activa con: precio, costo, cuánto cuesta...",
@@ -92,6 +106,10 @@ export function FlyerManager({ businessId, lang }: FlyerManagerProps) {
         titlePlaceholder: "E.g., Service Menu",
         typeLabel: "Flyer Type",
         filterAll: "All",
+        edit: "Edit",
+        save: "Save",
+        cancel: "Cancel",
+        editTitle: "Edit Flyer",
         typeTriggers: {
           menu: "Triggers on: menu, food, dish, breakfast...",
           price_list: "Triggers on: price, cost, how much...",
@@ -223,6 +241,43 @@ export function FlyerManager({ businessId, lang }: FlyerManagerProps) {
   const getTypeIcon = (type: string) => {
     const found = FLYER_TYPES.find((t) => t.value === type);
     return found?.icon || FileText;
+  };
+
+  const startEditing = (flyer: MediaAsset) => {
+    setEditingFlyer({
+      id: flyer.id,
+      title: flyer.title || flyer.file_name || "",
+      asset_type: flyer.asset_type as FlyerType,
+    });
+  };
+
+  const cancelEditing = () => {
+    setEditingFlyer(null);
+  };
+
+  const saveEdit = async () => {
+    if (!editingFlyer) return;
+    setSaving(true);
+    setError(null);
+
+    try {
+      const { error: updateError } = await supabase
+        .from("media_assets")
+        .update({
+          title: editingFlyer.title.trim() || null,
+          asset_type: editingFlyer.asset_type,
+        })
+        .eq("id", editingFlyer.id);
+
+      if (updateError) throw updateError;
+
+      setEditingFlyer(null);
+      await loadFlyers();
+    } catch (err: any) {
+      setError(err.message || "Failed to save changes");
+    }
+
+    setSaving(false);
   };
 
   const filteredFlyers = filterType === "all" 
@@ -437,6 +492,15 @@ export function FlyerManager({ businessId, lang }: FlyerManagerProps) {
                     <Button
                       variant="ghost"
                       size="sm"
+                      onClick={() => startEditing(flyer)}
+                    >
+                      <Pencil className="h-4 w-4 mr-1" />
+                      {copy.edit}
+                    </Button>
+
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => setPreviewUrl(flyer.file_url)}
                     >
                       <Eye className="h-4 w-4 mr-1" />
@@ -480,6 +544,83 @@ export function FlyerManager({ businessId, lang }: FlyerManagerProps) {
               className="max-w-full max-h-[80vh] rounded-lg"
               onClick={(e) => e.stopPropagation()}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {editingFlyer && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={cancelEditing}
+        >
+          <div
+            className="bg-background rounded-xl p-6 w-full max-w-md space-y-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">{copy.editTitle}</h3>
+              <Button variant="ghost" size="icon" onClick={cancelEditing}>
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+
+            {/* Title Input */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">{copy.titleLabel}</label>
+              <input
+                type="text"
+                className="w-full rounded-lg border bg-muted/30 px-3 py-2 text-sm"
+                placeholder={copy.titlePlaceholder}
+                value={editingFlyer.title}
+                onChange={(e) =>
+                  setEditingFlyer({ ...editingFlyer, title: e.target.value })
+                }
+              />
+            </div>
+
+            {/* Type Selector */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">{copy.typeLabel}</label>
+              <div className="flex flex-wrap gap-2">
+                {FLYER_TYPES.map((type) => {
+                  const Icon = type.icon;
+                  const isSelected = editingFlyer.asset_type === type.value;
+                  return (
+                    <button
+                      key={type.value}
+                      type="button"
+                      onClick={() =>
+                        setEditingFlyer({ ...editingFlyer, asset_type: type.value })
+                      }
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                        isSelected
+                          ? "bg-accent text-accent-foreground"
+                          : "bg-muted hover:bg-muted/80"
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {isEs ? type.labelEs : type.labelEn}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={cancelEditing}>
+                {copy.cancel}
+              </Button>
+              <Button onClick={saveEdit} disabled={saving}>
+                {saving ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4 mr-2" />
+                )}
+                {copy.save}
+              </Button>
+            </div>
           </div>
         </div>
       )}
