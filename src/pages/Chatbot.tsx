@@ -119,7 +119,6 @@ export default function ChatbotPage() {
   const [industryType, setIndustryType] = useState<IndustryType>("automotive");
   const [businessDescription, setBusinessDescription] = useState("");
   const [aiInstructions, setAiInstructions] = useState("");
-  const [flyerCooldownHours, setFlyerCooldownHours] = useState(24);
   
   // Integration state
   const [integrationState, setIntegrationState] = useState({
@@ -313,7 +312,7 @@ export default function ChatbotPage() {
       
       const { data: business } = await supabase
         .from("businesses")
-        .select("chatbot_enabled, language_preference, greeting_message, industry_type, business_description, ai_instructions, flyer_cooldown_hours")
+        .select("chatbot_enabled, language_preference, greeting_message, industry_type, business_description, ai_instructions")
         .eq("id", businessId)
         .single();
         
@@ -328,7 +327,6 @@ export default function ChatbotPage() {
         setIndustryType((business.industry_type as IndustryType) || "automotive");
         setBusinessDescription(business.business_description ?? "");
         setAiInstructions(business.ai_instructions ?? "");
-        setFlyerCooldownHours(business.flyer_cooldown_hours ?? 24);
       }
 
       const { data: integrations } = await supabase
@@ -399,7 +397,6 @@ export default function ChatbotPage() {
         industry_type: industryType,
         business_description: businessDescription.trim() || null,
         ai_instructions: aiInstructions.trim() || null,
-        flyer_cooldown_hours: flyerCooldownHours,
       })
       .eq("id", businessId);
 
@@ -1053,29 +1050,7 @@ export default function ChatbotPage() {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="p-6 space-y-6">
-            {/* Cooldown Setting */}
-            <div className="flex items-center gap-4 p-4 rounded-lg border bg-muted/30">
-              <div className="flex-1">
-                <label className="text-sm font-medium">
-                  {lang === "es" ? "Enfriamiento de Flyer (horas)" : "Flyer Cooldown (hours)"}
-                </label>
-                <p className="text-xs text-muted-foreground">
-                  {lang === "es" 
-                    ? "Tiempo mínimo entre envíos de flyer por conversación" 
-                    : "Minimum time between flyer sends per conversation"}
-                </p>
-              </div>
-              <input
-                type="number"
-                min={1}
-                max={168}
-                value={flyerCooldownHours}
-                onChange={(e) => setFlyerCooldownHours(Math.max(1, Math.min(168, parseInt(e.target.value) || 24)))}
-                className="w-20 rounded-lg border bg-background px-3 py-2 text-sm text-center focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
-              />
-            </div>
-            
+          <CardContent className="p-6">
             <FlyerManager businessId={businessId} lang={lang} />
           </CardContent>
         </Card>
