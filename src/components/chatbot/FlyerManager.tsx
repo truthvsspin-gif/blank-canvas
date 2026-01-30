@@ -14,6 +14,8 @@ import {
   Briefcase,
   Pencil,
   Check,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -62,6 +64,8 @@ export function FlyerManager({ businessId, lang }: FlyerManagerProps) {
   const [filterType, setFilterType] = useState<FlyerType | "all">("all");
   const [editingFlyer, setEditingFlyer] = useState<EditingFlyer | null>(null);
   const [saving, setSaving] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const copy = isEs
     ? {
@@ -84,6 +88,11 @@ export function FlyerManager({ businessId, lang }: FlyerManagerProps) {
         save: "Guardar",
         cancel: "Cancelar",
         editTitle: "Editar Flyer",
+        selectAll: "Seleccionar Todos",
+        deselectAll: "Deseleccionar",
+        deleteSelected: "Eliminar Seleccionados",
+        selected: "seleccionados",
+        confirmBulkDelete: "¿Eliminar los flyers seleccionados?",
         typeTriggers: {
           menu: "Se activa con: menú, comida, plato, desayuno...",
           price_list: "Se activa con: precio, costo, cuánto cuesta...",
@@ -110,6 +119,11 @@ export function FlyerManager({ businessId, lang }: FlyerManagerProps) {
         save: "Save",
         cancel: "Cancel",
         editTitle: "Edit Flyer",
+        selectAll: "Select All",
+        deselectAll: "Deselect All",
+        deleteSelected: "Delete Selected",
+        selected: "selected",
+        confirmBulkDelete: "Delete selected flyers?",
         typeTriggers: {
           menu: "Triggers on: menu, food, dish, breakfast...",
           price_list: "Triggers on: price, cost, how much...",
@@ -231,6 +245,62 @@ export function FlyerManager({ businessId, lang }: FlyerManagerProps) {
 
     await supabase.from("media_assets").delete().eq("id", flyer.id);
     await loadFlyers();
+  };
+
+  const toggleSelection = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const selectAllFiltered = () => {
+    setSelectedIds(new Set(filteredFlyers.map((f) => f.id)));
+  };
+
+  const deselectAll = () => {
+    setSelectedIds(new Set());
+  };
+
+  const bulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(copy.confirmBulkDelete)) return;
+
+    setBulkDeleting(true);
+    setError(null);
+
+    try {
+      const toDelete = flyers.filter((f) => selectedIds.has(f.id));
+
+      // Delete from storage
+      const storagePaths = toDelete
+        .map((f) => f.file_url.split("/flyers/")[1])
+        .filter(Boolean);
+
+      if (storagePaths.length > 0) {
+        await supabase.storage.from("flyers").remove(storagePaths);
+      }
+
+      // Delete from database
+      const { error: deleteError } = await supabase
+        .from("media_assets")
+        .delete()
+        .in("id", Array.from(selectedIds));
+
+      if (deleteError) throw deleteError;
+
+      setSelectedIds(new Set());
+      await loadFlyers();
+    } catch (err: any) {
+      setError(err.message || "Failed to delete flyers");
+    }
+
+    setBulkDeleting(false);
   };
 
   const getTypeLabel = (type: string) => {
@@ -377,37 +447,82 @@ export function FlyerManager({ businessId, lang }: FlyerManagerProps) {
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      {/* Filter Tabs */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <button
-          type="button"
-          onClick={() => setFilterType("all")}
-          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-            filterType === "all"
-              ? "bg-accent text-accent-foreground"
-              : "bg-muted hover:bg-muted/80"
-          }`}
-        >
-          {copy.filterAll} ({flyers.length})
-        </button>
-        {FLYER_TYPES.map((type) => {
-          const Icon = type.icon;
-          return (
-            <button
-              key={type.value}
-              type="button"
-              onClick={() => setFilterType(type.value)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                filterType === type.value
-                  ? "bg-accent text-accent-foreground"
-                  : "bg-muted hover:bg-muted/80"
-              }`}
-            >
-              <Icon className="h-3 w-3" />
-              {isEs ? type.labelEs : type.labelEn} ({flyerCounts[type.value]})
-            </button>
-          );
-        })}
+      {/* Filter Tabs & Bulk Actions */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setFilterType("all")}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+              filterType === "all"
+                ? "bg-accent text-accent-foreground"
+                : "bg-muted hover:bg-muted/80"
+            }`}
+          >
+            {copy.filterAll} ({flyers.length})
+          </button>
+          {FLYER_TYPES.map((type) => {
+            const Icon = type.icon;
+            return (
+              <button
+                key={type.value}
+                type="button"
+                onClick={() => setFilterType(type.value)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                  filterType === type.value
+                    ? "bg-accent text-accent-foreground"
+                    : "bg-muted hover:bg-muted/80"
+                }`}
+              >
+                <Icon className="h-3 w-3" />
+                {isEs ? type.labelEs : type.labelEn} ({flyerCounts[type.value]})
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Bulk Actions */}
+        {filteredFlyers.length > 0 && (
+          <div className="flex items-center gap-2">
+            {selectedIds.size > 0 ? (
+              <>
+                <span className="text-xs text-muted-foreground">
+                  {selectedIds.size} {copy.selected}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={deselectAll}
+                >
+                  <Square className="h-4 w-4 mr-1" />
+                  {copy.deselectAll}
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={bulkDelete}
+                  disabled={bulkDeleting}
+                >
+                  {bulkDeleting ? (
+                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4 mr-1" />
+                  )}
+                  {copy.deleteSelected}
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={selectAllFiltered}
+              >
+                <CheckSquare className="h-4 w-4 mr-1" />
+                {copy.selectAll}
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Flyer List */}
@@ -422,13 +537,31 @@ export function FlyerManager({ businessId, lang }: FlyerManagerProps) {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filteredFlyers.map((flyer) => {
             const TypeIcon = getTypeIcon(flyer.asset_type);
+            const isSelected = selectedIds.has(flyer.id);
             return (
               <div
                 key={flyer.id}
                 className={`relative rounded-xl border p-3 transition-all ${
-                  flyer.is_default ? "border-accent bg-accent/5" : "border-border"
+                  isSelected
+                    ? "border-primary bg-primary/5 ring-2 ring-primary/30"
+                    : flyer.is_default
+                    ? "border-accent bg-accent/5"
+                    : "border-border"
                 }`}
               >
+                {/* Selection Checkbox */}
+                <button
+                  type="button"
+                  onClick={() => toggleSelection(flyer.id)}
+                  className="absolute top-2 right-2 z-10 p-1 rounded-md bg-background/80 hover:bg-background transition-colors"
+                >
+                  {isSelected ? (
+                    <CheckSquare className="h-5 w-5 text-primary" />
+                  ) : (
+                    <Square className="h-5 w-5 text-muted-foreground" />
+                  )}
+                </button>
+
                 {/* Type Badge */}
                 <div className="absolute top-2 left-2 z-10">
                   <Badge variant="secondary" className="text-xs flex items-center gap-1">
