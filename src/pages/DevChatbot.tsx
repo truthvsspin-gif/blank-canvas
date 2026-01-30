@@ -34,6 +34,8 @@ type Message = {
   role: "user" | "bot";
   text: string;
   timestamp: Date;
+  flyerUrl?: string | null;
+  flyerType?: string | null;
 };
 
 type ConversationState = {
@@ -316,6 +318,8 @@ export default function DevChatbotPage() {
             role: "bot",
             text: data?.reply || "...",
             timestamp: new Date(),
+            flyerUrl: data?.flyerUrl || null,
+            flyerType: data?.flyerType || null,
           };
           setMessages((prev) => [...prev, botMsg]);
           setLoading(false);
@@ -592,6 +596,22 @@ export default function DevChatbotPage() {
                         }`}
                       >
                         <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
+                        
+                        {/* Flyer Image */}
+                        {msg.flyerUrl && msg.role === "bot" && (
+                          <div className="mt-3 rounded-lg overflow-hidden border border-border/50">
+                            <img
+                              src={msg.flyerUrl}
+                              alt={isEs ? "Flyer de servicios" : "Services flyer"}
+                              className="w-full max-w-xs object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                              onClick={() => window.open(msg.flyerUrl!, "_blank")}
+                            />
+                            <div className="px-2 py-1.5 bg-muted/50 text-xs text-muted-foreground flex items-center gap-1">
+                              <Sparkles className="h-3 w-3" />
+                              {isEs ? "Toca para ver en grande" : "Tap to view full size"}
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <span
                         className={`text-[10px] text-muted-foreground mt-1 opacity-0 group-hover:opacity-100 transition-opacity ${

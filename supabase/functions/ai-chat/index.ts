@@ -68,6 +68,8 @@ interface AIResponse {
   handoffRequired: boolean;
   leadQualified: boolean;
   returningCustomer: boolean;
+  flyerUrl?: string | null; // Services flyer URL when applicable
+  flyerType?: string | null; // Type of flyer (services_flyer, etc.)
   error?: string;
 }
 
@@ -229,6 +231,82 @@ function isLowIntent(text: string): boolean {
   ];
   
   return lowIntentPatterns.some(p => p.test(text));
+}
+
+// ============================================================================
+// SERVICES INQUIRY DETECTION - For flyer trigger
+// ============================================================================
+function isServicesInquiry(text: string): boolean {
+  const servicesPatterns = [
+    // English patterns
+    /\b(what (do you|can you) offer|what services|your services|service(s)? you|what.*offer|list.*services|menu|packages?|options|what's available|available services)\b/i,
+    /\b(how much|price|pricing|cost|rate|what.*charge|charge for|fees?)\b/i,
+    /\b(services|servicios|tratamientos|paquetes)\b/i,
+    /\b(info|information|tell me about|details|more about)\b/i,
+    
+    // Spanish patterns
+    /\b(qué (ofrecen|servicios|hacen)|sus servicios|servicios que|qué tienen|qué.*ofrecen|lista.*servicios|menú|paquetes?|opciones|qué hay disponible)\b/i,
+    /\b(cuánto|precio|costo|tarifa|cuánto cobran|cobran por|tarifas?)\b/i,
+    /\b(información|informe|cuéntame|detalles|más sobre)\b/i,
+  ];
+  
+  return servicesPatterns.some(p => p.test(text));
+}
+
+// ============================================================================
+// FLYER LOOKUP - Check if business has a services flyer
+// ============================================================================
+interface FlyerResult {
+  url: string | null;
+  type: string | null;
+}
+
+async function lookupServicesFlyer(
+  supabase: ReturnType<typeof createClient>,
+  businessId: string
+): Promise<FlyerResult> {
+  try {
+    const { data: flyer, error } = await supabase
+      .from("media_assets")
+      .select("file_url, asset_type")
+      .eq("business_id", businessId)
+      .eq("is_active", true)
+      .in("asset_type", ["services_flyer", "menu", "price_list"])
+      .eq("is_default", true)
+      .maybeSingle();
+    
+    if (error) {
+      console.error("[FLYER] Lookup error:", error.message);
+      return { url: null, type: null };
+    }
+    
+    if (flyer?.file_url) {
+      console.log(`[FLYER] Found ${flyer.asset_type} for business ${businessId}`);
+      return { url: flyer.file_url, type: flyer.asset_type };
+    }
+    
+    // Fallback: get any active services flyer if no default set
+    const { data: anyFlyer } = await supabase
+      .from("media_assets")
+      .select("file_url, asset_type")
+      .eq("business_id", businessId)
+      .eq("is_active", true)
+      .in("asset_type", ["services_flyer", "menu", "price_list"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    
+    if (anyFlyer?.file_url) {
+      console.log(`[FLYER] Found fallback ${anyFlyer.asset_type} for business ${businessId}`);
+      return { url: anyFlyer.file_url, type: anyFlyer.asset_type };
+    }
+    
+    console.log(`[FLYER] No flyer found for business ${businessId}`);
+    return { url: null, type: null };
+  } catch (err) {
+    console.error("[FLYER] Exception:", err);
+    return { url: null, type: null };
+  }
 }
 
 // ============================================================================
@@ -1733,6 +1811,13 @@ serve(async (req: Request) => {
 
     console.log(`[AI-CHAT] Response generated in ${performance.responseTimeMs}ms, fallback: ${performance.isFallback}`);
 
+    // Check if user is asking about services and look for flyer
+    let flyerResult: FlyerResult = { url: null, type: null };
+    if (isServicesInquiry(userMessage)) {
+      console.log(`[AI-CHAT] Services inquiry detected, checking for flyer...`);
+      flyerResult = await lookupServicesFlyer(supabase, businessId);
+    }
+
     // Store conversation state with performance metrics
     await storeConversationState(
       supabase,
@@ -1813,6 +1898,8 @@ serve(async (req: Request) => {
       handoffRequired: newContext.handoffRequired,
       leadQualified: newContext.leadQualified,
       returningCustomer: isReturning,
+      flyerUrl: flyerResult.url,
+      flyerType: flyerResult.type,
     };
 
     return new Response(
