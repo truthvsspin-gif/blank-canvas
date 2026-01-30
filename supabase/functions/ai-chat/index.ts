@@ -234,27 +234,55 @@ function isLowIntent(text: string): boolean {
 }
 
 // ============================================================================
-// SERVICES INQUIRY DETECTION - For flyer trigger
+// FLYER TYPE DETECTION - Specific triggers for each flyer type
 // ============================================================================
-function isServicesInquiry(text: string): boolean {
-  const servicesPatterns = [
-    // English patterns
-    /\b(what (do you|can you) offer|what services|your services|service(s)? you|what.*offer|list.*services|menu|packages?|options|what's available|available services)\b/i,
-    /\b(how much|price|pricing|cost|rate|what.*charge|charge for|fees?)\b/i,
-    /\b(services|servicios|tratamientos|paquetes)\b/i,
-    /\b(info|information|tell me about|details|more about)\b/i,
-    
-    // Spanish patterns
-    /\b(qué (ofrecen|servicios|hacen)|sus servicios|servicios que|qué tienen|qué.*ofrecen|lista.*servicios|menú|paquetes?|opciones|qué hay disponible)\b/i,
-    /\b(cuánto|precio|costo|tarifa|cuánto cobran|cobran por|tarifas?)\b/i,
-    /\b(información|informe|cuéntame|detalles|más sobre)\b/i,
+type FlyerType = "menu" | "price_list" | "services_flyer" | null;
+
+function detectFlyerType(text: string): FlyerType {
+  const lowerText = text.toLowerCase();
+  
+  // MENU - Food/drink/restaurant related queries
+  const menuPatterns = [
+    /\b(menu|menú|food|comida|dishes|platos|eat|comer|drink|bebida|beverage|appetizer|entrée|dessert|postre|cuisine|cocina|order|ordenar|breakfast|desayuno|lunch|almuerzo|dinner|cena|specials|especiales del día)\b/i,
+    /\b(what do you (serve|have to eat)|qué (sirven|tienen para comer))\b/i,
   ];
   
-  return servicesPatterns.some(p => p.test(text));
+  // PRICE LIST - Explicit pricing/cost inquiries
+  const priceListPatterns = [
+    /\b(price list|lista de precios|pricing|precios|rates|tarifas|cost|costo|how much|cuánto|what.*charge|cobran|fees?|quote|cotización|estimate|estimado|budget|presupuesto)\b/i,
+    /\b(price for|precio de|rate for|tarifa de|cost of|costo de)\b/i,
+  ];
+  
+  // SERVICES FLYER - General service inquiries
+  const servicesFlyerPatterns = [
+    /\b(services|servicios|what (do you|can you) offer|qué (ofrecen|hacen)|your services|sus servicios|packages?|paquetes|options|opciones|treatments?|tratamientos|what's available|qué hay disponible|available services)\b/i,
+    /\b(info|information|información|tell me about|cuéntame|details|detalles|more about|más sobre)\b/i,
+    /\b(brochure|folleto|catalog|catálogo)\b/i,
+  ];
+  
+  // Check in priority order: menu → price_list → services_flyer
+  if (menuPatterns.some(p => p.test(lowerText))) {
+    return "menu";
+  }
+  
+  if (priceListPatterns.some(p => p.test(lowerText))) {
+    return "price_list";
+  }
+  
+  if (servicesFlyerPatterns.some(p => p.test(lowerText))) {
+    return "services_flyer";
+  }
+  
+  return null;
+}
+
+// Legacy function for backward compatibility
+function isServicesInquiry(text: string): boolean {
+  return detectFlyerType(text) !== null;
 }
 
 // ============================================================================
-// FLYER LOOKUP - Check if business has a services flyer
+// FLYER LOOKUP - Check if business has a flyer matching the detected type
 // ============================================================================
 interface FlyerResult {
   url: string | null;
@@ -263,9 +291,47 @@ interface FlyerResult {
 
 async function lookupServicesFlyer(
   supabase: ReturnType<typeof createClient>,
-  businessId: string
+  businessId: string,
+  preferredType?: FlyerType
 ): Promise<FlyerResult> {
   try {
+    // If we have a preferred type, try to find that specific type first
+    if (preferredType) {
+      console.log(`[FLYER] Looking for ${preferredType} flyer for business ${businessId}`);
+      
+      // First try default of preferred type
+      const { data: preferredFlyer } = await supabase
+        .from("media_assets")
+        .select("file_url, asset_type")
+        .eq("business_id", businessId)
+        .eq("is_active", true)
+        .eq("asset_type", preferredType)
+        .eq("is_default", true)
+        .maybeSingle();
+      
+      if (preferredFlyer?.file_url) {
+        console.log(`[FLYER] Found default ${preferredFlyer.asset_type} for business ${businessId}`);
+        return { url: preferredFlyer.file_url, type: preferredFlyer.asset_type };
+      }
+      
+      // Then try any active of preferred type
+      const { data: anyPreferred } = await supabase
+        .from("media_assets")
+        .select("file_url, asset_type")
+        .eq("business_id", businessId)
+        .eq("is_active", true)
+        .eq("asset_type", preferredType)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (anyPreferred?.file_url) {
+        console.log(`[FLYER] Found ${anyPreferred.asset_type} for business ${businessId}`);
+        return { url: anyPreferred.file_url, type: anyPreferred.asset_type };
+      }
+    }
+    
+    // Fallback: try default of any supported type
     const { data: flyer, error } = await supabase
       .from("media_assets")
       .select("file_url, asset_type")
@@ -281,11 +347,11 @@ async function lookupServicesFlyer(
     }
     
     if (flyer?.file_url) {
-      console.log(`[FLYER] Found ${flyer.asset_type} for business ${businessId}`);
+      console.log(`[FLYER] Found fallback default ${flyer.asset_type} for business ${businessId}`);
       return { url: flyer.file_url, type: flyer.asset_type };
     }
     
-    // Fallback: get any active services flyer if no default set
+    // Final fallback: get any active flyer
     const { data: anyFlyer } = await supabase
       .from("media_assets")
       .select("file_url, asset_type")
@@ -1811,11 +1877,12 @@ serve(async (req: Request) => {
 
     console.log(`[AI-CHAT] Response generated in ${performance.responseTimeMs}ms, fallback: ${performance.isFallback}`);
 
-    // Check if user is asking about services and look for flyer
+    // Check if user is asking about services/menu/prices and look for matching flyer
     let flyerResult: FlyerResult = { url: null, type: null };
-    if (isServicesInquiry(userMessage)) {
-      console.log(`[AI-CHAT] Services inquiry detected, checking for flyer...`);
-      flyerResult = await lookupServicesFlyer(supabase, businessId);
+    const detectedFlyerType = detectFlyerType(userMessage);
+    if (detectedFlyerType) {
+      console.log(`[AI-CHAT] ${detectedFlyerType} inquiry detected, checking for matching flyer...`);
+      flyerResult = await lookupServicesFlyer(supabase, businessId, detectedFlyerType);
     }
 
     // Store conversation state with performance metrics
