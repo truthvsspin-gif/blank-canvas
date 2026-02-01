@@ -510,6 +510,174 @@ async function createOrUpdateLead(
 }
 
 // ============================================================================
+// BOOKING CREATION - Auto-create CRM booking when handoff is triggered
+// ============================================================================
+async function createBookingFromConversation(
+  supabase: ReturnType<typeof createClient>,
+  params: {
+    businessId: string;
+    conversationId: string;
+    customerIdentifier: string | null;
+    customerName: string | null;
+    channel: string | null;
+    context: ConversationContext;
+    recommendedService: string | null;
+  }
+): Promise<string | null> {
+  const { businessId, conversationId, customerIdentifier, customerName, channel, context, recommendedService } = params;
+
+  try {
+    // Step 1: Find or create customer
+    let customerId: string | null = null;
+    const phone = customerIdentifier?.startsWith("+") ? customerIdentifier : null;
+
+    if (phone) {
+      // Check if customer exists with this phone
+      const { data: existingCustomer } = await supabase
+        .from("customers")
+        .select("id")
+        .eq("business_id", businessId)
+        .eq("phone", phone)
+        .maybeSingle();
+
+      if (existingCustomer?.id) {
+        customerId = existingCustomer.id;
+        console.log(`[BOOKING] Found existing customer ${customerId} by phone`);
+      }
+    }
+
+    // Create customer if not found
+    if (!customerId) {
+      const vehicleInfoStr = context.vehicleInfo?.brand && context.vehicleInfo?.model
+        ? `${context.vehicleInfo.brand} ${context.vehicleInfo.model}`
+        : context.vehicleInfo?.brand || context.vehicleInfo?.type || null;
+
+      const { data: newCustomer, error: custError } = await supabase
+        .from("customers")
+        .insert({
+          business_id: businessId,
+          full_name: customerName || "Chatbot Lead",
+          phone: phone,
+          vehicle_info: vehicleInfoStr,
+          tags: ["chatbot", channel || "unknown"].filter(Boolean),
+        })
+        .select("id")
+        .single();
+
+      if (custError) {
+        console.error("[BOOKING] Failed to create customer:", custError);
+        return null;
+      }
+
+      customerId = newCustomer?.id || null;
+      console.log(`[BOOKING] Created new customer ${customerId}`);
+    }
+
+    if (!customerId) {
+      console.error("[BOOKING] No customer ID available");
+      return null;
+    }
+
+    // Step 2: Check if booking already exists for this conversation
+    const { data: existingBooking } = await supabase
+      .from("bookings")
+      .select("id")
+      .eq("business_id", businessId)
+      .eq("customer_id", customerId)
+      .eq("source", "chatbot")
+      .eq("status", "pending")
+      .is("scheduled_at", null)
+      .maybeSingle();
+
+    if (existingBooking?.id) {
+      console.log(`[BOOKING] Booking already exists: ${existingBooking.id}`);
+      return existingBooking.id;
+    }
+
+    // Step 3: Create new booking
+    const serviceName = recommendedService || context.recommendationSummary || "TBD";
+
+    const { data: newBooking, error: bookError } = await supabase
+      .from("bookings")
+      .insert({
+        business_id: businessId,
+        customer_id: customerId,
+        service_name: serviceName,
+        status: "pending",
+        source: "chatbot",
+      })
+      .select("id")
+      .single();
+
+    if (bookError) {
+      console.error("[BOOKING] Failed to create booking:", bookError);
+      return null;
+    }
+
+    console.log(`[BOOKING] Created new booking ${newBooking?.id} for service: ${serviceName}`);
+    return newBooking?.id || null;
+  } catch (err) {
+    console.error("[BOOKING] Error in createBookingFromConversation:", err);
+    return null;
+  }
+}
+
+// ============================================================================
+// EXTRACT RECOMMENDED SERVICE FROM AI RESPONSE OR CONTEXT
+// ============================================================================
+function extractRecommendedService(
+  aiResponse: string,
+  services: { name: string; description?: string | null; is_trojan_horse?: boolean }[],
+  context: ConversationContext
+): string | null {
+  if (!services || services.length === 0) return null;
+  
+  const responseLower = aiResponse.toLowerCase();
+  
+  // First, try to find an exact service name match in the AI response
+  for (const service of services) {
+    const serviceName = service.name.toLowerCase();
+    if (responseLower.includes(serviceName)) {
+      console.log(`[SERVICE MATCH] Found "${service.name}" in AI response`);
+      return service.name;
+    }
+  }
+  
+  // If benefit intent is known, match to appropriate service
+  if (context.benefitIntent) {
+    const benefitKeywords: Record<string, string[]> = {
+      shine: ["brillo", "shine", "polish", "pulir", "abrillant", "wax", "cera"],
+      protection: ["ceramic", "cerámico", "ceramico", "coating", "ppf", "protección", "protection", "sellado"],
+      interior: ["interior", "tapicería", "asiento", "seat", "leather", "piel"],
+    };
+    
+    const keywords = benefitKeywords[context.benefitIntent] || [];
+    for (const service of services) {
+      const nameAndDesc = `${service.name} ${service.description || ""}`.toLowerCase();
+      if (keywords.some(kw => nameAndDesc.includes(kw))) {
+        console.log(`[SERVICE MATCH] Matched "${service.name}" by benefit intent: ${context.benefitIntent}`);
+        return service.name;
+      }
+    }
+  }
+  
+  // Fall back to Trojan Horse service if available
+  const trojanHorse = services.find(s => s.is_trojan_horse);
+  if (trojanHorse) {
+    console.log(`[SERVICE MATCH] Using Trojan Horse: "${trojanHorse.name}"`);
+    return trojanHorse.name;
+  }
+  
+  // Last resort: first active service
+  if (services.length > 0) {
+    console.log(`[SERVICE MATCH] Defaulting to first service: "${services[0].name}"`);
+    return services[0].name;
+  }
+  
+  return null;
+}
+
+// ============================================================================
 // STALL DETECTION - Detects when customer is passive/non-advancing
 // ============================================================================
 function isStallResponse(text: string, state: State): boolean {
@@ -1986,8 +2154,28 @@ serve(async (req: Request) => {
       }
     }
     
+    // Create booking when handoff is triggered (new handoff, not repeat)
+    let createdBookingId: string | null = null;
     if (newContext.handoffRequired && !context.handoffRequired) {
       console.log(`[EVENT] handoff_required for business ${businessId}`);
+      
+      // Extract recommended service from AI response or context
+      const recommendedService = extractRecommendedService(reply, services || [], newContext);
+      
+      // Auto-create a CRM booking for this conversation
+      createdBookingId = await createBookingFromConversation(supabase, {
+        businessId,
+        conversationId: conversationId || `auto-${Date.now()}`,
+        customerIdentifier: customerIdentifier || null,
+        customerName: customerName || null,
+        channel: channel || null,
+        context: newContext,
+        recommendedService: recommendedService,
+      });
+      
+      if (createdBookingId) {
+        console.log(`[EVENT] booking_created for business ${businessId}, bookingId: ${createdBookingId}, service: ${recommendedService}`);
+      }
     }
 
     // Queue follow-ups when conversation goes cold or recovery exhausted
