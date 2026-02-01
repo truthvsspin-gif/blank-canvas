@@ -175,19 +175,23 @@ function parseVehicleInfo(text: string): ConversationContext["vehicleInfo"] | nu
 function parseBenefitIntent(text: string): string | null {
   const lowerText = text.toLowerCase();
   
-  if (/\b(shine|shiny|brillo|brillar|new|nuevo|look|lucir|polish|pulir|scratch|rayón|swirl|detalle|detail)\b/i.test(lowerText)) {
+  // Shine/appearance-focused keywords (expanded with more variations)
+  if (/\b(shine|shiny|brillante|brillo|brillar|brilloso|new|nuevo|como nuevo|look|lucir|luzca|polish|pulir|scratch|rayón|rayon|swirl|detalle|detail|clean|limpio|limpia|limpiar|impecable|perfecto)\b/i.test(lowerText)) {
     return "shine";
   }
   
-  if (/\b(protect|proteger|protección|ceramic|cerámico|wax|cera|coating|maintain|mantener|durabilidad|durable|long|largo plazo)\b/i.test(lowerText)) {
+  // Protection-focused keywords (expanded with more variations)
+  if (/\b(protect|proteger|protegido|protección|proteccion|ceramic|cerámico|ceramico|wax|cera|coating|maintain|mantener|durabilidad|durable|durar|duradero|long|largo plazo|preservar|cuidar|cuidado)\b/i.test(lowerText)) {
     return "protection";
   }
   
-  if (/\b(interior|inside|adentro|seats|asientos|leather|piel|cuero|smell|olor|clean inside|limpiar adentro|upholstery|tapicería)\b/i.test(lowerText)) {
+  // Interior-focused keywords
+  if (/\b(interior|inside|adentro|seats|asientos|leather|piel|cuero|smell|olor|clean inside|limpiar adentro|upholstery|tapicería|tapiceria|alfombra|carpet)\b/i.test(lowerText)) {
     return "interior";
   }
   
-  if (/\b(not sure|no sé|unsure|no estoy seguro|don't know|no se|maybe|quizás|options|opciones)\b/i.test(lowerText)) {
+  // Unsure/general inquiry keywords
+  if (/\b(not sure|no sé|no se|unsure|no estoy seguro|don't know|maybe|quizás|quizas|options|opciones|general|basico|básico|simple)\b/i.test(lowerText)) {
     return "unsure";
   }
   
@@ -1216,13 +1220,31 @@ async function processStateMachine(
     
     case STATES.STATE_2_BENEFIT: {
       const benefit = parseBenefitIntent(userMessage);
+      const usage = parseUsageContext(userMessage); // Also check for usage in same message
+      
       if (benefit) {
         newContext.benefitIntent = benefit;
-        if (benefit === "unsure") {
+        // If user also provided usage context in the same message, capture it and skip to prescription
+        if (usage) {
+          newContext.usageContext = usage;
+          newContext.currentState = STATES.STATE_4_PRESCRIPTION;
+          console.log(`[STATE MACHINE] Benefit (${benefit}) + Usage (${usage}) detected together, skipping to prescription`);
+        } else if (benefit === "unsure") {
           newContext.currentState = STATES.STATE_4_PRESCRIPTION;
         } else {
           newContext.currentState = STATES.STATE_3_USAGE;
         }
+      } else if (usage) {
+        // User mentioned usage without explicit benefit - infer shine as default and advance
+        newContext.benefitIntent = "shine"; // default benefit
+        newContext.usageContext = usage;
+        newContext.currentState = STATES.STATE_4_PRESCRIPTION;
+        console.log(`[STATE MACHINE] Usage (${usage}) detected without benefit, defaulting to shine`);
+      } else if (shouldTriggerHandoff(userMessage)) {
+        // User is ready to proceed even without explicit benefit - advance to prescription
+        newContext.benefitIntent = "unsure";
+        newContext.currentState = STATES.STATE_4_PRESCRIPTION;
+        console.log(`[STATE MACHINE] Positive intent detected, advancing to prescription`);
       }
       break;
     }
