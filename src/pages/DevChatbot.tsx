@@ -15,6 +15,14 @@ import {
   Zap,
 } from "lucide-react";
 
+// Generate a stable conversation ID for the session
+function generateConversationId(): string {
+  return `sim_${Date.now()}_${crypto.randomUUID().split('-')[0]}`;
+}
+
+// Simulated customer identifier for memory testing
+const SIMULATED_CUSTOMER_PHONE = "+1234567890";
+
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -116,6 +124,9 @@ export default function DevChatbotPage() {
   // Services state for dynamic prompts
   const [services, setServices] = useState<ServiceRecord[]>([]);
   const [servicesLoading, setServicesLoading] = useState(true);
+  
+  // Conversation ID for state persistence across messages
+  const [conversationId, setConversationId] = useState<string>(() => generateConversationId());
   
   // State machine tracking
   const [conversationState, setConversationState] = useState<ConversationState>({
@@ -284,6 +295,9 @@ export default function DevChatbotPage() {
               body: JSON.stringify({
                 businessId,
                 userMessage: trimmed,
+                conversationId, // Session persistence
+                customerIdentifier: SIMULATED_CUSTOMER_PHONE, // Simulated customer for memory testing
+                channel: selectedChannel,
                 conversationHistory: messages.map((m) => ({
                   role: m.role === "user" ? "user" : "assistant",
                   content: m.text,
@@ -343,12 +357,14 @@ export default function DevChatbotPage() {
       setLoading(false);
       setIsTyping(false);
     },
-    [input, loading, businessId, copy, conversationState.handoffRequired, messages]
+    [input, loading, businessId, copy, conversationState.handoffRequired, messages, conversationId, selectedChannel]
   );
 
   const handleClearChat = () => {
     setMessages([]);
     setError(null);
+    // Generate new conversation ID for fresh session
+    setConversationId(generateConversationId());
     setConversationState({
       currentState: "STATE_0_OPENING",
       handoffRequired: false,
