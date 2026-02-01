@@ -209,6 +209,8 @@ export type Database = {
           recommendation_summary: string | null
           recovery_attempt_count: number
           response_time_ms: number | null
+          scheduled_day: string | null
+          scheduled_time: string | null
           sender_name: string | null
           sender_phone_or_handle: string | null
           status: string
@@ -239,6 +241,8 @@ export type Database = {
           recommendation_summary?: string | null
           recovery_attempt_count?: number
           response_time_ms?: number | null
+          scheduled_day?: string | null
+          scheduled_time?: string | null
           sender_name?: string | null
           sender_phone_or_handle?: string | null
           status?: string
@@ -269,6 +273,8 @@ export type Database = {
           recommendation_summary?: string | null
           recovery_attempt_count?: number
           response_time_ms?: number | null
+          scheduled_day?: string | null
+          scheduled_time?: string | null
           sender_name?: string | null
           sender_phone_or_handle?: string | null
           status?: string
