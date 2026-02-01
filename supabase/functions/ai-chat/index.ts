@@ -157,7 +157,8 @@ function parseVehicleInfo(text: string): ConversationContext["vehicleInfo"] | nu
     sizeClass = "small";
   }
   
-  if (detectedBrand || detectedType) {
+  // Return vehicle info if ANY identifier was detected (brand, model, or type)
+  if (detectedBrand || detectedModel || detectedType) {
     return {
       brand: detectedBrand,
       model: detectedModel,
@@ -219,22 +220,48 @@ function parseUsageContext(text: string): string | null {
 // HANDOFF TRIGGER DETECTION (STATE 6)
 // ============================================================================
 function shouldTriggerHandoff(text: string): boolean {
-  const patterns = [
-    /\b(interested|interesado|i'm in|me interesa|let's do it|hagámoslo|vamos|proceed|adelante|book|reservar|agendar|schedule|programar|yes|sí|si|sounds good|suena bien|perfect|perfecto|next step|siguiente paso|availability|disponibilidad|when can|cuándo puedo)\b/i,
+  const lowerText = text.toLowerCase();
+  
+  // First check if this is a negative/low-intent phrase - if so, don't trigger handoff
+  const negativePatterns = [
+    /\b(no|not|don't|doesn't|won't|nada|nunca|tampoco)\s+(me interesa|interesado|quiero|thanks|gracias)/i,
+    /\b(no me interesa|no estoy interesado|not interested|don't want|no quiero)\b/i,
   ];
   
-  return patterns.some(p => p.test(text));
+  if (negativePatterns.some(p => p.test(lowerText))) {
+    return false;
+  }
+  
+  const patterns = [
+    /\b(interested|interesado|i'm in|me interesa|let's do it|hagámoslo|vamos|proceed|adelante)\b/i,
+    /\b(book|reservar|agendar|schedule|programar|cita|appointment)\b/i,
+    /\b(yes|sí|si|sounds good|suena bien|perfect|perfecto|next step|siguiente paso)\b/i,
+    /\b(availability|disponibilidad|when can|cuándo puedo|cuándo pueden)\b/i,
+  ];
+  
+  return patterns.some(p => p.test(lowerText));
 }
 
 // ============================================================================
 // LOW INTENT DETECTION
 // ============================================================================
 function isLowIntent(text: string): boolean {
+  const lowerText = text.toLowerCase().trim();
+  
+  // Very short dismissive responses
+  if (/^(no|nah|nope|na|meh|ok|k|bye|adios|chao)$/i.test(lowerText)) {
+    return true;
+  }
+  
   const lowIntentPatterns = [
-    /\b(just looking|solo viendo|browsing|curious|curioso|maybe later|después|not now|ahora no|no thanks|no gracias|never mind|olvídalo)\b/i,
+    /\b(just looking|solo viendo|browsing|curious|curioso|maybe later|después|tal vez después)\b/i,
+    /\b(not now|ahora no|no thanks|no gracias|never mind|olvídalo|forget it)\b/i,
+    /\b(not interested|no me interesa|no estoy interesado|don't want|no quiero|paso|pass)\b/i,
+    /\b(too expensive|muy caro|caro|expensive|later|luego|otro día|another day|pensaré|think about it)\b/i,
+    /\b(no need|no necesito|don't need|no hace falta|I'm good|estoy bien)\b/i,
   ];
   
-  return lowIntentPatterns.some(p => p.test(text));
+  return lowIntentPatterns.some(p => p.test(lowerText));
 }
 
 // ============================================================================
@@ -1164,8 +1191,8 @@ async function processStateMachine(
     };
   }
   
-  // Reset recovery count if customer engages meaningfully
-  if (context.recoveryAttemptCount > 0 && !isStallResponse(userMessage, context.currentState)) {
+  // Reset recovery count if customer engages meaningfully (but NOT if they show low intent)
+  if (context.recoveryAttemptCount > 0 && !isStallResponse(userMessage, context.currentState) && !isLowIntent(userMessage)) {
     newContext.recoveryAttemptCount = 0;
     console.log(`[RECOVERY] Customer engaged meaningfully, resetting recovery count`);
   }
@@ -1458,7 +1485,9 @@ async function storeConversationState(
 ): Promise<void> {
   try {
     if (conversationId) {
-      const updateData: Record<string, any> = {
+      const conversationData: Record<string, any> = {
+        business_id: businessId,
+        conversation_id: conversationId,
         current_state: context.currentState,
         vehicle_info: context.vehicleInfo,
         benefit_intent: context.benefitIntent,
@@ -1472,15 +1501,18 @@ async function storeConversationState(
 
       // Add performance metrics if provided
       if (performance) {
-        updateData.response_time_ms = performance.responseTimeMs;
-        updateData.is_fallback = performance.isFallback;
-        updateData.ai_model = performance.aiModel;
+        conversationData.response_time_ms = performance.responseTimeMs;
+        conversationData.is_fallback = performance.isFallback;
+        conversationData.ai_model = performance.aiModel;
       }
 
+      // Use upsert to create or update the conversation record
       await supabase
         .from("conversations")
-        .update(updateData)
-        .eq("id", conversationId);
+        .upsert(conversationData, { 
+          onConflict: "conversation_id",
+          ignoreDuplicates: false 
+        });
     }
 
     await supabase.from("messages").insert([
@@ -1695,7 +1727,9 @@ async function loadConversationContext(
     const { data } = await supabase
       .from("conversations")
       .select("current_state, vehicle_info, benefit_intent, usage_context, recommendation_summary, handoff_required, lead_qualified, recovery_attempt_count")
-      .eq("id", conversationId)
+      .eq("conversation_id", conversationId)
+      .order("updated_at", { ascending: false })
+      .limit(1)
       .single();
 
     if (data) {
