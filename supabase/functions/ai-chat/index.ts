@@ -21,8 +21,9 @@ const STATES = {
   STATE_2_BENEFIT: "STATE_2_BENEFIT",
   STATE_3_USAGE: "STATE_3_USAGE",
   STATE_4_PRESCRIPTION: "STATE_4_PRESCRIPTION",
-  STATE_5_ACTION: "STATE_5_ACTION",
-  STATE_6_HANDOFF: "STATE_6_HANDOFF",
+  STATE_5_SCHEDULE: "STATE_5_SCHEDULE",
+  STATE_6_ACTION: "STATE_6_ACTION",
+  STATE_7_HANDOFF: "STATE_7_HANDOFF",
 } as const;
 
 type State = typeof STATES[keyof typeof STATES];
@@ -41,6 +42,8 @@ interface ConversationContext {
   handoffRequired: boolean;
   leadQualified: boolean;
   recoveryAttemptCount: number; // Intent Recovery Window (0-2)
+  scheduledDay?: string; // Mon-Fri day selection
+  scheduledTime?: string; // morning/afternoon
 }
 
 interface ChatMessage {
@@ -240,6 +243,55 @@ function shouldTriggerHandoff(text: string): boolean {
   ];
   
   return patterns.some(p => p.test(lowerText));
+}
+
+// ============================================================================
+// SCHEDULE RESPONSE PARSING (STATE_5_SCHEDULE)
+// ============================================================================
+function parseScheduleResponse(text: string): { day: string | null; time: string | null } {
+  const lowerText = text.toLowerCase();
+  
+  // Day detection (Spanish & English)
+  const dayPatterns: Record<string, RegExp> = {
+    monday: /\b(monday|lunes)\b/i,
+    tuesday: /\b(tuesday|martes)\b/i,
+    wednesday: /\b(wednesday|miércoles|miercoles)\b/i,
+    thursday: /\b(thursday|jueves)\b/i,
+    friday: /\b(friday|viernes)\b/i,
+  };
+  
+  let detectedDay: string | null = null;
+  for (const [day, pattern] of Object.entries(dayPatterns)) {
+    if (pattern.test(lowerText)) {
+      detectedDay = day;
+      break;
+    }
+  }
+  
+  // Time detection (morning/afternoon)
+  let detectedTime: string | null = null;
+  if (/\b(morning|mañana|am|temprano)\b/i.test(lowerText)) {
+    detectedTime = "morning";
+  } else if (/\b(afternoon|tarde|pm)\b/i.test(lowerText)) {
+    detectedTime = "afternoon";
+  }
+  
+  return { day: detectedDay, time: detectedTime };
+}
+
+// ============================================================================
+// GET NEXT WEEKDAY DATE FROM DAY NAME
+// ============================================================================
+function getNextWeekday(dayName: string): Date {
+  const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  const targetDay = days.indexOf(dayName.toLowerCase());
+  const today = new Date();
+  const currentDay = today.getDay();
+  let daysUntil = targetDay - currentDay;
+  if (daysUntil <= 0) daysUntil += 7;
+  const nextDate = new Date(today);
+  nextDate.setDate(today.getDate() + daysUntil);
+  return nextDate;
 }
 
 // ============================================================================
@@ -594,8 +646,24 @@ async function createBookingFromConversation(
       return existingBooking.id;
     }
 
-    // Step 3: Create new booking
+    // Step 3: Create new booking with scheduled date if available
     const serviceName = recommendedService || context.recommendationSummary || "TBD";
+    
+    // Calculate scheduled date if day was selected
+    let scheduledAt: string | null = null;
+    if (context.scheduledDay) {
+      const scheduledDate = getNextWeekday(context.scheduledDay);
+      // Set time based on morning/afternoon preference (default 10am / 2pm)
+      if (context.scheduledTime === "morning") {
+        scheduledDate.setHours(10, 0, 0, 0);
+      } else if (context.scheduledTime === "afternoon") {
+        scheduledDate.setHours(14, 0, 0, 0);
+      } else {
+        scheduledDate.setHours(10, 0, 0, 0); // Default to morning
+      }
+      scheduledAt = scheduledDate.toISOString();
+      console.log(`[BOOKING] Calculated scheduled_at: ${scheduledAt} from day: ${context.scheduledDay}, time: ${context.scheduledTime || 'default'}`);
+    }
 
     const { data: newBooking, error: bookError } = await supabase
       .from("bookings")
@@ -605,6 +673,7 @@ async function createBookingFromConversation(
         service_name: serviceName,
         status: "pending",
         source: "chatbot",
+        scheduled_at: scheduledAt,
       })
       .select("id")
       .single();
@@ -683,8 +752,10 @@ function extractRecommendedService(
 function isStallResponse(text: string, state: State): boolean {
   const lowerText = text.toLowerCase().trim();
   
-  // Very short/vague responses after recommendation states
-  if (state === STATES.STATE_4_PRESCRIPTION || state === STATES.STATE_5_ACTION) {
+  // Very short/vague responses after recommendation/scheduling states
+  if (state === STATES.STATE_4_PRESCRIPTION || 
+      state === STATES.STATE_5_SCHEDULE || 
+      state === STATES.STATE_6_ACTION) {
     const vaguePatterns = [
       /^(ok|okay|hmm|mhm|alright|sure|bien|bueno|está bien|ya|ah|oh|uh huh)\.?$/i,
       /^(i see|i understand|entiendo|ya veo)\.?$/i,
@@ -940,7 +1011,7 @@ REGLAS ABSOLUTAS (NUNCA ROMPER):
 1. UNA sola pregunta a la vez - SIEMPRE
 2. Respuestas CORTAS (1-3 oraciones máximo)
 3. NUNCA listar servicios, paquetes o menús
-4. NUNCA dar precios sin contexto de valor primero
+4. SIEMPRE incluir el precio cuando menciones un servicio
 5. NUNCA usar jerga técnica con el cliente
 6. NUNCA pedir fotos ni depósitos
 7. NUNCA presionar - sé consultivo, no vendedor agresivo
@@ -955,7 +1026,7 @@ ABSOLUTE RULES (NEVER BREAK):
 1. ONE question at a time - ALWAYS
 2. SHORT responses (1-3 sentences max)
 3. NEVER list services, packages, or menus
-4. NEVER give prices without value context first
+4. ALWAYS include the price when mentioning a service
 5. NEVER use technical jargon with customers
 6. NEVER ask for photos or deposits
 7. NEVER pressure - be consultative, not pushy
@@ -1000,23 +1071,25 @@ Ask if this is a daily-use vehicle or more occasional.`;
       
     case STATES.STATE_4_PRESCRIPTION:
       stateGoal = language === "es"
-        ? `OBJETIVO: Hacer UNA recomendación conceptual basada en el CONTEXTO DE NEGOCIO.
+        ? `OBJETIVO: Hacer UNA recomendación con PRECIO basada en el CONTEXTO DE NEGOCIO.
 1. Breve resumen mostrando que entiendes su situación
 2. Enmarca el valor/beneficio (no proceso técnico)
 3. Haz UNA recomendación del servicio que MEJOR APLICA de tu contexto
-4. Si hay rango de precio, menciona como "generalmente entre X-Y"
-5. Sugiere revisar disponibilidad como siguiente paso
+4. INCLUYE el precio exacto del servicio (ej: '$199')
+5. Propone días disponibles: "Tenemos disponibilidad lunes, miércoles o viernes"
+6. Pregunta cuál día le funciona mejor
 
 IMPORTANTE: Selecciona el servicio que mejor encaja basándote en:
 - Vehículo del cliente (tamaño, tipo)
 - Objetivo deseado (brillo, protección, interior)
 - Patrón de uso (diario vs ocasional)`
-        : `GOAL: Make ONE conceptual recommendation based on BUSINESS CONTEXT.
+        : `GOAL: Make ONE recommendation with PRICE based on BUSINESS CONTEXT.
 1. Brief summary showing you understand their situation
 2. Frame the value/benefit (not technical process)
 3. Make ONE recommendation for the BEST MATCHING service from your context
-4. If price range exists, mention as "typically between X-Y"
-5. Suggest checking availability as next step
+4. INCLUDE the exact price (e.g., '$199')
+5. Propose available days: "We have availability Monday, Wednesday or Friday"
+6. Ask which day works best for them
 
 IMPORTANT: Select the service that best fits based on:
 - Customer's vehicle (size, type)
@@ -1024,17 +1097,35 @@ IMPORTANT: Select the service that best fits based on:
 - Usage pattern (daily vs occasional)`;
       break;
       
-    case STATES.STATE_5_ACTION:
+    case STATES.STATE_5_SCHEDULE:
       stateGoal = language === "es"
-        ? `OBJETIVO: Cierre suave - mover hacia acción.
-Pregunta si les gustaría avanzar y revisar disponibilidad.
-Si tienen objeciones, aborda UNA objeción, luego redirige a acción.`
-        : `GOAL: Soft close - move toward action.
-Ask if they'd like to move forward and check availability.
-If they have objections, address ONE objection only, then redirect to action.`;
+        ? `OBJETIVO: Proponer cita automáticamente.
+1. Si el cliente ya eligió un día, confirma y pregunta mañana o tarde
+2. Si no eligió día, propone: "Tenemos disponibilidad lunes, miércoles o viernes"
+3. NO requiere confirmación del sistema - asume disponibilidad Lunes a Viernes
+4. Respuesta CORTA (2-3 oraciones máximo)`
+        : `GOAL: Propose appointment automatically.
+1. If customer already chose a day, confirm and ask morning or afternoon
+2. If no day chosen, propose: "We have availability Monday, Wednesday or Friday"
+3. NO system confirmation needed - assume Mon-Fri availability
+4. SHORT response (2-3 sentences max)`;
       break;
       
-    case STATES.STATE_6_HANDOFF:
+    case STATES.STATE_6_ACTION:
+      stateGoal = language === "es"
+        ? `OBJETIVO: Confirmar cita y pedir contacto.
+1. Confirma el día y hora seleccionados
+2. Confirma el servicio con precio
+3. Pide nombre y teléfono para finalizar la reserva
+4. Respuesta CORTA (2-3 oraciones)`
+        : `GOAL: Confirm appointment and request contact info.
+1. Confirm the selected day and time
+2. Confirm the service with price
+3. Ask for name and phone to finalize the booking
+4. SHORT response (2-3 sentences)`;
+      break;
+      
+    case STATES.STATE_7_HANDOFF:
       stateGoal = language === "es"
         ? `OBJETIVO: Confirmar traspaso a humano.
 Hazles saber que los conectarás con el equipo para coordinar.
@@ -1145,16 +1236,16 @@ Guide customer toward human contact for assistance.
 - NUNCA listes todos los servicios al cliente
 - Selecciona UNA mejor opción basada en su situación
 - Si nada aplica, guía hacia handoff humano
-- Los precios son rangos, nunca cotizaciones exactas
-- Solo menciona precios DESPUÉS de establecer valor${trojanHorseRule}`
+- SIEMPRE menciona el precio cuando recomiendes un servicio
+- Propone disponibilidad Lunes a Viernes automáticamente${trojanHorseRule}`
     : `USAGE RULES:
 - You may ONLY recommend services listed here
 - NEVER invent services, packages, or prices
 - NEVER list all services to the customer
 - Select ONE best option based on their situation
 - If nothing fits, guide toward human handoff
-- Prices are ranges, never exact quotes
-- Only mention prices AFTER establishing value${trojanHorseRule}`;
+- ALWAYS mention the price when recommending a service
+- Propose Mon-Fri availability automatically${trojanHorseRule}`;
 
   let contextBlock = `${header}
 Business: ${businessName}
@@ -1314,7 +1405,9 @@ async function processStateMachine(
   // INTENT RECOVERY WINDOW (DetaPRO v1.2)
   // Check for stalled/passive responses in recommendation states
   // ============================================================================
-  if ((context.currentState === STATES.STATE_4_PRESCRIPTION || context.currentState === STATES.STATE_5_ACTION) &&
+  if ((context.currentState === STATES.STATE_4_PRESCRIPTION || 
+       context.currentState === STATES.STATE_5_SCHEDULE ||
+       context.currentState === STATES.STATE_6_ACTION) &&
       isStallResponse(userMessage, context.currentState) &&
       context.recoveryAttemptCount < 2) {
     
@@ -1370,11 +1463,11 @@ async function processStateMachine(
       context.currentState !== STATES.STATE_1_VEHICLE &&
       context.currentState !== STATES.STATE_2_BENEFIT &&
       shouldTriggerHandoff(userMessage)) {
-    newContext.currentState = STATES.STATE_6_HANDOFF;
+    newContext.currentState = STATES.STATE_7_HANDOFF;
     newContext.handoffRequired = true;
     newContext.leadQualified = true;
     
-    const systemPrompt = buildSystemPrompt(STATES.STATE_6_HANDOFF, newContext, language, business, services);
+    const systemPrompt = buildSystemPrompt(STATES.STATE_7_HANDOFF, newContext, language, business, services);
     const messages: ChatMessage[] = [
       { role: "system", content: systemPrompt },
       ...conversationHistory.slice(-4),
@@ -1458,20 +1551,47 @@ async function processStateMachine(
     }
     
     case STATES.STATE_4_PRESCRIPTION: {
+      // After prescription, move to scheduling
       newContext.leadQualified = true;
-      newContext.currentState = STATES.STATE_5_ACTION;
+      
+      // Check if user already picked a day in same message
+      const scheduleInPrescription = parseScheduleResponse(userMessage);
+      if (scheduleInPrescription.day) {
+        newContext.scheduledDay = scheduleInPrescription.day;
+        newContext.scheduledTime = scheduleInPrescription.time || undefined;
+        newContext.currentState = STATES.STATE_6_ACTION;
+        console.log(`[STATE MACHINE] Day detected in prescription: ${scheduleInPrescription.day}`);
+      } else {
+        newContext.currentState = STATES.STATE_5_SCHEDULE;
+      }
       break;
     }
     
-    case STATES.STATE_5_ACTION: {
+    case STATES.STATE_5_SCHEDULE: {
+      const schedule = parseScheduleResponse(userMessage);
+      if (schedule.day) {
+        newContext.scheduledDay = schedule.day;
+        newContext.scheduledTime = schedule.time || undefined;
+        newContext.currentState = STATES.STATE_6_ACTION;
+        console.log(`[STATE MACHINE] Schedule captured: ${schedule.day} ${schedule.time || ""}`);
+      } else if (schedule.time && newContext.scheduledDay) {
+        // User specified only time, we already have day
+        newContext.scheduledTime = schedule.time;
+        newContext.currentState = STATES.STATE_6_ACTION;
+        console.log(`[STATE MACHINE] Time captured: ${schedule.time}`);
+      }
+      break;
+    }
+    
+    case STATES.STATE_6_ACTION: {
       if (shouldTriggerHandoff(userMessage)) {
-        newContext.currentState = STATES.STATE_6_HANDOFF;
+        newContext.currentState = STATES.STATE_7_HANDOFF;
         newContext.handoffRequired = true;
       }
       break;
     }
     
-    case STATES.STATE_6_HANDOFF: {
+    case STATES.STATE_7_HANDOFF: {
       // Stay in handoff state
       break;
     }
@@ -1535,14 +1655,18 @@ async function processStateMachine(
         es: "¿Es de uso diario o más ocasional?"
       },
       STATE_4_PRESCRIPTION: {
-        en: "Based on what you've shared, I'd recommend a service focused on your priority. Want to check availability?",
-        es: "Basándome en lo que me compartiste, recomendaría un servicio enfocado en tu prioridad. ¿Revisamos disponibilidad?"
+        en: "Based on what you've shared, I'd recommend a service focused on your priority. We have availability Monday, Wednesday, or Friday - which works best?",
+        es: "Basándome en lo que me compartiste, recomendaría un servicio enfocado en tu prioridad. Tenemos disponibilidad lunes, miércoles o viernes - ¿cuál te funciona mejor?"
       },
-      STATE_5_ACTION: {
-        en: "Would you like to move forward and check availability?",
-        es: "¿Te gustaría avanzar y revisar disponibilidad?"
+      STATE_5_SCHEDULE: {
+        en: "We have availability Monday, Wednesday, and Friday. Which day works best for you?",
+        es: "Tenemos disponibilidad lunes, miércoles y viernes. ¿Cuál día te funciona mejor?"
       },
-      STATE_6_HANDOFF: {
+      STATE_6_ACTION: {
+        en: "Perfect! To confirm your appointment, may I have your name and phone number?",
+        es: "¡Perfecto! Para confirmar tu cita, ¿me puedes dar tu nombre y teléfono?"
+      },
+      STATE_7_HANDOFF: {
         en: "Perfect! I'll connect you with our team to finalize the details. 🎉",
         es: "¡Perfecto! Te conecto con nuestro equipo para finalizar los detalles. 🎉"
       }
@@ -1664,6 +1788,8 @@ async function storeConversationState(
         handoff_required: context.handoffRequired,
         lead_qualified: context.leadQualified,
         recovery_attempt_count: context.recoveryAttemptCount,
+        scheduled_day: context.scheduledDay || null,
+        scheduled_time: context.scheduledTime || null,
         updated_at: new Date().toISOString(),
       };
 
@@ -1894,7 +2020,7 @@ async function loadConversationContext(
   try {
     const { data } = await supabase
       .from("conversations")
-      .select("current_state, vehicle_info, benefit_intent, usage_context, recommendation_summary, handoff_required, lead_qualified, recovery_attempt_count")
+      .select("current_state, vehicle_info, benefit_intent, usage_context, recommendation_summary, handoff_required, lead_qualified, recovery_attempt_count, scheduled_day, scheduled_time")
       .eq("conversation_id", conversationId)
       .order("updated_at", { ascending: false })
       .limit(1)
@@ -1910,6 +2036,8 @@ async function loadConversationContext(
         handoffRequired: data.handoff_required || false,
         leadQualified: data.lead_qualified || false,
         recoveryAttemptCount: data.recovery_attempt_count || 0,
+        scheduledDay: data.scheduled_day || undefined,
+        scheduledTime: data.scheduled_time || undefined,
       };
     }
   } catch (err) {
@@ -2182,7 +2310,7 @@ serve(async (req: Request) => {
     const shouldQueueFollowUps = 
       newContext.recoveryAttemptCount >= 2 || // Recovery attempts exhausted
       newContext.handoffRequired || // Handoff triggered
-      newContext.currentState === STATES.STATE_6_HANDOFF;
+      newContext.currentState === STATES.STATE_7_HANDOFF;
     
     if (shouldQueueFollowUps && conversationId) {
       // Use created lead_id or fetch existing one
