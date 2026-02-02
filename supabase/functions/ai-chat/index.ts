@@ -268,11 +268,14 @@ function parseScheduleResponse(text: string): { day: string | null; time: string
     }
   }
   
-  // Time detection (morning/afternoon)
+  // Time detection (morning/afternoon) - use phrase patterns to handle Spanish expressions
   let detectedTime: string | null = null;
-  if (/\b(morning|mañana|am|temprano)\b/i.test(lowerText)) {
+  // Morning patterns: "por la mañana", "en la mañana", "morning", "am", "temprano"
+  if (/(?:por\s+la\s+mañana|en\s+la\s+mañana|de\s+la\s+mañana|\bmorning\b|\bam\b|\btemprano\b)/i.test(lowerText)) {
     detectedTime = "morning";
-  } else if (/\b(afternoon|tarde|pm)\b/i.test(lowerText)) {
+  } 
+  // Afternoon patterns: "por la tarde", "en la tarde", "afternoon", "pm"
+  else if (/(?:por\s+la\s+tarde|en\s+la\s+tarde|de\s+la\s+tarde|\bafternoon\b|\bpm\b)/i.test(lowerText)) {
     detectedTime = "afternoon";
   }
   
