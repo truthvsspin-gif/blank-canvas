@@ -90,8 +90,38 @@ interface CustomerMemory {
 // LANGUAGE DETECTION
 // ============================================================================
 function detectLanguage(text: string): "en" | "es" {
-  const spanishPatterns = /\b(hola|buenos|gracias|por favor|quiero|necesito|cuánto|cómo|dónde|qué|tiene|pueden|está|servicio|cita|reserva|vehículo|carro|coche|auto|camioneta)\b/i;
-  return spanishPatterns.test(text) ? "es" : "en";
+  const lowerText = text.toLowerCase();
+  
+  // Comprehensive Spanish patterns - common words, phrases, and sentence structures
+  const spanishPatterns = [
+    // Greetings & courtesy
+    /\b(hola|buenos|buenas|gracias|por favor|disculpa|perdón|oye|oiga)\b/,
+    // Common verbs (conjugated forms)
+    /\b(quiero|necesito|tengo|busco|estoy|puedo|puede|tienen|hacen|ofrecen|cuestan|cuesta)\b/,
+    // Question words
+    /\b(cuánto|cómo|dónde|qué|cuál|cuándo|quién|por qué)\b/,
+    // Common nouns
+    /\b(servicio|cita|reserva|vehículo|carro|coche|auto|camioneta|precio|lavado|limpieza)\b/,
+    // Pronouns & articles
+    /\b(mi|mis|tu|tus|su|sus|el|la|los|las|un|una|unos|unas)\b/,
+    // Prepositions & connectors
+    /\b(para|sobre|desde|hasta|entre|con|sin|hacia|durante)\b/,
+    // Time expressions
+    /\b(hoy|mañana|ahora|después|antes|siempre|nunca|lunes|martes|miércoles|jueves|viernes)\b/,
+    // Common adjectives
+    /\b(bien|bueno|buena|mejor|nuevo|nueva|grande|pequeño|diario|semanal)\b/,
+    // Affirmations/negations
+    /\b(sí|claro|exacto|perfecto|vale|ok|no|nada|tampoco|también)\b/,
+    // Common phrases
+    /\b(me llamo|me gustaría|lo uso|es mi|para mi|por la|en la|de la)\b/,
+    // Vehicle-related Spanish
+    /\b(brillo|protección|interior|exterior|pintura|detallado|encerado|pulido)\b/,
+  ];
+  
+  // Check if any Spanish pattern matches
+  const isSpanish = spanishPatterns.some(pattern => pattern.test(lowerText));
+  
+  return isSpanish ? "es" : "en";
 }
 
 // ============================================================================
