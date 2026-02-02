@@ -240,9 +240,25 @@ function shouldTriggerHandoff(text: string): boolean {
     /\b(book|reservar|agendar|schedule|programar|cita|appointment)\b/i,
     /\b(yes|sí|si|sounds good|suena bien|perfect|perfecto|next step|siguiente paso)\b/i,
     /\b(availability|disponibilidad|when can|cuándo puedo|cuándo pueden)\b/i,
+    /\b(confirm|confirmo|confirmar)\b/i,
   ];
   
   return patterns.some(p => p.test(lowerText));
+}
+
+// Detect if user provided contact information (name + phone)
+function hasContactInfo(text: string): boolean {
+  // Phone number patterns
+  const phonePattern = /\b(\d{3}[-.\s]?\d{3,4}[-.\s]?\d{4}|\d{10,11}|\+\d{1,3}\s?\d{6,12})\b/;
+  
+  // Name patterns - common name introductions or just capitalized words before numbers
+  const nameIntroPattern = /\b(me llamo|my name is|soy|i'm|i am)\s+([A-Z][a-z]+)/i;
+  const capitalizedName = /\b([A-Z][a-z]+)\s+([A-Z][a-z]+)?\s*[,\s]+.*\d{3}/;
+  
+  const hasPhone = phonePattern.test(text);
+  const hasName = nameIntroPattern.test(text) || capitalizedName.test(text);
+  
+  return hasPhone && hasName;
 }
 
 // ============================================================================
@@ -1585,9 +1601,12 @@ async function processStateMachine(
     }
     
     case STATES.STATE_6_ACTION: {
-      if (shouldTriggerHandoff(userMessage)) {
+      // Trigger handoff if user says "yes/confirm" OR provides contact info (name + phone)
+      if (shouldTriggerHandoff(userMessage) || hasContactInfo(userMessage)) {
         newContext.currentState = STATES.STATE_7_HANDOFF;
         newContext.handoffRequired = true;
+        newContext.leadQualified = true;
+        console.log(`[STATE MACHINE] Contact info or confirmation detected, moving to handoff`);
       }
       break;
     }
