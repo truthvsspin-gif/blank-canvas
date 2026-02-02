@@ -110,8 +110,8 @@ function detectLanguage(text: string): "en" | "es" {
     /\b(hoy|mañana|ahora|después|antes|siempre|nunca|lunes|martes|miércoles|jueves|viernes)\b/,
     // Common adjectives
     /\b(bien|bueno|buena|mejor|nuevo|nueva|grande|pequeño|diario|semanal)\b/,
-    // Affirmations/negations
-    /\b(sí|claro|exacto|perfecto|vale|ok|no|nada|tampoco|también)\b/,
+    // Affirmations/negations (excluding universal terms like "ok", "no" alone)
+    /\b(sí|claro|exacto|perfecto|vale|nada|tampoco|también)\b/,
     // Common phrases
     /\b(me llamo|me gustaría|lo uso|es mi|para mi|por la|en la|de la)\b/,
     // Vehicle-related Spanish
