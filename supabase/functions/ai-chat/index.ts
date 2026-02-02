@@ -1461,11 +1461,9 @@ async function processStateMachine(
     console.log(`[RECOVERY] Customer engaged meaningfully, resetting recovery count`);
   }
   
-  // Check for handoff triggers (after STATE_2)
-  if (context.currentState !== STATES.STATE_0_OPENING && 
-      context.currentState !== STATES.STATE_1_VEHICLE &&
-      context.currentState !== STATES.STATE_2_BENEFIT &&
-      shouldTriggerHandoff(userMessage)) {
+  // Check for handoff triggers ONLY in late states (after scheduling)
+  // Earlier states should follow the consultative flow through prescription and scheduling
+  if (context.currentState === STATES.STATE_6_ACTION && shouldTriggerHandoff(userMessage)) {
     newContext.currentState = STATES.STATE_7_HANDOFF;
     newContext.handoffRequired = true;
     newContext.leadQualified = true;
