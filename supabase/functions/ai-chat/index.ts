@@ -44,6 +44,7 @@ interface ConversationContext {
   recoveryAttemptCount: number; // Intent Recovery Window (0-2)
   scheduledDay?: string; // Mon-Fri day selection
   scheduledTime?: string; // morning/afternoon
+  detectedLanguage?: "en" | "es"; // Persisted language preference
 }
 
 interface ChatMessage {
@@ -1340,9 +1341,16 @@ function buildSystemPrompt(
   // Dynamic business context (from DB)
   const businessContext = buildBusinessContextBlock(business, services, language);
 
+  // Language enforcement instruction - placed at the very beginning for maximum compliance
+  const languageInstruction = language === "es"
+    ? "🔒 IDIOMA OBLIGATORIO: Responde SIEMPRE en ESPAÑOL. Bajo ninguna circunstancia respondas en inglés."
+    : "🔒 MANDATORY LANGUAGE: ALWAYS respond in ENGLISH. Never respond in Spanish.";
+
   // Assemble final prompt with clear separation
-  // ORDER: Confirmed Facts → Constraints → Agent Brain → Business Context → State Goal
-  return `${confirmedFacts}
+  // ORDER: Language → Confirmed Facts → Constraints → Agent Brain → Business Context → State Goal
+  return `${languageInstruction}
+
+${confirmedFacts}
 
 ${negativeConstraints}
 
@@ -1811,6 +1819,9 @@ async function storeConversationState(
         scheduled_day: context.scheduledDay || null,
         scheduled_time: context.scheduledTime || null,
         updated_at: new Date().toISOString(),
+        metadata: {
+          detected_language: context.detectedLanguage || "en",
+        },
       };
 
       // Add performance metrics if provided
@@ -2040,13 +2051,16 @@ async function loadConversationContext(
   try {
     const { data } = await supabase
       .from("conversations")
-      .select("current_state, vehicle_info, benefit_intent, usage_context, recommendation_summary, handoff_required, lead_qualified, recovery_attempt_count, scheduled_day, scheduled_time")
+      .select("current_state, vehicle_info, benefit_intent, usage_context, recommendation_summary, handoff_required, lead_qualified, recovery_attempt_count, scheduled_day, scheduled_time, metadata")
       .eq("conversation_id", conversationId)
       .order("updated_at", { ascending: false })
       .limit(1)
       .single();
 
     if (data) {
+      // Extract language from metadata
+      const storedLanguage = data.metadata?.detected_language as "en" | "es" | undefined;
+      
       return {
         currentState: data.current_state || STATES.STATE_0_OPENING,
         vehicleInfo: data.vehicle_info || {},
@@ -2058,6 +2072,7 @@ async function loadConversationContext(
         recoveryAttemptCount: data.recovery_attempt_count || 0,
         scheduledDay: data.scheduled_day || undefined,
         scheduledTime: data.scheduled_time || undefined,
+        detectedLanguage: storedLanguage,
       };
     }
   } catch (err) {
@@ -2197,8 +2212,9 @@ serve(async (req: Request) => {
     const serviceCount = services?.length || 0;
     console.log(`[AI-CHAT] Loaded ${serviceCount} active services for business ${businessId}`);
 
-    // Detect language
-    const language = detectLanguage(userMessage);
+    // Detect language from first message, then persist it
+    // If context already has language, use that (consistency across conversation)
+    let detectedLang = detectLanguage(userMessage);
 
     // FAIL-SAFE: If no business found, return neutral handoff message
     if (!business) {
@@ -2224,10 +2240,18 @@ serve(async (req: Request) => {
     // Load conversation context (state machine state)
     let context = await loadConversationContext(supabase, conversationId || null);
     
+    // Use persisted language from context if available, otherwise use detected language
+    const language: "en" | "es" = context.detectedLanguage || detectedLang;
+    
     // Load customer memory and merge into context
     const customerMemory = await loadCustomerMemory(supabase, businessId, customerIdentifier || null);
     const { context: enrichedContext, isReturning } = mergeMemoryIntoContext(context, customerMemory);
     context = enrichedContext;
+    
+    // Ensure language is set in context for persistence
+    if (!context.detectedLanguage) {
+      context.detectedLanguage = language;
+    }
 
     if (isReturning && customerMemory) {
       console.log(`[AI-CHAT] Returning customer detected! Visits: ${customerMemory.conversationCount}, Last: ${customerMemory.lastInteractionAt}`);
@@ -2246,6 +2270,9 @@ serve(async (req: Request) => {
       conversationHistory,
       GROQ_API_KEY
     );
+    
+    // Persist language in new context
+    newContext.detectedLanguage = language;
 
     console.log(`[AI-CHAT] Response generated in ${performance.responseTimeMs}ms, fallback: ${performance.isFallback}`);
 
