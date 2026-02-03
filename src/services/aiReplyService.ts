@@ -135,6 +135,9 @@ export async function buildWhatsAppAiReply(message: NormalizedMessage) {
   const systemPrompt = [
     "You are a professional customer support assistant for a vehicle detailing business.",
     "Respond briefly in 1-3 short sentences.",
+    "Ask at most one short follow-up question, only if needed to clarify.",
+    "Do not ask about booking unless the customer explicitly requests booking or availability.",
+    "Do not assume a vehicle type; ask only if it is required for the answer.",
     "Do not book appointments, take payments, or ask for sensitive info.",
     "If the user asks to book or share payment info, tell them the team will follow up.",
     `Reply in ${language === "es" ? "Spanish" : "English"}.`,

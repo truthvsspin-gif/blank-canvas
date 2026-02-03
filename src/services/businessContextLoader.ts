@@ -12,6 +12,9 @@ export type BusinessContext = {
   office_hours: string | null
   language_preference: "en" | "es" | null
   booking_rules: Record<string, unknown>
+  greeting_message: string | null
+  business_description: string | null
+  ai_instructions: string | null
 }
 
 type CachedContext = {
@@ -54,7 +57,7 @@ export async function loadBusinessContext(businessId: string): Promise<BusinessC
   const supabase = getSupabaseAdmin()
   const { data: business } = await supabase
     .from("businesses")
-    .select("id, name, language_preference, office_hours, booking_rules")
+    .select("id, name, language_preference, office_hours, booking_rules, greeting_message, business_description, ai_instructions")
     .eq("id", businessId)
     .single()
 
@@ -71,6 +74,9 @@ export async function loadBusinessContext(businessId: string): Promise<BusinessC
         language_preference?: string | null
         office_hours?: string | null
         booking_rules?: Record<string, unknown> | null
+        greeting_message?: string | null
+        business_description?: string | null
+        ai_instructions?: string | null
       }
     | null
   const serviceRecords = (services as BusinessContext["services"]) ?? []
@@ -89,6 +95,9 @@ export async function loadBusinessContext(businessId: string): Promise<BusinessC
       businessRecord?.booking_rules && typeof businessRecord.booking_rules === "object"
         ? (businessRecord.booking_rules as Record<string, unknown>)
         : {},
+    greeting_message: businessRecord?.greeting_message ?? null,
+    business_description: businessRecord?.business_description ?? null,
+    ai_instructions: businessRecord?.ai_instructions ?? null,
   }
 
   writeCache(businessId, context)

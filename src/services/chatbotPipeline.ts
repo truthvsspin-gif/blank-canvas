@@ -1,4 +1,5 @@
 import type { NormalizedMessage } from "@/services/messageIngest"
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin"
 import { loadBusinessContext, type BusinessContext } from "@/services/businessContextLoader"
 import { qualifyLeadFromMessage } from "@/services/leadQualificationService"
 import { syncLeadToCrm } from "@/services/leadSyncService"
@@ -29,7 +30,7 @@ function detectLanguage(messageText: string): "en" | "es" {
 const intentKeywords = {
   pricing: ["price", "pricing", "cost", "quote", "precio", "costo", "cotizacion"],
   booking: ["book", "booking", "appointment", "reserve", "schedule", "cita", "agendar", "reservar"],
-  services: ["services", "service list", "options", "servicios", "opciones"],
+  services: ["services", "service list", "options", "servicios", "opciones", "include", "included", "package", "paquete", "incluye"],
   hours: ["hours", "open", "horario", "abren", "abierto"],
   complaint: ["complaint", "refund", "problem", "issue", "damage", "queja", "reclamo", "problema", "danos"],
 }
@@ -43,9 +44,6 @@ const vehicleKeywords = [
   "coupe",
   "hatchback",
   "motorcycle",
-  "car",
-  "coche",
-  "auto",
   "camioneta",
   "camion",
   "furgoneta",
@@ -90,7 +88,7 @@ function detectTimePreference(messageText: string): string | null {
     "evening",
     "hoy",
     "manana",
-    "mañana",
+    "manana",
     "esta semana",
     "proxima semana",
     "tarde",
@@ -106,16 +104,77 @@ function detectTimePreference(messageText: string): string | null {
   return null
 }
 
+function normalizeText(input: string) {
+  return input.toLowerCase().replace(/[^a-z0-9\s]/gi, " ").replace(/\s+/g, " ").trim()
+}
+
+function detectService(
+  messageText: string,
+  services: BusinessContext["services"]
+): BusinessContext["services"][number] | null {
+  if (!services || services.length === 0) return null
+  const normalized = normalizeText(messageText)
+  if (!normalized) return null
+  return (
+    services.find((service) => {
+      const name = normalizeText(service.name)
+      if (!name) return false
+      return normalized.includes(name)
+    }) ?? null
+  )
+}
+
+type ConversationContext = {
+  vehicleType: string | null
+  timePreference: string | null
+  selectedService: BusinessContext["services"][number] | null
+}
+
+function buildThreadKey(message: NormalizedMessage) {
+  return message.sender_phone_or_handle || message.conversation_id
+}
+
+async function loadRecentContext(
+  message: NormalizedMessage,
+  services: BusinessContext["services"]
+): Promise<ConversationContext> {
+  const threadKey = buildThreadKey(message)
+  const supabase = getSupabaseAdmin()
+  const { data } = await supabase
+    .from("messages")
+    .select("message_text, direction")
+    .eq("business_id", message.business_id)
+    .eq("conversation_id", threadKey)
+    .order("timestamp", { ascending: false })
+    .limit(8)
+
+  const rows = (data ?? []) as Array<{ message_text?: string | null; direction?: string | null }>
+  let vehicleType: string | null = null
+  let timePreference: string | null = null
+  let selectedService: BusinessContext["services"][number] | null = null
+
+  for (const row of rows) {
+    if (row.direction !== "inbound") continue
+    const text = row.message_text ?? ""
+    if (!vehicleType) vehicleType = detectVehicleType(text)
+    if (!timePreference) timePreference = detectTimePreference(text)
+    if (!selectedService) selectedService = detectService(text, services)
+    if (vehicleType && timePreference && selectedService) break
+  }
+
+  return { vehicleType, timePreference, selectedService }
+}
+
 function formatKnowledgeContext(chunks: Array<{ content: string }>) {
   if (chunks.length === 0) return null
   return chunks
     .map((chunk) => chunk.content.trim())
     .filter(Boolean)
-    .slice(0, 2)
+    .slice(0, 1)
     .join("\n---\n")
 }
 
-function summarizeKnowledge(knowledge: string, maxChars = 360) {
+function summarizeKnowledge(knowledge: string, maxChars = 220) {
   const cleaned = knowledge.replace(/\s+/g, " ").trim()
   if (cleaned.length <= maxChars) return cleaned
   const sentences = cleaned.split(/(?<=[.!?])\s+/)
@@ -126,21 +185,6 @@ function summarizeKnowledge(knowledge: string, maxChars = 360) {
     summary = summary ? `${summary} ${sentence}` : sentence
   }
   return summary || cleaned.slice(0, maxChars)
-}
-
-function formatServiceSummary(context: BusinessContext, language: "en" | "es"): string {
-  if (context.services.length === 0) {
-    return language === "es" ? "No hay servicios configurados." : "No services configured yet."
-  }
-  return context.services
-    .slice(0, 3)
-    .map((service) => {
-      const price = service.base_price ? `$${service.base_price}` : null
-      const duration = service.duration_minutes ? `${service.duration_minutes} min` : null
-      const pieces = [service.name, price ? `desde ${price}` : null, duration].filter(Boolean)
-      return pieces.join(" · ")
-    })
-    .join("\n")
 }
 
 function formatServiceLine(
@@ -156,7 +200,7 @@ function formatServiceLine(
     : language === "es"
     ? "precio a confirmar"
     : "price on request"
-  return [service.name, priceCopy, duration].filter(Boolean).join(" · ")
+  return [service.name, priceCopy, duration].filter(Boolean).join(" - ")
 }
 
 function buildServiceOptions(
@@ -168,10 +212,10 @@ function buildServiceOptions(
       ? "No hay servicios configurados."
       : "No services configured yet."
   }
-  return context.services
-    .slice(0, 3)
-    .map((service) => `• ${formatServiceLine(service, language)}`)
-    .join("\n")
+  const names = context.services.slice(0, 3).map((service) => service.name)
+  return language === "es"
+    ? `Servicios: ${names.join(", ")}.`
+    : `Services: ${names.join(", ")}.`
 }
 
 function buildGreeting(
@@ -179,34 +223,31 @@ function buildGreeting(
   language: "en" | "es"
 ): string {
   const name = context.business_name ?? (language === "es" ? "nuestro equipo" : "our team")
-  const options =
-    language === "es"
-      ? "1) Servicios  2) Precios  3) Reservar cita"
-      : "1) Services  2) Pricing  3) Book an appointment"
+  if (context.greeting_message) {
+    return context.greeting_message
+  }
   return language === "es"
-    ? `Hola, soy el asistente virtual de ${name}. En que te puedo ayudar?\n${options}`
-    : `Hi, I'm the virtual assistant for ${name}. How can I help you today?\n${options}`
+    ? `Hola, soy el asistente virtual de ${name}. En que te puedo ayudar?`
+    : `Hi, I'm the virtual assistant for ${name}. How can I help you today?`
 }
 
 function buildMissingKnowledge(language: "en" | "es") {
   return language === "es"
-    ? "Aun no hay contenido ingestado. Agrega informacion en la base de conocimiento para activar respuestas completas."
-    : "No content ingested yet. Add knowledge base content to enable full responses."
+    ? "Aun no hay informacion cargada. Que servicio te interesa?"
+    : "We don't have detailed info loaded yet. What service are you interested in?"
 }
 
 function buildNoMatchKnowledge(language: "en" | "es") {
   return language === "es"
-    ? "No encontre esa informacion en la base de conocimiento. Puedes indicar el servicio o compartir mas detalles?"
-    : "I couldn't find that in the knowledge base. Can you share the service name or more details?"
+    ? "No encontre esa informacion. Que servicio te interesa?"
+    : "I couldn't find that. Which service are you asking about?"
 }
 
 function buildKnowledgeResponse(
-  language: "en" | "es",
   knowledge: string,
-  nextPrompt: string
+  nextPrompt?: string
 ) {
-  const header = language === "es" ? "Info del negocio:" : "Business info:"
-  return `${header}\n${knowledge}\n${nextPrompt}`.trim()
+  return `${knowledge}${nextPrompt ? ` ${nextPrompt}` : ""}`.trim()
 }
 
 function buildPricingResponse(params: {
@@ -219,20 +260,18 @@ function buildPricingResponse(params: {
   if (!selectedService) {
     const services = buildServiceOptions(context, language)
     return language === "es"
-      ? `Claro. Estos son algunos servicios:\n${services}\nQue servicio te interesa?`
-      : `Sure. Here are a few services:\n${services}\nWhich service are you interested in?`
+      ? `Claro. ${services} Que servicio te interesa?`
+      : `Sure. ${services} Which service are you interested in?`
+  }
+  if (!vehicleType) {
+    return language === "es"
+      ? "Que tipo de vehiculo es (sedan, SUV, pickup, etc.)?"
+      : "What type of vehicle is it (sedan, SUV, pickup, etc.)?"
   }
   const baseLine = formatServiceLine(selectedService, language)
-  const vehicleCopy = vehicleType
-    ? language === "es"
-      ? `para un ${vehicleType}`
-      : `for a ${vehicleType}`
-    : language === "es"
-    ? "para tu vehiculo"
-    : "for your vehicle"
   return language === "es"
-    ? `Para ${selectedService.name} ${vehicleCopy}, los precios suelen ${baseLine.toLowerCase()}. El costo final depende del tamano y la condicion del vehiculo.\nQue tipo de vehiculo es y cuando te gustaria agendar?`
-    : `For ${selectedService.name} ${vehicleCopy}, pricing is ${baseLine.toLowerCase()}. Final cost depends on vehicle size and condition.\nWhat vehicle type is it and what timing works for you?`
+    ? `Para ${selectedService.name} en un ${vehicleType}, el precio suele ${baseLine.toLowerCase()}. El costo final depende del tamano y la condicion.`
+    : `For ${selectedService.name} on a ${vehicleType}, pricing is ${baseLine.toLowerCase()}. Final cost depends on size and condition.`
 }
 
 function buildBookingResponse(params: {
@@ -250,13 +289,13 @@ function buildBookingResponse(params: {
   if (missingService) {
     const services = buildServiceOptions(context, language)
     return language === "es"
-      ? `Perfecto. Que servicio deseas reservar?\n${services}`
-      : `Great. Which service would you like to book?\n${services}`
+      ? `Perfecto. Que servicio deseas reservar? ${services}`
+      : `Great. Which service would you like to book? ${services}`
   }
   if (missingVehicle) {
     return language === "es"
-      ? `Genial. Que tipo de vehiculo es (carro, SUV, camioneta, etc.)?`
-      : `Great. What type of vehicle is it (car, SUV, truck, etc.)?`
+      ? "Genial. Que tipo de vehiculo es (sedan, SUV, pickup, etc.)?"
+      : "Great. What type of vehicle is it (sedan, SUV, pickup, etc.)?"
   }
   if (missingTime) {
     const hours = context.office_hours
@@ -265,12 +304,12 @@ function buildBookingResponse(params: {
         : `Hours: ${context.office_hours}.`
       : ""
     return language === "es"
-      ? `Listo. Que dia y hora te conviene dentro del horario?\n${hours}`.trim()
-      : `All set. What day and time works for you within business hours?\n${hours}`.trim()
+      ? `Listo. Que dia y hora te conviene dentro del horario? ${hours}`.trim()
+      : `All set. What day and time works for you within business hours? ${hours}`.trim()
   }
   return language === "es"
-    ? `Perfecto. Tengo: ${selectedService.name}, ${vehicleType}, ${timePreference}. Necesito tu nombre y un telefono de contacto para confirmar.`
-    : `Perfect. I have: ${selectedService.name}, ${vehicleType}, ${timePreference}. Please share your name and a contact phone to confirm.`
+    ? `Perfecto. Tengo: ${selectedService.name}, ${vehicleType}, ${timePreference}. Cual es el mejor nombre y telefono de contacto para confirmar?`
+    : `Perfect. I have: ${selectedService.name}, ${vehicleType}, ${timePreference}. What's the best name and contact number to confirm?`
 }
 
 function buildEscalation(language: "en" | "es") {
@@ -286,8 +325,8 @@ function buildHoursResponse(context: BusinessContext, language: "en" | "es") {
     ? "Horario disponible a solicitud"
     : "Business hours available on request"
   return language === "es"
-    ? `Nuestro horario es: ${hours}. Te gustaria agendar una cita?`
-    : `Our hours are: ${hours}. Would you like to book an appointment?`
+    ? `Nuestro horario es: ${hours}.`
+    : `Our hours are: ${hours}.`
 }
 
 function generateAIResponse(
@@ -295,7 +334,8 @@ function generateAIResponse(
   context: BusinessContext,
   language: "en" | "es",
   knowledge: string | null,
-  knowledgeExists: boolean
+  knowledgeExists: boolean,
+  conversationContext: ConversationContext
 ): string {
   if (!knowledge && !knowledgeExists) {
     return buildMissingKnowledge(language)
@@ -305,54 +345,61 @@ function generateAIResponse(
   }
 
   const intent = detectIntent(messageText)
-  const vehicleType = detectVehicleType(messageText)
-  const timePreference = detectTimePreference(messageText)
+  const detectedVehicle = detectVehicleType(messageText)
+  const detectedTime = detectTimePreference(messageText)
+  const detectedService = detectService(messageText, context.services)
+  const vehicleType = detectedVehicle ?? conversationContext.vehicleType
+  const timePreference = detectedTime ?? conversationContext.timePreference
+  const selectedService = detectedService ?? conversationContext.selectedService
+  const knowledgeSummary = knowledge ? summarizeKnowledge(knowledge) : null
 
   if (intent.complaint) {
     return buildEscalation(language)
   }
   if (intent.hours) {
-    const nextPrompt =
-      language === "es"
-        ? "Quieres agendar una cita?"
-        : "Would you like to book an appointment?"
-    return buildKnowledgeResponse(language, knowledge ?? "", nextPrompt)
+    return buildHoursResponse(context, language)
   }
   if (intent.services) {
-    const nextPrompt =
-      language === "es"
-        ? "Te interesa un precio o una cita?"
-        : "Would you like pricing or to book an appointment?"
-    return buildKnowledgeResponse(language, knowledge ?? "", nextPrompt)
+    if (knowledgeSummary) {
+      return buildKnowledgeResponse(
+        knowledgeSummary,
+        language === "es" ? "Que servicio te interesa?" : "Which service are you interested in?"
+      )
+    }
+    const services = buildServiceOptions(context, language)
+    return language === "es"
+      ? `${services} Cual te interesa?`
+      : `${services} Which one are you interested in?`
   }
   if (intent.pricing) {
-    const nextPrompt =
-      language === "es"
-        ? "Que servicio y tipo de vehiculo te interesa?"
-        : "Which service and vehicle type are you interested in?"
-    return buildKnowledgeResponse(language, knowledge ?? "", nextPrompt)
+    return buildPricingResponse({
+      context,
+      language,
+      selectedService,
+      vehicleType,
+    })
   }
   if (intent.booking) {
-    const nextPrompt = (() => {
-      if (!vehicleType) {
-        return language === "es"
-          ? "Que tipo de vehiculo es?"
-          : "What type of vehicle is it?"
-      }
-      if (!timePreference) {
-        return language === "es"
-          ? "Que dia y hora prefieres?"
-          : "What day and time do you prefer?"
-      }
-      return language === "es"
-        ? "Listo. Comparte tu nombre y telefono para confirmar."
-        : "Great. Share your name and phone to confirm."
-    })()
-    return buildKnowledgeResponse(language, knowledge ?? "", nextPrompt)
+    return buildBookingResponse({
+      context,
+      language,
+      selectedService,
+      vehicleType,
+      timePreference,
+    })
   }
 
-  const greeting = buildGreeting(context, language)
-  return buildKnowledgeResponse(language, knowledge ?? "", greeting)
+  if (knowledgeSummary) {
+    if (!selectedService && intent.services) {
+      return buildKnowledgeResponse(
+        knowledgeSummary,
+        language === "es" ? "Que servicio te interesa?" : "Which service are you interested in?"
+      )
+    }
+    return buildKnowledgeResponse(knowledgeSummary)
+  }
+
+  return buildGreeting(context, language)
 }
 
 export async function runChatbotPipeline(message: NormalizedMessage): Promise<PipelineResult> {
@@ -373,12 +420,14 @@ export async function runChatbotPipeline(message: NormalizedMessage): Promise<Pi
   )
   const knowledge = formatKnowledgeContext(knowledgeChunks)
   const knowledgeExists = await hasKnowledgeSources(message.business_id)
+  const recentContext = await loadRecentContext(message, context.services)
   const responseText = generateAIResponse(
     message.message_text,
     context,
     detectedLanguage,
     knowledge,
-    knowledgeExists
+    knowledgeExists,
+    recentContext
   )
 
   try {

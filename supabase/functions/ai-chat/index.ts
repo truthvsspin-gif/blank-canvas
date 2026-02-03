@@ -125,6 +125,101 @@ function detectLanguage(text: string): "en" | "es" {
 }
 
 // ============================================================================
+// SIMPLE INTENT DETECTION (FAQ STYLE)
+// ============================================================================
+type SimpleIntent = "pricing" | "services" | "hours" | "booking" | "availability" | "general_question";
+
+function detectSimpleIntent(text: string): SimpleIntent {
+  const lower = text.toLowerCase();
+  if (/\b(book|booking|appointment|reserve|schedule|cita|agendar|reservar)\b/i.test(lower)) return "booking";
+  if (/\b(availability|available|slots?|openings?|hours|horario|disponible)\b/i.test(lower)) return "availability";
+  if (/\b(price|pricing|cost|quote|precio|costo|cotizaci[oó]n|cu[aá]nto|how much|estimate|presupuesto)\b/i.test(lower)) return "pricing";
+  if (/\b(services?|servicios?|packages?|paquetes|menu|men[uú]|options|opciones|included|include|incluye)\b/i.test(lower)) return "services";
+  if (/\b(hours|open|horario|abren|abierto)\b/i.test(lower)) return "hours";
+  return "general_question";
+}
+
+function normalizeText(input: string) {
+  return input.toLowerCase().replace(/[^a-z0-9\s]/gi, " ").replace(/\s+/g, " ").trim();
+}
+
+function detectServiceName(text: string, services: Array<{ name?: string | null }>): string | null {
+  if (!services || services.length === 0) return null;
+  const normalized = normalizeText(text);
+  if (!normalized) return null;
+  const match = services.find((service) => {
+    const name = normalizeText(service.name || "");
+    return name && normalized.includes(name);
+  });
+  return match?.name || null;
+}
+
+function buildServicesReply(services: Array<{ name?: string | null }>, language: "en" | "es") {
+  if (!services || services.length === 0) {
+    return language === "es"
+      ? "Por ahora no tenemos servicios configurados. ¿Qué necesitas?"
+      : "We do not have services listed yet. What do you need help with?";
+  }
+  const names = services.slice(0, 3).map((s) => s.name).filter(Boolean);
+  const list = names.join(", ");
+  return language === "es"
+    ? `Servicios: ${list}. ¿Cuál te interesa?`
+    : `Services: ${list}. Which one are you interested in?`;
+}
+
+function buildHoursReply(officeHours: string | null, language: "en" | "es") {
+  if (officeHours) {
+    return language === "es"
+      ? `Nuestro horario es: ${officeHours}.`
+      : `Our hours are: ${officeHours}.`;
+  }
+  return language === "es"
+    ? "Horario disponible a solicitud."
+    : "Business hours available on request.";
+}
+
+function buildPricingReply(params: {
+  services: Array<{ name?: string | null; base_price?: number | null }>;
+  language: "en" | "es";
+  serviceName: string | null;
+  hasVehicle: boolean;
+}) {
+  const { services, language, serviceName, hasVehicle } = params;
+  if (!serviceName) {
+    return language === "es"
+      ? "¿Qué servicio te interesa?"
+      : "Which service are you interested in?";
+  }
+  const match = services.find((s) => s.name === serviceName);
+  const price = match?.base_price ?? null;
+  if (price != null) {
+    if (!hasVehicle) {
+      return language === "es"
+        ? `Para ${serviceName}, el precio inicia en $${price}. ¿Qué tipo de vehículo es?`
+        : `For ${serviceName}, pricing starts at $${price}. What type of vehicle is it?`;
+    }
+    return language === "es"
+      ? `Para ${serviceName}, el precio inicia en $${price}.`
+      : `For ${serviceName}, pricing starts at $${price}.`;
+  }
+  return language === "es"
+    ? `El precio de ${serviceName} depende del vehículo. ¿Qué tipo de vehículo es?`
+    : `Pricing for ${serviceName} depends on the vehicle. What type of vehicle is it?`;
+}
+
+function buildGeneralReply(greeting: string | null, language: "en" | "es") {
+  const base = greeting?.trim()
+    ? greeting.trim()
+    : language === "es"
+      ? "Hola, gracias por escribirnos."
+      : "Hi, thanks for reaching out.";
+  const question = language === "es"
+    ? "¿Buscas servicios, precios o reservar una cita?"
+    : "Are you looking for services, pricing, or to book?";
+  return `${base} ${question}`.trim();
+}
+
+// ============================================================================
 // VEHICLE PARSING (STATE 1 - Internal)
 // ============================================================================
 function parseVehicleInfo(text: string): ConversationContext["vehicleInfo"] | null {
@@ -1442,8 +1537,8 @@ async function processStateMachine(
       if (error || !content) {
         usedFallback = true;
         const fallback = language === "es"
-          ? "Perfecto, cuando quieras retomarlo estaré aquí. ¡Que tengas buen día! 👋"
-          : "Perfect, whenever you want to revisit it I'll be happy to help. Have a great day! 👋";
+          ? "Perfecto, cuando quieras retomarlo estaré aquí. Que tengas buen día."
+          : "Perfect, whenever you want to revisit it I'll be happy to help. Have a great day.";
         return { 
           reply: fallback, 
           newContext,
@@ -1534,8 +1629,8 @@ async function processStateMachine(
     if (error || !content) {
       usedFallback = true;
       const fallback = language === "es"
-        ? "¡Perfecto! 🎉 Te conecto con la persona encargada para coordinar disponibilidad y confirmar los detalles."
-        : "Perfect! 🎉 I'll connect you with the person in charge to coordinate availability and confirm the details.";
+        ? "Perfecto. Te conecto con la persona encargada para coordinar disponibilidad y confirmar los detalles."
+        : "Perfect. I'll connect you with the person in charge to coordinate availability and confirm the details.";
       return { 
         reply: fallback, 
         newContext,
@@ -1725,8 +1820,8 @@ async function processStateMachine(
         es: "¡Perfecto! Para confirmar tu cita, ¿me puedes dar tu nombre y teléfono?"
       },
       STATE_7_HANDOFF: {
-        en: "Perfect! I'll connect you with our team to finalize the details. 🎉",
-        es: "¡Perfecto! Te conecto con nuestro equipo para finalizar los detalles. 🎉"
+        en: "Perfect. I'll connect you with our team to finalize the details.",
+        es: "Perfecto. Te conecto con nuestro equipo para finalizar los detalles."
       }
     };
     
@@ -2216,7 +2311,7 @@ serve(async (req: Request) => {
     // Load business context
     const { data: business, error: bizError } = await supabase
       .from("businesses")
-      .select("name, language_preference, greeting_message, industry_type, business_description, ai_instructions")
+      .select("name, language_preference, greeting_message, industry_type, business_description, ai_instructions, office_hours")
       .eq("id", businessId)
       .single();
 
@@ -2281,6 +2376,83 @@ serve(async (req: Request) => {
     // Ensure language is set in context for persistence
     if (!context.detectedLanguage) {
       context.detectedLanguage = language;
+    }
+
+    // Capture vehicle info if present in current message (for memory)
+    const parsedVehicle = parseVehicleInfo(userMessage);
+    if (parsedVehicle) {
+      context.vehicleInfo = parsedVehicle;
+    }
+
+    // FAQ-style short responses (match production behavior)
+    const simpleIntent = detectSimpleIntent(userMessage);
+    const isBookingIntent = simpleIntent === "booking" || simpleIntent === "availability";
+    if (!isBookingIntent) {
+      const serviceName = detectServiceName(userMessage, (services || []) as Array<{ name?: string | null }>);
+      const hasVehicle = Boolean(
+        context.vehicleInfo?.brand || context.vehicleInfo?.model || context.vehicleInfo?.type
+      );
+      let reply = "";
+
+      if (simpleIntent === "services") {
+        reply = buildServicesReply(services || [], language);
+      } else if (simpleIntent === "pricing") {
+        reply = buildPricingReply({
+          services: services || [],
+          language,
+          serviceName,
+          hasVehicle,
+        });
+      } else if (simpleIntent === "hours") {
+        reply = buildHoursReply(business?.office_hours || null, language);
+      } else {
+        reply = buildGeneralReply(business?.greeting_message || null, language);
+      }
+
+      // Check for matching flyer (services/pricing)
+      let flyerResult: FlyerResult = { url: null, type: null };
+      const detectedFlyerType = detectFlyerType(userMessage);
+      if (detectedFlyerType) {
+        flyerResult = await lookupServicesFlyer(supabase, businessId, detectedFlyerType);
+      }
+
+      await storeConversationState(
+        supabase,
+        businessId,
+        conversationId || null,
+        userMessage,
+        reply,
+        context,
+        { responseTimeMs: 0, isFallback: false, aiModel: "simple" }
+      );
+
+      await saveCustomerMemory(
+        supabase,
+        businessId,
+        customerIdentifier || null,
+        customerName || null,
+        channel || null,
+        context,
+        isReturning
+      );
+
+      const response: AIResponse = {
+        success: true,
+        reply,
+        intent: simpleIntent,
+        model: "simple",
+        currentState: context.currentState,
+        handoffRequired: context.handoffRequired,
+        leadQualified: context.leadQualified,
+        returningCustomer: isReturning,
+        flyerUrl: flyerResult.url,
+        flyerType: flyerResult.type,
+      };
+
+      return new Response(
+        JSON.stringify(response),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     if (isReturning && customerMemory) {

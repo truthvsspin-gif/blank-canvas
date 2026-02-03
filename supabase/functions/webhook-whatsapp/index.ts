@@ -121,7 +121,7 @@ serve(async (req: Request) => {
 
         // Generate AI response if enabled
         if (business.ai_reply_enabled) {
-          const aiResponse = await generateAIResponse(supabase, message, business);
+          const aiResponse = await generateAIResponse(supabase, message, business, intent);
           
           if (aiResponse) {
             // Record outbound text message
@@ -278,6 +278,111 @@ function detectIntent(text: string): string {
   return "general_question";
 }
 
+type ChatbotThreadState = {
+  vehicleType?: string | null;
+  serviceName?: string | null;
+  timePreference?: string | null;
+  updatedAt?: string | null;
+};
+
+function normalizeText(input: string): string {
+  return input.toLowerCase().replace(/[^a-z0-9\s]/gi, " ").replace(/\s+/g, " ").trim();
+}
+
+function detectVehicleType(text: string): string | null {
+  const lower = text.toLowerCase();
+  if (/\b(suv|crossover|camioneta|4x4)\b/i.test(lower)) return "SUV";
+  if (/\b(pickup|pick-up|pick up|troca)\b/i.test(lower)) return "Pickup";
+  if (/\b(truck|camion)\b/i.test(lower)) return "Truck";
+  if (/\b(sedan|sedÃ¡n)\b/i.test(lower)) return "Sedan";
+  if (/\b(coupe|coupÃ©|deportivo)\b/i.test(lower)) return "Coupe";
+  if (/\b(hatchback|hatch)\b/i.test(lower)) return "Hatchback";
+  if (/\b(van|minivan|mini van|furgoneta)\b/i.test(lower)) return "Van";
+  if (/\b(moto|motorcycle)\b/i.test(lower)) return "Motorcycle";
+  return null;
+}
+
+function detectTimePreference(text: string): string | null {
+  const lower = text.toLowerCase();
+  if (/\b(morning|maÃ±ana|manana|temprano)\b/i.test(lower)) return "morning";
+  if (/\b(afternoon|tarde)\b/i.test(lower)) return "afternoon";
+  if (/\b(evening|noche)\b/i.test(lower)) return "evening";
+  if (/\b(today|hoy|tomorrow|maÃ±ana)\b/i.test(lower)) return "soon";
+  return null;
+}
+
+function detectServiceName(
+  text: string,
+  services: Array<{ name?: string | null }>
+): string | null {
+  if (!services || services.length === 0) return null;
+  const normalized = normalizeText(text);
+  if (!normalized) return null;
+  const match = services.find((s) => {
+    const name = normalizeText(s.name || "");
+    return name && normalized.includes(name);
+  });
+  return match?.name || null;
+}
+
+async function loadThreadState(
+  supabase: any,
+  message: NormalizedMessage
+): Promise<ChatbotThreadState> {
+  const threadKey = message.sender_phone_or_handle || message.conversation_id;
+  const { data } = await supabase
+    .from("inbox_threads")
+    .select("metadata")
+    .eq("business_id", message.business_id)
+    .eq("channel", message.channel)
+    .eq("conversation_id", threadKey)
+    .maybeSingle();
+  const meta = data?.metadata || {};
+  const state = meta?.chatbot_state || {};
+  return {
+    vehicleType: state.vehicleType || null,
+    serviceName: state.serviceName || null,
+    timePreference: state.timePreference || null,
+    updatedAt: state.updatedAt || null,
+  };
+}
+
+async function saveThreadState(
+  supabase: any,
+  message: NormalizedMessage,
+  nextState: ChatbotThreadState
+): Promise<void> {
+  const threadKey = message.sender_phone_or_handle || message.conversation_id;
+  const { data } = await supabase
+    .from("inbox_threads")
+    .select("id, metadata")
+    .eq("business_id", message.business_id)
+    .eq("channel", message.channel)
+    .eq("conversation_id", threadKey)
+    .maybeSingle();
+  if (!data?.id) return;
+  const metadata = data.metadata || {};
+  const chatbotState = {
+    ...(metadata.chatbot_state || {}),
+    ...nextState,
+    updatedAt: new Date().toISOString(),
+  };
+  await supabase
+    .from("inbox_threads")
+    .update({ metadata: { ...metadata, chatbot_state: chatbotState } })
+    .eq("id", data.id);
+}
+
+function trimResponse(text: string, maxSentences = 2, maxChars = 360): string {
+  const cleaned = text.replace(/\s+/g, " ").trim();
+  if (cleaned.length <= maxChars) {
+    const sentences = cleaned.split(/(?<=[.!?])\s+/);
+    if (sentences.length <= maxSentences) return cleaned;
+    return sentences.slice(0, maxSentences).join(" ").trim();
+  }
+  return cleaned.slice(0, maxChars).trim();
+}
+
 async function ensureThread(
   supabase: any,
   message: NormalizedMessage,
@@ -420,7 +525,8 @@ async function trackConversationWindow(supabase: any, message: NormalizedMessage
 async function generateAIResponse(
   supabase: any,
   message: NormalizedMessage,
-  business: any
+  business: any,
+  intent: string
 ): Promise<string | null> {
   const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
   if (!GROQ_API_KEY) {
@@ -449,15 +555,37 @@ async function generateAIResponse(
   ).join("\n") || "No services configured.";
 
   const language = business.language_preference === "es" ? "Spanish" : "English";
+  const threadState = await loadThreadState(supabase, message);
+  const detectedVehicle = detectVehicleType(message.message_text);
+  const detectedService = detectServiceName(message.message_text, services || []);
+  const detectedTime = detectTimePreference(message.message_text);
+  const mergedState: ChatbotThreadState = {
+    vehicleType: detectedVehicle || threadState.vehicleType || null,
+    serviceName: detectedService || threadState.serviceName || null,
+    timePreference: detectedTime || threadState.timePreference || null,
+  };
+  await saveThreadState(supabase, message, mergedState);
+  const knownFacts = [
+    mergedState.serviceName ? `Service: ${mergedState.serviceName}` : null,
+    mergedState.vehicleType ? `Vehicle: ${mergedState.vehicleType}` : null,
+    mergedState.timePreference ? `Timing: ${mergedState.timePreference}` : null,
+  ].filter(Boolean).join(" | ");
   
   const systemPrompt = `You are a helpful AI assistant for ${business.name || "a car detailing business"} responding on WhatsApp.
 Respond in ${language}.
-Be friendly, professional, and concise (1-3 sentences max).
+Be professional and concise (1-2 sentences max).
+Ask at most one short follow-up question, only if needed.
+Do not ask to book unless the customer explicitly asks about booking or availability.
+Do not assume a vehicle type; only ask if needed to answer.
+Avoid emojis and hype.
 
 Your goals:
 1. Answer questions about services, pricing, and hours
 2. Qualify leads by identifying booking interest
 3. If customer wants to book, ask for preferred date/time and vehicle type
+
+Detected intent: ${intent}
+Known facts: ${knownFacts || "None"}
 
 Business Services:
 ${servicesContext}
@@ -471,7 +599,9 @@ Rules:
 - Keep responses short for WhatsApp format
 - Be direct and actionable
 - If you don't know something, offer to connect them with the team
-- When discussing services/pricing, mention you can share a visual service menu`;
+- When discussing services/pricing, mention you can share a visual service menu
+- If intent is services/pricing/packages and service is unknown, ask which service they want (no booking question)
+- If service is known and intent is pricing but vehicle is unknown, ask for vehicle type`;
 
   try {
     const response = await fetch(GROQ_API_URL, {
@@ -498,7 +628,8 @@ Rules:
     }
 
     const data = await response.json();
-    return data.choices?.[0]?.message?.content || null;
+    const reply = data.choices?.[0]?.message?.content || null;
+    return reply ? trimResponse(reply) : null;
   } catch (error) {
     console.error("AI response generation failed:", error);
     return null;

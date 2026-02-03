@@ -176,9 +176,9 @@ export default function DevChatbotPage() {
   const initialMessage: Message = useMemo(() => ({
     id: "welcome",
     role: "bot" as const,
-    text: isEs 
-      ? "¡Perfecto, con gusto te ayudo! 🚗\n\nPara orientarte mejor, ¿para qué vehículo es?\n(Marca, modelo, y si es sedán, SUV o pickup)"
-      : "Perfect, happy to help! 🚗\n\nTo guide you properly, what vehicle is this for?\n(Brand, model, and whether it's a sedan, SUV, or pickup)",
+    text: isEs
+      ? "Hola, gracias por escribirnos. En que te podemos ayudar?"
+      : "Hi, thanks for reaching out. How can we help you today?",
     timestamp: new Date(),
   }), [isEs]);
 
@@ -716,3 +716,4 @@ export default function DevChatbotPage() {
     </div>
   );
 }
+
