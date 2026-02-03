@@ -121,106 +121,67 @@ function detectLanguage(text: string): "en" | "es" {
   // Check if any Spanish pattern matches
   const isSpanish = spanishPatterns.some(pattern => pattern.test(lowerText));
   
-  return isSpanish ? "es" : "en";
-}
-
+  return isSpanish ? "es" : "en";\r\n}\r\n
 // ============================================================================
-// SIMPLE INTENT DETECTION (FAQ STYLE)
+// SIMPLE INTENT & SLOT DETECTION (Match WhatsApp/Instagram)
 // ============================================================================
-type SimpleIntent = "pricing" | "services" | "hours" | "booking" | "availability" | "general_question";
+type WebhookIntent = "pricing" | "services" | "packages" | "booking" | "availability" | "general_question";
 
-function detectSimpleIntent(text: string): SimpleIntent {
+function detectWebhookIntent(text: string): WebhookIntent {
   const lower = text.toLowerCase();
-  if (/\b(book|booking|appointment|reserve|schedule|cita|agendar|reservar)\b/i.test(lower)) return "booking";
-  if (/\b(availability|available|slots?|openings?|hours|horario|disponible)\b/i.test(lower)) return "availability";
-  if (/\b(price|pricing|cost|quote|precio|costo|cotizaci[oó]n|cu[aá]nto|how much|estimate|presupuesto)\b/i.test(lower)) return "pricing";
-  if (/\b(services?|servicios?|packages?|paquetes|menu|men[uú]|options|opciones|included|include|incluye)\b/i.test(lower)) return "services";
-  if (/\b(hours|open|horario|abren|abierto)\b/i.test(lower)) return "hours";
+  const intents: Record<WebhookIntent, string[]> = {
+    pricing: ["price", "pricing", "cost", "quote", "precio", "costo", "cotizacion", "cuanto", "how much"],
+    services: ["service", "services", "servicio", "servicios", "what do you offer", "que ofrecen", "menu", "men�"],
+    packages: ["package", "packages", "paquete", "paquetes", "combo", "deal", "promocion", "promo"],
+    booking: ["book", "booking", "appointment", "reserve", "schedule", "cita", "agendar", "reservar"],
+    availability: ["availability", "available", "slots", "open", "hours", "horario", "disponible"],
+    general_question: [],
+  };
+
+  for (const [intent, keywords] of Object.entries(intents)) {
+    if (keywords.some((kw) => lower.includes(kw))) return intent as WebhookIntent;
+  }
   return "general_question";
 }
 
-function normalizeText(input: string) {
+function detectVehicleTypeSimple(text: string): string | null {
+  const lower = text.toLowerCase();
+  if (/\b(suv|crossover|camioneta|4x4)\b/i.test(lower)) return "SUV";
+  if (/\b(pickup|pick-up|pick up|troca)\b/i.test(lower)) return "Pickup";
+  if (/\b(truck|camion)\b/i.test(lower)) return "Truck";
+  if (/\b(sedan|sed�n)\b/i.test(lower)) return "Sedan";
+  if (/\b(coupe|coup�|deportivo)\b/i.test(lower)) return "Coupe";
+  if (/\b(hatchback|hatch)\b/i.test(lower)) return "Hatchback";
+  if (/\b(van|minivan|mini van|furgoneta)\b/i.test(lower)) return "Van";
+  if (/\b(moto|motorcycle)\b/i.test(lower)) return "Motorcycle";
+  return null;
+}
+
+function normalizeTextSimple(input: string) {
   return input.toLowerCase().replace(/[^a-z0-9\s]/gi, " ").replace(/\s+/g, " ").trim();
 }
 
-function detectServiceName(text: string, services: Array<{ name?: string | null }>): string | null {
+function detectServiceNameSimple(text: string, services: Array<{ name?: string | null }>): string | null {
   if (!services || services.length === 0) return null;
-  const normalized = normalizeText(text);
+  const normalized = normalizeTextSimple(text);
   if (!normalized) return null;
   const match = services.find((service) => {
-    const name = normalizeText(service.name || "");
+    const name = normalizeTextSimple(service.name || "");
     return name && normalized.includes(name);
   });
   return match?.name || null;
 }
 
-function buildServicesReply(services: Array<{ name?: string | null }>, language: "en" | "es") {
-  if (!services || services.length === 0) {
-    return language === "es"
-      ? "Por ahora no tenemos servicios configurados. ¿Qué necesitas?"
-      : "We do not have services listed yet. What do you need help with?";
+function trimResponse(text: string, maxSentences = 2, maxChars = 360): string {
+  const cleaned = text.replace(/\s+/g, " ").trim();
+  if (cleaned.length <= maxChars) {
+    const sentences = cleaned.split(/(?<=[.!?])\s+/);
+    if (sentences.length <= maxSentences) return cleaned;
+    return sentences.slice(0, maxSentences).join(" ").trim();
   }
-  const names = services.slice(0, 3).map((s) => s.name).filter(Boolean);
-  const list = names.join(", ");
-  return language === "es"
-    ? `Servicios: ${list}. ¿Cuál te interesa?`
-    : `Services: ${list}. Which one are you interested in?`;
-}
-
-function buildHoursReply(officeHours: string | null, language: "en" | "es") {
-  if (officeHours) {
-    return language === "es"
-      ? `Nuestro horario es: ${officeHours}.`
-      : `Our hours are: ${officeHours}.`;
-  }
-  return language === "es"
-    ? "Horario disponible a solicitud."
-    : "Business hours available on request.";
-}
-
-function buildPricingReply(params: {
-  services: Array<{ name?: string | null; base_price?: number | null }>;
-  language: "en" | "es";
-  serviceName: string | null;
-  hasVehicle: boolean;
-}) {
-  const { services, language, serviceName, hasVehicle } = params;
-  if (!serviceName) {
-    return language === "es"
-      ? "¿Qué servicio te interesa?"
-      : "Which service are you interested in?";
-  }
-  const match = services.find((s) => s.name === serviceName);
-  const price = match?.base_price ?? null;
-  if (price != null) {
-    if (!hasVehicle) {
-      return language === "es"
-        ? `Para ${serviceName}, el precio inicia en $${price}. ¿Qué tipo de vehículo es?`
-        : `For ${serviceName}, pricing starts at $${price}. What type of vehicle is it?`;
-    }
-    return language === "es"
-      ? `Para ${serviceName}, el precio inicia en $${price}.`
-      : `For ${serviceName}, pricing starts at $${price}.`;
-  }
-  return language === "es"
-    ? `El precio de ${serviceName} depende del vehículo. ¿Qué tipo de vehículo es?`
-    : `Pricing for ${serviceName} depends on the vehicle. What type of vehicle is it?`;
-}
-
-function buildGeneralReply(greeting: string | null, language: "en" | "es") {
-  const base = greeting?.trim()
-    ? greeting.trim()
-    : language === "es"
-      ? "Hola, gracias por escribirnos."
-      : "Hi, thanks for reaching out.";
-  const question = language === "es"
-    ? "¿Buscas servicios, precios o reservar una cita?"
-    : "Are you looking for services, pricing, or to book?";
-  return `${base} ${question}`.trim();
-}
-
-// ============================================================================
-// VEHICLE PARSING (STATE 1 - Internal)
+  return cleaned.slice(0, maxChars).trim();
+}\r\n
+// ============================================================================\r\n// VEHICLE PARSING (STATE 1 - Internal)
 // ============================================================================
 function parseVehicleInfo(text: string): ConversationContext["vehicleInfo"] | null {
   const lowerText = text.toLowerCase();
@@ -2384,101 +2345,88 @@ serve(async (req: Request) => {
       context.vehicleInfo = parsedVehicle;
     }
 
-    // FAQ-style short responses (match production behavior)
-    const simpleIntent = detectSimpleIntent(userMessage);
-    const isBookingIntent = simpleIntent === "booking" || simpleIntent === "availability";
-    if (!isBookingIntent) {
-      const serviceName = detectServiceName(userMessage, (services || []) as Array<{ name?: string | null }>);
-      const hasVehicle = Boolean(
-        context.vehicleInfo?.brand || context.vehicleInfo?.model || context.vehicleInfo?.type
-      );
-      let reply = "";
-
-      if (simpleIntent === "services") {
-        reply = buildServicesReply(services || [], language);
-      } else if (simpleIntent === "pricing") {
-        reply = buildPricingReply({
-          services: services || [],
-          language,
-          serviceName,
-          hasVehicle,
-        });
-      } else if (simpleIntent === "hours") {
-        reply = buildHoursReply(business?.office_hours || null, language);
-      } else {
-        reply = buildGeneralReply(business?.greeting_message || null, language);
-      }
-
-      // Check for matching flyer (services/pricing)
-      let flyerResult: FlyerResult = { url: null, type: null };
-      const detectedFlyerType = detectFlyerType(userMessage);
-      if (detectedFlyerType) {
-        flyerResult = await lookupServicesFlyer(supabase, businessId, detectedFlyerType);
-      }
-
-      await storeConversationState(
-        supabase,
-        businessId,
-        conversationId || null,
-        userMessage,
-        reply,
-        context,
-        { responseTimeMs: 0, isFallback: false, aiModel: "simple" }
-      );
-
-      await saveCustomerMemory(
-        supabase,
-        businessId,
-        customerIdentifier || null,
-        customerName || null,
-        channel || null,
-        context,
-        isReturning
-      );
-
-      const response: AIResponse = {
-        success: true,
-        reply,
-        intent: simpleIntent,
-        model: "simple",
-        currentState: context.currentState,
-        handoffRequired: context.handoffRequired,
-        leadQualified: context.leadQualified,
-        returningCustomer: isReturning,
-        flyerUrl: flyerResult.url,
-        flyerType: flyerResult.type,
-      };
-
-      return new Response(
-        JSON.stringify(response),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     if (isReturning && customerMemory) {
       console.log(`[AI-CHAT] Returning customer detected! Visits: ${customerMemory.conversationCount}, Last: ${customerMemory.lastInteractionAt}`);
     }
     
     console.log(`[AI-CHAT] Business: ${business?.name}, Services: ${serviceCount}, State: ${context.currentState}, Language: ${language}, Returning: ${isReturning}`);
 
-    // Process through state machine WITH Groq
-    // Services are fetched fresh on every request - no caching needed for real-time updates
-    const { reply, newContext, performance } = await processStateMachine(
-      userMessage,
-      context,
-      language,
-      business,
-      services || [],
-      conversationHistory,
-      GROQ_API_KEY
-    );
-    
-    // Persist language in new context
+    // Build Groq prompt to match WhatsApp/Instagram behavior
+    const channelLabel = channel === "instagram" ? "Instagram" : "WhatsApp";
+    const languageLabel = language === "es" ? "Spanish" : "English";
+    const intent = detectWebhookIntent(userMessage);
+    const detectedService = detectServiceNameSimple(userMessage, services || []);
+    const detectedVehicleType = detectVehicleTypeSimple(userMessage);
+    const schedulePref = parseScheduleResponse(userMessage);
+    const knownFacts = [
+  detectedService ? `Service: ${detectedService}` : null,
+  detectedVehicleType ? `Vehicle: ${detectedVehicleType}` : null,
+  schedulePref.time ? `Timing: ${schedulePref.time}` : null,
+].filter(Boolean).join(" | ");
+
+    const { data: knowledge } = await supabase
+  .from("knowledge_chunks")
+  .select("content")
+  .eq("business_id", businessId)
+  .textSearch("content_tsv", userMessage.split(" ").slice(0, 5).join(" | "))
+  .limit(3);
+
+    const knowledgeContext = knowledge?.map((k: any) => k.content).join("\n") || "";
+    const servicesContext = (services || []).map((s: any) =>
+  `${s.name}: ${s.description || ""} - $${s.base_price || "TBD"} (${s.duration_minutes || "?"} min)`
+).join("\n") || "No services configured.";
+
+    const systemPrompt = `You are a helpful AI assistant for ${business?.name || "a car detailing business"} responding on ${channelLabel}.
+Respond in ${languageLabel}.
+Be professional and concise (1-2 sentences max).
+Ask at most one short follow-up question, only if needed.
+Do not ask to book unless the customer explicitly asks about booking or availability.
+Do not assume a vehicle type; only ask if needed to answer.
+Avoid emojis and hype.
+
+Your goals:
+1. Answer questions about services, pricing, and hours
+2. Qualify leads by identifying booking interest
+3. If customer wants to book, ask for preferred date/time and vehicle type
+
+Detected intent: ${intent}
+Known facts: ${knownFacts || "None"}
+
+Business Services:
+${servicesContext}
+
+Knowledge Base:
+${knowledgeContext}
+
+Greeting: ${business?.greeting_message || "Hi! How can I help you today?"}
+
+Rules:
+- Keep responses short for ${channelLabel} format
+- Be direct and actionable
+- If you don't know something, offer to connect them with the team
+- When discussing services/pricing, mention you can share a visual service menu
+- If intent is services/pricing/packages and service is unknown, ask which service they want (no booking question)
+- If service is known and intent is pricing but vehicle is unknown, ask for vehicle type`;
+
+    const messages: ChatMessage[] = [
+  { role: "system", content: systemPrompt },
+  { role: "user", content: userMessage }
+];
+
+    const { content, error, latencyMs } = await callGroqAPI(messages, GROQ_API_KEY);
+    const usedFallback = Boolean(error || !content);
+    const fallbackReply = language === "es"
+  ? "Gracias por tu mensaje. ¿En qué puedo ayudarte?"
+  : "Thanks for your message. How can I help?";
+    const reply = trimResponse(content || fallbackReply);
+    const newContext = { ...context };
+    if (detectedVehicleType && !newContext.vehicleInfo?.type) {
+  newContext.vehicleInfo = { ...(newContext.vehicleInfo || {}), type: detectedVehicleType };
+}
     newContext.detectedLanguage = language;
+    const performance = { responseTimeMs: latencyMs, isFallback: usedFallback, aiModel: DEFAULT_MODEL };
 
-    console.log(`[AI-CHAT] Response generated in ${performance.responseTimeMs}ms, fallback: ${performance.isFallback}`);
-
-    // Check if user is asking about services/menu/prices and look for matching flyer
+    console.log(`[AI-CHAT] Response generated in ${performance.responseTimeMs}ms, fallback: ${performance.isFallback}`);// Check if user is asking about services/menu/prices and look for matching flyer
     let flyerResult: FlyerResult = { url: null, type: null };
     const detectedFlyerType = detectFlyerType(userMessage);
     if (detectedFlyerType) {
@@ -2603,3 +2551,10 @@ serve(async (req: Request) => {
     );
   }
 });
+
+
+
+
+
+
+
