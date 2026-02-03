@@ -79,7 +79,7 @@ serve(async (req: Request) => {
 
       const { data: business } = await supabase
         .from("businesses")
-        .select("chatbot_enabled, ai_reply_enabled, language_preference, greeting_message, flyer_cooldown_hours")
+        .select("chatbot_enabled, ai_reply_enabled, language_preference, greeting_message, flyer_cooldown_hours, office_hours")
         .eq("id", businessId)
         .single();
 
@@ -245,7 +245,18 @@ function detectIntent(text: string): string {
   return "general_question";
 }
 
-type ChatbotThreadState = {
+
+type SimpleIntent = "pricing" | "services" | "hours" | "booking" | "availability" | "general_question";
+
+function detectSimpleIntent(text: string): SimpleIntent {
+  const lower = text.toLowerCase();
+  if (/\b(book|booking|appointment|reserve|schedule|cita|agendar|reservar)\b/i.test(lower)) return "booking";
+  if (/\b(availability|available|slots?|openings?|hours|horario|disponible)\b/i.test(lower)) return "availability";
+  if (/\b(price|pricing|cost|quote|precio|costo|cotizaci[o�]n|cu[a�]nto|how much|estimate|presupuesto)\b/i.test(lower)) return "pricing";
+  if (/\b(services?|servicios?|packages?|paquetes|menu|men[u�]|options|opciones|included|include|incluye)\b/i.test(lower)) return "services";
+  if (/\b(hours|open|horario|abren|abierto)\b/i.test(lower)) return "hours";
+  return "general_question";
+}type ChatbotThreadState = {
   vehicleType?: string | null;
   serviceName?: string | null;
   timePreference?: string | null;
@@ -292,7 +303,71 @@ function detectServiceName(
   return match?.name || null;
 }
 
-async function loadThreadState(
+
+function buildServicesReply(services: Array<{ name?: string | null }>, language: "en" | "es") {
+  if (!services || services.length === 0) {
+    return language === "es"
+      ? "Por ahora no tenemos servicios configurados. ¿Qué necesitas?"
+      : "We do not have services listed yet. What do you need help with?";
+  }
+  const names = services.slice(0, 3).map((s) => s.name).filter(Boolean);
+  const list = names.join(", ");
+  return language === "es"
+    ? `Servicios: ${list}. ¿Cuál te interesa?`
+    : `Services: ${list}. Which one are you interested in?`;
+}
+
+function buildHoursReply(officeHours: string | null, language: "en" | "es") {
+  if (officeHours) {
+    return language === "es"
+      ? `Nuestro horario es: ${officeHours}.`
+      : `Our hours are: ${officeHours}.`;
+  }
+  return language === "es"
+    ? "Horario disponible a solicitud."
+    : "Business hours available on request.";
+}
+
+function buildPricingReply(params: {
+  services: Array<{ name?: string | null; base_price?: number | null }>;
+  language: "en" | "es";
+  serviceName: string | null;
+  hasVehicle: boolean;
+}) {
+  const { services, language, serviceName, hasVehicle } = params;
+  if (!serviceName) {
+    return language === "es"
+      ? "¿Qué servicio te interesa?"
+      : "Which service are you interested in?";
+  }
+  const match = services.find((s) => s.name === serviceName);
+  const price = match?.base_price ?? null;
+  if (price != null) {
+    if (!hasVehicle) {
+      return language === "es"
+        ? `Para ${serviceName}, el precio inicia en $${price}. ¿Qué tipo de vehículo es?`
+        : `For ${serviceName}, pricing starts at $${price}. What type of vehicle is it?`;
+    }
+    return language === "es"
+      ? `Para ${serviceName}, el precio inicia en $${price}.`
+      : `For ${serviceName}, pricing starts at $${price}.`;
+  }
+  return language === "es"
+    ? `El precio de ${serviceName} depende del vehículo. ¿Qué tipo de vehículo es?`
+    : `Pricing for ${serviceName} depends on the vehicle. What type of vehicle is it?`;
+}
+
+function buildGeneralReply(greeting: string | null, language: "en" | "es") {
+  const base = greeting?.trim()
+    ? greeting.trim()
+    : language === "es"
+      ? "Hola, gracias por escribirnos."
+      : "Hi, thanks for reaching out.";
+  const question = language === "es"
+    ? "¿Buscas servicios, precios o reservar una cita?"
+    : "Are you looking for services, pricing, or to book?";
+  return `${base} ${question}`.trim();
+}async function loadThreadState(
   supabase: any,
   message: NormalizedMessage
 ): Promise<ChatbotThreadState> {
@@ -535,7 +610,29 @@ async function generateAIResponse(
     mergedState.timePreference ? `Timing: ${mergedState.timePreference}` : null,
   ].filter(Boolean).join(" | ");
 
-  const systemPrompt = `You are a helpful AI assistant for ${business.name || "a car detailing business"} responding on Instagram.
+    const languageCode: "en" | "es" = business.language_preference === "es" ? "es" : "en";
+  const simpleIntent = detectSimpleIntent(message.message_text);
+  const isBookingIntent = simpleIntent === "booking" || simpleIntent === "availability";
+  if (!isBookingIntent) {
+    let reply = "";
+    if (simpleIntent === "services") {
+      reply = buildServicesReply(services || [], languageCode);
+    } else if (simpleIntent === "pricing") {
+      const hasVehicle = Boolean(mergedState.vehicleType);
+      reply = buildPricingReply({
+        services: services || [],
+        language: languageCode,
+        serviceName: mergedState.serviceName || null,
+        hasVehicle,
+      });
+    } else if (simpleIntent === "hours") {
+      reply = buildHoursReply(business.office_hours || null, languageCode);
+    } else {
+      reply = buildGeneralReply(business.greeting_message || null, languageCode);
+    }
+    return trimResponse(reply, 2, 360);
+  }
+const systemPrompt = `You are a helpful AI assistant for ${business.name || "a car detailing business"} responding on Instagram.
 Respond in ${language}.
 Be professional and concise (1-2 sentences max).
 Ask at most one short follow-up question, only if needed.
@@ -863,3 +960,7 @@ async function qualifyLead(
     qualification_reason: `intent=${intent}`,
   });
 }
+
+
+
+
