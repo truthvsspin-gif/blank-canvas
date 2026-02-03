@@ -323,8 +323,10 @@ function detectServiceName(
     return name && normalized.includes(name);
   });
   return match?.name || null;
-}\n${question}`.trim();
-}async function loadThreadState(
+
+}
+
+async function loadThreadState(
   supabase: any,
   message: NormalizedMessage
 ): Promise<ChatbotThreadState> {
@@ -570,7 +572,7 @@ async function generateAIResponse(
     mergedState.timePreference ? `Timing: ${mergedState.timePreference}` : null,
   ].filter(Boolean).join(" | ");
   
-    const languageCode: "en" | "es" = business.language_preference === "es" ? "es" : "en";\nconst systemPrompt = `You are a helpful AI assistant for ${business.name || "a car detailing business"} responding on WhatsApp.
+    const systemPrompt = `You are a helpful AI assistant for ${business.name || "a car detailing business"} responding on WhatsApp.
 Respond in ${language}.
 Be professional and concise (1-2 sentences max).
 Ask at most one short follow-up question, only if needed.

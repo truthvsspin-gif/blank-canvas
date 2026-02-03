@@ -121,7 +121,9 @@ function detectLanguage(text: string): "en" | "es" {
   // Check if any Spanish pattern matches
   const isSpanish = spanishPatterns.some(pattern => pattern.test(lowerText));
   
-  return isSpanish ? "es" : "en";\r\n}\r\n
+  return isSpanish ? "es" : "en";
+}
+
 // ============================================================================
 // SIMPLE INTENT & SLOT DETECTION (Match WhatsApp/Instagram)
 // ============================================================================
@@ -131,7 +133,7 @@ function detectWebhookIntent(text: string): WebhookIntent {
   const lower = text.toLowerCase();
   const intents: Record<WebhookIntent, string[]> = {
     pricing: ["price", "pricing", "cost", "quote", "precio", "costo", "cotizacion", "cuanto", "how much"],
-    services: ["service", "services", "servicio", "servicios", "what do you offer", "que ofrecen", "menu", "menú"],
+    services: ["service", "services", "servicio", "servicios", "what do you offer", "que ofrecen", "menu", "menï¿½"],
     packages: ["package", "packages", "paquete", "paquetes", "combo", "deal", "promocion", "promo"],
     booking: ["book", "booking", "appointment", "reserve", "schedule", "cita", "agendar", "reservar"],
     availability: ["availability", "available", "slots", "open", "hours", "horario", "disponible"],
@@ -149,8 +151,8 @@ function detectVehicleTypeSimple(text: string): string | null {
   if (/\b(suv|crossover|camioneta|4x4)\b/i.test(lower)) return "SUV";
   if (/\b(pickup|pick-up|pick up|troca)\b/i.test(lower)) return "Pickup";
   if (/\b(truck|camion)\b/i.test(lower)) return "Truck";
-  if (/\b(sedan|sedán)\b/i.test(lower)) return "Sedan";
-  if (/\b(coupe|coupé|deportivo)\b/i.test(lower)) return "Coupe";
+  if (/\b(sedan|sedï¿½n)\b/i.test(lower)) return "Sedan";
+  if (/\b(coupe|coupï¿½|deportivo)\b/i.test(lower)) return "Coupe";
   if (/\b(hatchback|hatch)\b/i.test(lower)) return "Hatchback";
   if (/\b(van|minivan|mini van|furgoneta)\b/i.test(lower)) return "Van";
   if (/\b(moto|motorcycle)\b/i.test(lower)) return "Motorcycle";
@@ -180,8 +182,10 @@ function trimResponse(text: string, maxSentences = 2, maxChars = 360): string {
     return sentences.slice(0, maxSentences).join(" ").trim();
   }
   return cleaned.slice(0, maxChars).trim();
-}\r\n
-// ============================================================================\r\n// VEHICLE PARSING (STATE 1 - Internal)
+}
+
+// ============================================================================
+// VEHICLE PARSING (STATE 1 - Internal)
 // ============================================================================
 function parseVehicleInfo(text: string): ConversationContext["vehicleInfo"] | null {
   const lowerText = text.toLowerCase();
