@@ -2248,7 +2248,7 @@ serve(async (req: Request) => {
 
     // FAIL-SAFE: If no business found, return neutral handoff message
     if (!business) {
-      const failsafeMsg = language === "es"
+      const failsafeMsg = detectedLang === "es"
         ? "Quiero asegurarme de darte la orientación correcta. Permíteme conectarte con el equipo para asistirte mejor."
         : "I want to make sure you get the right guidance. Let me connect you with the team to assist you properly.";
       
@@ -2258,7 +2258,7 @@ serve(async (req: Request) => {
           reply: failsafeMsg,
           intent: null,
           model: DEFAULT_MODEL,
-          currentState: STATES.STATE_6_HANDOFF,
+          currentState: STATES.STATE_7_HANDOFF,
           handoffRequired: true,
           leadQualified: false,
           returningCustomer: false,
