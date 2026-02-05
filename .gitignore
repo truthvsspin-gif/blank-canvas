@@ -40,3 +40,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+# Local design/flow exports
+Chatbot_Consultative_Sales_Flow.pdf
+Consultative_Sales_Chatbot_Full_Diagram.pdf
