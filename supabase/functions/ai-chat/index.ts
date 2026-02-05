@@ -33,6 +33,7 @@ interface ConversationContext {
   vehicleInfo: {
     brand?: string;
     model?: string;
+    year?: string;
     type?: string;
     sizeClass?: string;
   };
@@ -61,6 +62,7 @@ interface AIRequest {
   channel?: string;
   userMessage: string;
   conversationHistory?: ChatMessage[];
+  model?: string; // Optional Groq model override
 }
 
 interface AIResponse {
@@ -174,6 +176,22 @@ function detectServiceNameSimple(text: string, services: Array<{ name?: string |
   return match?.name || null;
 }
 
+function buildServiceInquiryReply(
+  language: "en" | "es",
+  serviceName: string,
+  priceText: string,
+  askVehicle: boolean
+): string {
+  if (language === "es") {
+    return askVehicle
+      ? `Recomiendo ${serviceName} (${priceText}). ¿Para qué vehículo es? (marca, modelo, año)`
+      : `Recomiendo ${serviceName} (${priceText}). ¿Buscas brillo a corto plazo o protección a largo plazo?`;
+  }
+  return askVehicle
+    ? `I recommend ${serviceName} (${priceText}). What vehicle is this for? (brand, model, year)`
+    : `I recommend ${serviceName} (${priceText}). Are you looking for short-term shine or long-term protection?`;
+}
+
 function trimResponse(text: string, maxSentences = 2, maxChars = 360): string {
   const cleaned = text.replace(/\s+/g, " ").trim();
   if (cleaned.length <= maxChars) {
@@ -198,7 +216,7 @@ function parseVehicleInfo(text: string): ConversationContext["vehicleInfo"] | nu
   ];
   
   const typePatterns = {
-    sedan: /\b(sedan|sedán|car|carro|coche|auto)\b/i,
+    sedan: /\b(sedan|sedán)\b/i,
     suv: /\b(suv|crossover|camioneta|truck|4x4)\b/i,
     pickup: /\b(pickup|pick-up|pick up|troca|truck)\b/i,
     coupe: /\b(coupe|coupé|deportivo|sports car)\b/i,
@@ -208,6 +226,7 @@ function parseVehicleInfo(text: string): ConversationContext["vehicleInfo"] | nu
   
   let detectedBrand: string | undefined;
   let detectedModel: string | undefined;
+  let detectedYear: string | undefined;
   let detectedType: string | undefined;
   
   for (const brand of brands) {
@@ -243,19 +262,27 @@ function parseVehicleInfo(text: string): ConversationContext["vehicleInfo"] | nu
       break;
     }
   }
+
+  const yearMatch = text.match(/\b(19|20)\d{2}\b/);
+  if (yearMatch) {
+    detectedYear = yearMatch[0];
+  }
   
-  let sizeClass = "medium";
+  let sizeClass: string | undefined;
   if (detectedType === "pickup" || detectedType === "suv") {
     sizeClass = "large";
   } else if (detectedType === "coupe" || detectedType === "hatchback") {
     sizeClass = "small";
+  } else if (detectedType) {
+    sizeClass = "medium";
   }
   
-  // Return vehicle info if ANY identifier was detected (brand, model, or type)
-  if (detectedBrand || detectedModel || detectedType) {
+  // Return vehicle info if a concrete identifier was detected (brand/model/year)
+  if (detectedBrand || detectedModel || detectedYear) {
     return {
       brand: detectedBrand,
       model: detectedModel,
+      year: detectedYear,
       type: detectedType,
       sizeClass,
     };
@@ -271,12 +298,12 @@ function parseBenefitIntent(text: string): string | null {
   const lowerText = text.toLowerCase();
   
   // Shine/appearance-focused keywords (expanded with more variations)
-  if (/\b(shine|shiny|brillante|brillo|brillar|brilloso|new|nuevo|como nuevo|look|lucir|luzca|polish|pulir|scratch|rayón|rayon|swirl|detalle|detail|clean|limpio|limpia|limpiar|impecable|perfecto)\b/i.test(lowerText)) {
+  if (/\b(shine|shiny|brillante|brillo|brillar|brilloso|new|nuevo|como nuevo|look|lucir|luzca|polish|pulir|scratch|rayón|rayon|swirl|detalle|detail|clean|limpio|limpia|limpiar|impecable|perfecto|short term|corto plazo|quick|rápido)\b/i.test(lowerText)) {
     return "shine";
   }
   
   // Protection-focused keywords (expanded with more variations)
-  if (/\b(protect|proteger|protegido|protección|proteccion|ceramic|cerámico|ceramico|wax|cera|coating|maintain|mantener|durabilidad|durable|durar|duradero|long|largo plazo|preservar|cuidar|cuidado)\b/i.test(lowerText)) {
+  if (/\b(protect|proteger|protegido|protección|proteccion|ceramic|cerámico|ceramico|wax|cera|coating|maintain|mantener|durabilidad|durable|durar|duradero|long|long term|largo plazo|preservar|cuidar|cuidado)\b/i.test(lowerText)) {
     return "protection";
   }
   
@@ -839,6 +866,18 @@ function extractRecommendedService(
       }
     }
   }
+
+  // If no direct match, use routing defaults aligned to the flow
+  const routing = resolveServiceRouting(services as ServiceContext[]);
+  if (context.benefitIntent === "protection" && routing.protection) {
+    return routing.protection.name;
+  }
+  if (context.benefitIntent === "interior" && routing.interior) {
+    return routing.interior.name;
+  }
+  if (routing.anchor) {
+    return routing.anchor.name;
+  }
   
   // Fall back to Trojan Horse service if available
   const trojanHorse = services.find(s => s.is_trojan_horse);
@@ -1021,6 +1060,7 @@ function buildConfirmedFactsBlock(context: ConversationContext, language: "en" |
     const vehicleParts = [
       context.vehicleInfo.brand,
       context.vehicleInfo.model,
+      context.vehicleInfo.year,
       context.vehicleInfo.type ? `(${context.vehicleInfo.type})` : null,
       context.vehicleInfo.sizeClass ? `- ${context.vehicleInfo.sizeClass} size` : null
     ].filter(Boolean).join(" ");
@@ -1069,10 +1109,17 @@ function buildNegativeConstraints(context: ConversationContext, language: "en" |
   const constraints: string[] = [];
   
   if (context.vehicleInfo?.brand || context.vehicleInfo?.model || context.vehicleInfo?.type) {
-    constraints.push(language === "es"
-      ? "❌ YA SABES el vehículo. NO preguntes qué carro/vehículo/tipo tienen."
-      : "❌ You ALREADY KNOW the vehicle. DO NOT ask what car/vehicle/type they have."
-    );
+    if (!context.vehicleInfo?.year) {
+      constraints.push(language === "es"
+        ? "❌ YA SABES el vehículo. SOLO pregunta el año si falta."
+        : "❌ You ALREADY KNOW the vehicle. ONLY ask for the year if missing."
+      );
+    } else {
+      constraints.push(language === "es"
+        ? "❌ YA SABES el vehículo. NO preguntes qué carro/vehículo/tipo tienen."
+        : "❌ You ALREADY KNOW the vehicle. DO NOT ask what car/vehicle/type they have."
+      );
+    }
   }
   
   if (context.benefitIntent) {
@@ -1120,14 +1167,17 @@ Tu trabajo es DIAGNOSTICAR necesidades y PRESCRIBIR UNA solución, no listar opc
 REGLAS ABSOLUTAS (NUNCA ROMPER):
 1. UNA sola pregunta a la vez - SIEMPRE
 2. Respuestas CORTAS (1-3 oraciones máximo)
-3. NUNCA listar servicios, paquetes o menús
-4. SIEMPRE incluir el precio cuando menciones un servicio
-5. NUNCA usar jerga técnica con el cliente
-6. NUNCA pedir fotos ni depósitos
-7. NUNCA presionar - sé consultivo, no vendedor agresivo
-8. SOLO recomienda servicios que existen en tu CONTEXTO DE NEGOCIO
-9. Si no hay servicio que aplique, guía hacia handoff humano
-10. Sé cálido, profesional y humano - responde en Español`
+3. Estrictamente informativo: sin opiniones, sin comentarios del vehículo, sin sobre-explicar
+4. NUNCA listar servicios, paquetes o menús
+5. SIEMPRE incluir el precio cuando menciones un servicio
+6. NUNCA usar jerga técnica con el cliente
+7. NUNCA pedir fotos ni depósitos
+8. NUNCA presionar - sé consultivo, no vendedor agresivo
+9. SOLO recomienda servicios que existen en tu CONTEXTO DE NEGOCIO
+10. Si no hay servicio que aplique, guía hacia handoff humano
+11. Si el cliente hace una pregunta, responde SOLO eso y vuelve al siguiente paso de agenda
+12. Si el cliente pide otra opción, ofrece SOLO la siguiente más fuerte
+13. Sé cálido, profesional y humano - responde en Español`
     : `=== CONSULTATIVE SALES AGENT - CORE RULES ===
 IDENTITY: You are a consultative sales advisor, NOT an informational bot.
 Your job is to DIAGNOSE needs and PRESCRIBE ONE solution, not list options.
@@ -1135,14 +1185,17 @@ Your job is to DIAGNOSE needs and PRESCRIBE ONE solution, not list options.
 ABSOLUTE RULES (NEVER BREAK):
 1. ONE question at a time - ALWAYS
 2. SHORT responses (1-3 sentences max)
-3. NEVER list services, packages, or menus
-4. ALWAYS include the price when mentioning a service
-5. NEVER use technical jargon with customers
-6. NEVER ask for photos or deposits
-7. NEVER pressure - be consultative, not pushy
-8. ONLY recommend services that exist in your BUSINESS CONTEXT
-9. If no service applies, guide toward human handoff
-10. Be warm, professional, and human - reply in English`;
+3. Strictly informational: no opinions, no vehicle commentary, no over-education
+4. NEVER list services, packages, or menus
+5. ALWAYS include the price when mentioning a service
+6. NEVER use technical jargon with customers
+7. NEVER ask for photos or deposits
+8. NEVER pressure - be consultative, not pushy
+9. ONLY recommend services that exist in your BUSINESS CONTEXT
+10. If no service applies, guide toward human handoff
+11. If the customer asks a question, answer ONLY that and return to the next scheduling step
+12. If the customer asks for another option, offer ONLY the next stronger package
+13. Be warm, professional, and human - reply in English`;
 
   // State-specific goals
   let stateGoal = "";
@@ -1150,22 +1203,24 @@ ABSOLUTE RULES (NEVER BREAK):
     case STATES.STATE_0_OPENING:
       stateGoal = language === "es"
         ? `OBJETIVO: Obtener información del vehículo.
-Pregunta amablemente qué vehículo tienen (marca, modelo, tipo como sedán/SUV/pickup).
+Saluda de forma breve y neutral, luego pregunta qué vehículo tienen (marca, modelo y año).
 Sé amigable y acogedor.`
         : `GOAL: Get vehicle information.
-Ask what vehicle this is for (brand, model, type like sedan/SUV/pickup).
+Greet briefly and neutrally, then ask what vehicle this is for (brand, model, and year).
 Be friendly and welcoming.`;
       break;
       
     case STATES.STATE_2_BENEFIT:
       stateGoal = language === "es"
-        ? `OBJETIVO: Entender qué beneficio/problema quieren resolver.
+        ? `OBJETIVO: Entender si buscan brillo a corto plazo o protección a largo plazo.
 ${vehicleRef ? `Menciona su ${vehicleRef} para mostrar que escuchaste.` : ""}
-Pregunta qué buscan lograr: brillo como nuevo, protección, o interior.
+Pregunta si buscan brillo a corto plazo o protección a largo plazo.
+Si piden interior, indícalo y continúa.
 NO listes servicios - pregunta por el RESULTADO que desean.`
         : `GOAL: Understand what benefit/problem they want to solve.
 ${vehicleRef ? `Reference their ${vehicleRef} to show you listened.` : ""}
-Ask what they're mainly looking to achieve: new-look shine, protection, or interior.
+Ask whether they want short-term shine or long-term protection.
+If they need interior work, have them say so.
 DO NOT list services - ask about the OUTCOME they want.`;
       break;
       
@@ -1181,42 +1236,32 @@ Ask if this is a daily-use vehicle or more occasional.`;
       
     case STATES.STATE_4_PRESCRIPTION:
       stateGoal = language === "es"
-        ? `OBJETIVO: Hacer UNA recomendación con PRECIO basada en el CONTEXTO DE NEGOCIO.
-1. Breve resumen mostrando que entiendes su situación
-2. Enmarca el valor/beneficio (no proceso técnico)
-3. Haz UNA recomendación del servicio que MEJOR APLICA de tu contexto
-4. INCLUYE el precio exacto del servicio (ej: '$199')
-5. Propone días disponibles: "Tenemos disponibilidad lunes, miércoles o viernes"
-6. Pregunta cuál día le funciona mejor
-
-IMPORTANTE: Selecciona el servicio que mejor encaja basándote en:
-- Vehículo del cliente (tamaño, tipo)
-- Objetivo deseado (brillo, protección, interior)
-- Patrón de uso (diario vs ocasional)`
-        : `GOAL: Make ONE recommendation with PRICE based on BUSINESS CONTEXT.
-1. Brief summary showing you understand their situation
-2. Frame the value/benefit (not technical process)
-3. Make ONE recommendation for the BEST MATCHING service from your context
-4. INCLUDE the exact price (e.g., '$199')
-5. Propose available days: "We have availability Monday, Wednesday or Friday"
-6. Ask which day works best for them
-
-IMPORTANT: Select the service that best fits based on:
-- Customer's vehicle (size, type)
-- Desired outcome (shine, protection, interior)
-- Usage pattern (daily vs occasional)`;
+        ? `OBJETIVO: Hacer UNA recomendación con PRECIO basada en el ENRUTAMIENTO.
+1. Confirma brevemente que entiendes su objetivo
+2. Si pidió interior → usa el servicio INTERIOR
+3. Si pidió protección a largo plazo → usa PROTECCIÓN
+4. Si es corto plazo o está vago → usa el ANCLA (Exterior)
+5. Incluye qué incluye + precio exacto
+6. Propón disponibilidad Lunes a Viernes y pregunta qué día le funciona`
+        : `GOAL: Make ONE recommendation with PRICE based on ROUTING.
+1. Briefly confirm you understand their goal
+2. If interior requested → use INTERIOR service
+3. If long-term protection → use PROTECTION
+4. If short-term or vague → use ANCHOR (Exterior)
+5. Include what it includes + exact price
+6. Propose Mon–Fri availability and ask which day works`;
       break;
       
     case STATES.STATE_5_SCHEDULE:
       stateGoal = language === "es"
         ? `OBJETIVO: Proponer cita automáticamente.
 1. Si el cliente ya eligió un día, confirma y pregunta mañana o tarde
-2. Si no eligió día, propone: "Tenemos disponibilidad lunes, miércoles o viernes"
+2. Si no eligió día, propone: "Tenemos disponibilidad de lunes a viernes"
 3. NO requiere confirmación del sistema - asume disponibilidad Lunes a Viernes
 4. Respuesta CORTA (2-3 oraciones máximo)`
         : `GOAL: Propose appointment automatically.
 1. If customer already chose a day, confirm and ask morning or afternoon
-2. If no day chosen, propose: "We have availability Monday, Wednesday or Friday"
+2. If no day chosen, propose: "We have availability Monday to Friday"
 3. NO system confirmation needed - assume Mon-Fri availability
 4. SHORT response (2-3 sentences max)`;
       break;
@@ -1273,6 +1318,13 @@ function buildBusinessContextBlock(
   const businessName = business?.name || "the business";
   const businessDesc = business?.business_description || "";
   const customInstructions = business?.ai_instructions || "";
+  const routing = resolveServiceRouting(services);
+  const formatService = (service: ServiceContext | null) => {
+    if (!service) return language === "es" ? "No configurado" : "Not configured";
+    return service.base_price
+      ? `${service.name} - $${service.base_price}`
+      : service.name;
+  };
 
   // If no services are configured, return empty context with warning
   if (!services || services.length === 0) {
@@ -1288,9 +1340,6 @@ DO NOT attempt to sell or recommend specific services.
 Guide customer toward human contact for assistance.
 =========================================`;
   }
-
-  // Find the Trojan Horse service (if any)
-  const trojanHorse = services.find(s => s.is_trojan_horse);
 
   // Build compressed service reasoning context
   const serviceBlocks = services.map((service, idx) => {
@@ -1330,15 +1379,6 @@ Guide customer toward human contact for assistance.
     ? "=== CONTEXTO DE NEGOCIO (SOLO INTERNO - NUNCA MOSTRAR AL CLIENTE) ==="
     : "=== BUSINESS CONTEXT (INTERNAL ONLY - NEVER SHOW TO CUSTOMER) ===";
 
-  // Trojan Horse rule (DetaPRO v1.2)
-  const trojanHorseRule = trojanHorse
-    ? language === "es"
-      ? `\n⭐ REGLA TROJAN HORSE: Para consultas generales ("qué servicios tienen", "cuánto cuesta", "información") 
-      SIEMPRE recomienda SOLO "${trojanHorse.name}" como punto de entrada. NO listes otros servicios.`
-      : `\n⭐ TROJAN HORSE RULE: For general inquiries ("what services", "how much", "information")
-      ALWAYS recommend ONLY "${trojanHorse.name}" as the entry point. DO NOT list other services.`
-    : "";
-
   const rulesBlock = language === "es"
     ? `REGLAS DE USO:
 - SOLO puedes recomendar servicios listados aquí
@@ -1347,7 +1387,7 @@ Guide customer toward human contact for assistance.
 - Selecciona UNA mejor opción basada en su situación
 - Si nada aplica, guía hacia handoff humano
 - SIEMPRE menciona el precio cuando recomiendes un servicio
-- Propone disponibilidad Lunes a Viernes automáticamente${trojanHorseRule}`
+- Propone disponibilidad Lunes a Viernes automáticamente`
     : `USAGE RULES:
 - You may ONLY recommend services listed here
 - NEVER invent services, packages, or prices
@@ -1355,11 +1395,23 @@ Guide customer toward human contact for assistance.
 - Select ONE best option based on their situation
 - If nothing fits, guide toward human handoff
 - ALWAYS mention the price when recommending a service
-- Propose Mon-Fri availability automatically${trojanHorseRule}`;
+- Propose Mon-Fri availability automatically`;
+
+  const routingBlock = language === "es"
+    ? `ENRUTAMIENTO OBLIGATORIO:
+- ANCLA (por defecto salvo interior): ${formatService(routing.anchor)}
+- PROTECCIÓN LARGO PLAZO: ${formatService(routing.protection)}
+- SOLICITUD INTERIOR: ${formatService(routing.interior)}`
+    : `MANDATORY ROUTING:
+- ANCHOR (default unless interior requested): ${formatService(routing.anchor)}
+- LONG-TERM PROTECTION: ${formatService(routing.protection)}
+- INTERIOR REQUEST: ${formatService(routing.interior)}`;
 
   let contextBlock = `${header}
 Business: ${businessName}
 ${businessDesc ? `Description: ${businessDesc}` : ""}
+
+${routingBlock}
 
 AVAILABLE SERVICES:
 ${serviceBlocks}
@@ -1411,6 +1463,30 @@ function inferIdealFor(name: string, description: string): string {
   return "";
 }
 
+// ============================================================================ 
+// SERVICE ROUTING (Anchor/Protection/Interior) 
+// ============================================================================
+function resolveServiceRouting(services: ServiceContext[]) {
+  const findBy = (patterns: RegExp[]) => {
+    return services.find((s) => {
+      const haystack = `${s.name} ${s.description || ""}`.toLowerCase();
+      return patterns.some((p) => p.test(haystack));
+    }) || null;
+  };
+
+  const anchor = findBy([/exterior/]);
+  const protection = findBy([/ceramic/, /coating/, /protection/, /ppf/]);
+  const interior = findBy([/interior/, /inside/, /upholstery/, /seat/, /carpet/]);
+  const trojan = services.find((s) => s.is_trojan_horse) || null;
+  const fallback = services[0] || null;
+
+  return {
+    anchor: anchor || trojan || fallback,
+    protection: protection || anchor || trojan || fallback,
+    interior: interior || anchor || trojan || fallback,
+  };
+}
+
 // ============================================================================
 // ASSEMBLE COMPLETE SYSTEM PROMPT (Agent Brain + Business Context)
 // ============================================================================
@@ -1436,9 +1512,27 @@ function buildSystemPrompt(
     ? "🔒 IDIOMA OBLIGATORIO: Responde SIEMPRE en ESPAÑOL. Bajo ninguna circunstancia respondas en inglés."
     : "🔒 MANDATORY LANGUAGE: ALWAYS respond in ENGLISH. Never respond in Spanish.";
 
+  const masterDirectives = language === "es"
+    ? `=== DIRECTIVAS MAESTRAS (PRIORIDAD MÁXIMA) ===
+1. RESPONDE SIEMPRE la pregunta directa del cliente primero (breve y profesional).
+2. Si falta información crítica para avanzar, pide SOLO una cosa a la vez.
+3. Nunca inventes servicios, precios, horarios ni políticas.
+4. No adelantes la agenda: sigue el estado actual (no propongas agenda antes de tiempo).
+5. Si recomiendas un servicio, incluye el precio exacto disponible.
+6. Mensajes cortos: 1–3 oraciones máximo.`
+    : `=== MASTER DIRECTIVES (HIGHEST PRIORITY) ===
+1. ALWAYS answer the customer’s direct question first (brief and professional).
+2. If critical info is missing to proceed, ask for ONLY one thing at a time.
+3. Never invent services, prices, hours, or policies.
+4. Do not jump ahead: follow the current state (no scheduling early).
+5. If you recommend a service, include the exact available price.
+6. Keep replies short: 1–3 sentences max.`;
+
   // Assemble final prompt with clear separation
   // ORDER: Language → Confirmed Facts → Constraints → Agent Brain → Business Context → State Goal
   return `${languageInstruction}
+
+${masterDirectives}
 
 ${confirmedFacts}
 
@@ -1472,19 +1566,69 @@ async function processStateMachine(
   business: any,
   services: any[],
   conversationHistory: ChatMessage[],
-  apiKey: string
+  apiKey: string,
+  model: string
 ): Promise<StateMachineResult> {
   const newContext = { ...context };
   let lastLatencyMs = 0;
   let usedFallback = false;
+  const overrideInstructions: string[] = [];
   
   console.log(`[STATE MACHINE] Current state: ${context.currentState}, Message: "${userMessage.substring(0, 50)}..."`);
-  
+
+  // Early handling for service/pricing inquiries at the opening step
+  const isOpeningState = context.currentState === STATES.STATE_0_OPENING;
+  const openingVehicleInfo = isOpeningState ? parseVehicleInfo(userMessage) : null;
+
+  if (isOpeningState) {
+    const intent = detectWebhookIntent(userMessage);
+    const detectedService = detectServiceNameSimple(userMessage, services || []);
+    const isServiceInquiry = intent === "services" || intent === "pricing" || intent === "packages" || !!detectedService;
+
+    if (isServiceInquiry) {
+      const benefit = parseBenefitIntent(userMessage);
+      const routing = resolveServiceRouting(services as ServiceContext[]);
+      const service =
+        benefit === "interior" ? routing.interior :
+        benefit === "protection" ? routing.protection :
+        routing.anchor;
+      const serviceName = detectedService || service?.name || "Exterior Detailing";
+      const priceText = service?.base_price ? `$${service.base_price}` : (language === "es" ? "precio por confirmar" : "price TBD");
+      const followUp = openingVehicleInfo
+        ? (language === "es"
+            ? "Luego pregunta si busca brillo a corto plazo o protecci\u00f3n a largo plazo."
+            : "Then ask whether they want short-term shine or long-term protection.")
+        : (language === "es"
+            ? "Luego pide el veh\u00edculo (marca, modelo, a\u00f1o)."
+            : "Then ask for the vehicle (brand, model, year).");
+
+      const override = language === "es"
+        ? `INSTRUCCI\u00d3N OBLIGATORIA PARA ESTA RESPUESTA:
+Responde a la pregunta sobre servicios/precio con UNA sola recomendaci\u00f3n.
+Recomienda: ${serviceName} (${priceText}).
+${followUp}
+NO menciones disponibilidad ni agenda en esta respuesta.`
+        : `MANDATORY OVERRIDE FOR THIS REPLY:
+Answer the services/pricing question with ONE recommendation.
+Recommend: ${serviceName} (${priceText}).
+${followUp}
+Do NOT mention availability or scheduling in this reply.`;
+      overrideInstructions.push(override);
+    } else if (!openingVehicleInfo) {
+      // Hard guard: Opening state must ask for vehicle info unless it's already provided
+      const override = language === "es"
+        ? `INSTRUCCI\u00d3N OBLIGATORIA PARA ESTA RESPUESTA:
+Pregunta SOLO por el veh\u00edculo (marca, modelo, a\u00f1o). No preguntes otra cosa.`
+        : `MANDATORY OVERRIDE FOR THIS REPLY:
+Ask ONLY for the vehicle (brand, model, year). Do not ask anything else.`;
+      overrideInstructions.push(override);
+    }
+  }
   // Check for low intent exit (only after recovery attempts exhausted)
   if (isLowIntent(userMessage)) {
     // If we still have recovery attempts, don't exit yet
     if (context.recoveryAttemptCount < 2 && 
-        (context.currentState === STATES.STATE_4_PRESCRIPTION || context.currentState === STATES.STATE_5_ACTION)) {
+        (context.currentState === STATES.STATE_4_PRESCRIPTION || context.currentState === STATES.STATE_5_SCHEDULE)) {
       console.log(`[RECOVERY] Low intent detected but attempting recovery (attempt ${context.recoveryAttemptCount + 1})`);
       newContext.recoveryAttemptCount = context.recoveryAttemptCount + 1;
       // Fall through to recovery logic below
@@ -1497,23 +1641,15 @@ async function processStateMachine(
         { role: "user", content: userMessage }
       ];
       
-      const { content, error, latencyMs } = await callGroqAPI(messages, apiKey);
+      const { content, error, latencyMs } = await callGroqAPI(messages, apiKey, model);
       lastLatencyMs = latencyMs;
       if (error || !content) {
-        usedFallback = true;
-        const fallback = language === "es"
-          ? "Perfecto, cuando quieras retomarlo estaré aquí. Que tengas buen día."
-          : "Perfect, whenever you want to revisit it I'll be happy to help. Have a great day.";
-        return { 
-          reply: fallback, 
-          newContext,
-          performance: { responseTimeMs: lastLatencyMs, isFallback: true, aiModel: DEFAULT_MODEL }
-        };
+        throw new Error("AI response unavailable.");
       }
       return { 
         reply: content, 
         newContext,
-        performance: { responseTimeMs: lastLatencyMs, isFallback: false, aiModel: DEFAULT_MODEL }
+        performance: { responseTimeMs: lastLatencyMs, isFallback: false, aiModel: model }
       };
     }
   }
@@ -1542,30 +1678,17 @@ async function processStateMachine(
       { role: "user", content: userMessage }
     ];
     
-    const { content, error, latencyMs } = await callGroqAPI(messages, apiKey);
+    const { content, error, latencyMs } = await callGroqAPI(messages, apiKey, model);
     lastLatencyMs = latencyMs;
     
     if (error || !content) {
-      usedFallback = true;
-      // Fallback recovery messages
-      const recoveryFallback = attemptNumber === 1
-        ? (language === "es"
-            ? "Basándome en lo que me compartiste, esta opción realmente se adapta a tu situación. ¿Te gustaría revisar disponibilidad?"
-            : "Based on what you've shared, this option really fits your situation. Would you like to check availability?")
-        : (language === "es"
-            ? "Para simplificarlo: ¿buscas el resultado completo que mencionamos, o algo más básico por ahora?"
-            : "To simplify: are you looking for the full result we discussed, or something more basic for now?");
-      return { 
-        reply: recoveryFallback, 
-        newContext,
-        performance: { responseTimeMs: lastLatencyMs, isFallback: true, aiModel: DEFAULT_MODEL }
-      };
+      throw new Error("AI response unavailable.");
     }
     
     return { 
       reply: content, 
       newContext,
-      performance: { responseTimeMs: lastLatencyMs, isFallback: false, aiModel: DEFAULT_MODEL }
+      performance: { responseTimeMs: lastLatencyMs, isFallback: false, aiModel: model }
     };
   }
   
@@ -1589,30 +1712,22 @@ async function processStateMachine(
       { role: "user", content: userMessage }
     ];
     
-    const { content, error, latencyMs } = await callGroqAPI(messages, apiKey);
+    const { content, error, latencyMs } = await callGroqAPI(messages, apiKey, model);
     lastLatencyMs = latencyMs;
     if (error || !content) {
-      usedFallback = true;
-      const fallback = language === "es"
-        ? "Perfecto. Te conecto con la persona encargada para coordinar disponibilidad y confirmar los detalles."
-        : "Perfect. I'll connect you with the person in charge to coordinate availability and confirm the details.";
-      return { 
-        reply: fallback, 
-        newContext,
-        performance: { responseTimeMs: lastLatencyMs, isFallback: true, aiModel: DEFAULT_MODEL }
-      };
+      throw new Error("AI response unavailable.");
     }
     return { 
       reply: content, 
       newContext,
-      performance: { responseTimeMs: lastLatencyMs, isFallback: false, aiModel: DEFAULT_MODEL }
+      performance: { responseTimeMs: lastLatencyMs, isFallback: false, aiModel: model }
     };
   }
   
   // Process based on current state
   switch (context.currentState) {
     case STATES.STATE_0_OPENING: {
-      const vehicleInfo = parseVehicleInfo(userMessage);
+      const vehicleInfo = openingVehicleInfo;
       if (vehicleInfo) {
         newContext.vehicleInfo = vehicleInfo;
         newContext.currentState = STATES.STATE_2_BENEFIT;
@@ -1627,16 +1742,13 @@ async function processStateMachine(
       
       if (benefit) {
         newContext.benefitIntent = benefit;
-        // If user also provided usage context in the same message, capture it and skip to prescription
+        // If user also provided usage context in the same message, capture it
         if (usage) {
           newContext.usageContext = usage;
-          newContext.currentState = STATES.STATE_4_PRESCRIPTION;
-          console.log(`[STATE MACHINE] Benefit (${benefit}) + Usage (${usage}) detected together, skipping to prescription`);
-        } else if (benefit === "unsure") {
-          newContext.currentState = STATES.STATE_4_PRESCRIPTION;
-        } else {
-          newContext.currentState = STATES.STATE_3_USAGE;
         }
+        // Spec: minimize back-and-forth, go straight to recommendation
+        newContext.currentState = STATES.STATE_4_PRESCRIPTION;
+        console.log(`[STATE MACHINE] Benefit detected (${benefit}), advancing to prescription`);
       } else if (usage) {
         // User mentioned usage without explicit benefit - infer shine as default and advance
         newContext.benefitIntent = "shine"; // default benefit
@@ -1719,7 +1831,10 @@ async function processStateMachine(
   const contextSummary = buildContextSummary(newContext, language);
   
   // Build prompt for current/new state and call Groq
-  const systemPrompt = buildSystemPrompt(newContext.currentState, newContext, language, business, services);
+  const systemPromptBase = buildSystemPrompt(newContext.currentState, newContext, language, business, services);
+  const systemPrompt = overrideInstructions.length > 0
+    ? `${systemPromptBase}\n\n${overrideInstructions.join("\n\n")}`
+    : systemPromptBase;
   
   // Inject context summary at the start of history
   const historyWithContext: ChatMessage[] = contextSummary
@@ -1732,76 +1847,39 @@ async function processStateMachine(
     { role: "user", content: userMessage }
   ];
   
-  let { content, error, latencyMs } = await callGroqAPI(messages, apiKey);
+  let { content, error, latencyMs } = await callGroqAPI(messages, apiKey, model);
   lastLatencyMs = latencyMs;
   
   // Validate response - catch context amnesia
-  if (content && !validateResponse(content, newContext)) {
+  if (content && !validateResponse(content, newContext, newContext.currentState)) {
     console.warn("[VALIDATION] Response failed validation, regenerating with stronger constraints");
-    const reinforcedPrompt = `${systemPrompt}\n\n⚠️ CRITICAL: Your previous response asked about information we already have. DO NOT repeat this mistake. Check CONFIRMED FACTS above.`;
+    const reinforcedPrompt = `${systemPrompt}\n\n⚠️ CRITICAL: Your previous response violated rules. Fix it:\n- Do NOT ask for known info (see CONFIRMED FACTS)\n- Include price when recommending a service\n- Include Mon–Fri availability when scheduling\n- Ask at most ONE short question`;
     const retryMessages: ChatMessage[] = [
       { role: "system", content: reinforcedPrompt },
       ...historyWithContext,
       { role: "user", content: userMessage }
     ];
-    const retry = await callGroqAPI(retryMessages, apiKey);
-    if (retry.content && validateResponse(retry.content, newContext)) {
+    const retry = await callGroqAPI(retryMessages, apiKey, model);
+    if (retry.content) {
       content = retry.content;
       lastLatencyMs = retry.latencyMs;
+      // If still invalid, accept the Groq reply to avoid hard failure.
+      if (!validateResponse(content, newContext, newContext.currentState)) {
+        console.warn("[VALIDATION] Retry still invalid; accepting Groq reply to avoid 500.");
+      }
     } else {
-      // Use fallback if retry also fails validation
-      usedFallback = true;
-      content = "";
+      throw new Error("AI response invalid.");
     }
   }
   
   if (error || !content) {
-    usedFallback = true;
-    // Fallback responses if Groq fails
-    const fallbacks: Record<State, { en: string; es: string }> = {
-      STATE_0_OPENING: {
-        en: "To help you best, what vehicle is this for? (brand, model, type)",
-        es: "Para ayudarte mejor, ¿para qué vehículo es? (marca, modelo, tipo)"
-      },
-      STATE_1_VEHICLE: { en: "", es: "" },
-      STATE_2_BENEFIT: {
-        en: "What are you mainly looking to achieve - shine, protection, or interior refresh?",
-        es: "¿Qué buscas principalmente - brillo, protección, o renovar el interior?"
-      },
-      STATE_3_USAGE: {
-        en: "Is this a daily driver or more occasional use?",
-        es: "¿Es de uso diario o más ocasional?"
-      },
-      STATE_4_PRESCRIPTION: {
-        en: "Based on what you've shared, I'd recommend a service focused on your priority. We have availability Monday, Wednesday, or Friday - which works best?",
-        es: "Basándome en lo que me compartiste, recomendaría un servicio enfocado en tu prioridad. Tenemos disponibilidad lunes, miércoles o viernes - ¿cuál te funciona mejor?"
-      },
-      STATE_5_SCHEDULE: {
-        en: "We have availability Monday, Wednesday, and Friday. Which day works best for you?",
-        es: "Tenemos disponibilidad lunes, miércoles y viernes. ¿Cuál día te funciona mejor?"
-      },
-      STATE_6_ACTION: {
-        en: "Perfect! To confirm your appointment, may I have your name and phone number?",
-        es: "¡Perfecto! Para confirmar tu cita, ¿me puedes dar tu nombre y teléfono?"
-      },
-      STATE_7_HANDOFF: {
-        en: "Perfect. I'll connect you with our team to finalize the details.",
-        es: "Perfecto. Te conecto con nuestro equipo para finalizar los detalles."
-      }
-    };
-    
-    const fallback = fallbacks[newContext.currentState] || fallbacks.STATE_0_OPENING;
-    return { 
-      reply: fallback[language], 
-      newContext,
-      performance: { responseTimeMs: lastLatencyMs, isFallback: true, aiModel: DEFAULT_MODEL }
-    };
+    throw new Error("AI response unavailable.");
   }
   
   return { 
     reply: content, 
     newContext,
-    performance: { responseTimeMs: lastLatencyMs, isFallback: false, aiModel: DEFAULT_MODEL }
+    performance: { responseTimeMs: lastLatencyMs, isFallback: false, aiModel: model }
   };
 }
 
@@ -1812,7 +1890,7 @@ function buildContextSummary(context: ConversationContext, language: "en" | "es"
   const parts: string[] = [];
   
   if (context.vehicleInfo?.brand || context.vehicleInfo?.model) {
-    const vehicle = `${context.vehicleInfo.brand || ""} ${context.vehicleInfo.model || ""} ${context.vehicleInfo.type || ""}`.trim();
+    const vehicle = `${context.vehicleInfo.brand || ""} ${context.vehicleInfo.model || ""} ${context.vehicleInfo.year || ""} ${context.vehicleInfo.type || ""}`.trim();
     parts.push(language === "es" ? `vehículo: ${vehicle}` : `vehicle: ${vehicle}`);
   }
   
@@ -1834,8 +1912,50 @@ function buildContextSummary(context: ConversationContext, language: "en" | "es"
 // ============================================================================
 // VALIDATE RESPONSE (Catch context amnesia)
 // ============================================================================
-function validateResponse(response: string, context: ConversationContext): boolean {
+function validateResponse(response: string, context: ConversationContext, state?: State): boolean {
   const lowerResponse = response.toLowerCase();
+  const questionMarks = (response.match(/\?/g) || []).length;
+  if (questionMarks > 1) {
+    console.warn("[VALIDATION] Response asks too many questions");
+    return false;
+  }
+
+  // Prevent scheduling before prescription/schedule states
+  if (
+    state === STATES.STATE_0_OPENING ||
+    state === STATES.STATE_1_VEHICLE ||
+    state === STATES.STATE_2_BENEFIT ||
+    state === STATES.STATE_3_USAGE
+  ) {
+    const mentionsWeekday = /\b(monday|tuesday|wednesday|thursday|friday|mon\-fri|monday to friday|lunes|martes|mi[eé]rcoles|jueves|viernes|lunes a viernes)\b/i.test(response);
+    if (mentionsWeekday) {
+      console.warn("[VALIDATION] Response mentions scheduling too early");
+      return false;
+    }
+  }
+
+  // State 0 must ask for vehicle (brand/model/year)
+  if (state === STATES.STATE_0_OPENING) {
+    const asksVehicle = /(vehicle|car|truck|suv|veh[ií]culo|carro|coche|auto)/i.test(response);
+    const asksBrand = /(brand|marca)/i.test(response);
+    const asksModel = /(model|modelo)/i.test(response);
+    const asksYear = /(year|año)/i.test(response);
+    if (!(asksVehicle && asksBrand && asksModel && asksYear)) {
+      console.warn("[VALIDATION] Response missing vehicle brand/model/year request");
+      return false;
+    }
+  }
+
+  // State 2 must ask short-term vs long-term (or interior)
+  if (state === STATES.STATE_2_BENEFIT) {
+    const shortTerm = /(short\-term|short term|corto plazo|brillo)/i.test(response);
+    const longTerm = /(long\-term|long term|largo plazo|protecci[oó]n)/i.test(response);
+    const interior = /(interior)/i.test(response);
+    if (!(shortTerm && longTerm) && !interior) {
+      console.warn("[VALIDATION] Response missing short-term vs long-term question");
+      return false;
+    }
+  }
   
   // If we have vehicle info, the response should NOT ask about vehicle
   if (context.vehicleInfo?.brand || context.vehicleInfo?.model || context.vehicleInfo?.type) {
@@ -1844,8 +1964,18 @@ function validateResponse(response: string, context: ConversationContext): boole
                         /what.*do you (have|drive|own)/i.test(response) ||
                         /tell me about your (car|vehicle)/i.test(response);
     if (asksVehicle) {
-      console.warn("[VALIDATION] Response asks about vehicle despite having info");
-      return false;
+      if (!context.vehicleInfo?.year) {
+        const asksOnlyYear = /(year|año)/i.test(response);
+        if (asksOnlyYear) {
+          // Allow asking for missing year
+        } else {
+          console.warn("[VALIDATION] Response asks about vehicle despite having info");
+          return false;
+        }
+      } else {
+        console.warn("[VALIDATION] Response asks about vehicle despite having info");
+        return false;
+      }
     }
   }
   
@@ -1868,6 +1998,24 @@ function validateResponse(response: string, context: ConversationContext): boole
                       /es de uso (diario|ocasional)/i.test(response);
     if (asksUsage) {
       console.warn("[VALIDATION] Response asks about usage despite having info");
+      return false;
+    }
+  }
+
+  // Pricing must be included when presenting services (prescription or booking confirmation)
+  if (state === STATES.STATE_4_PRESCRIPTION || state === STATES.STATE_6_ACTION) {
+    const hasPrice = /\$\s?\d+/.test(response);
+    if (!hasPrice) {
+      console.warn("[VALIDATION] Response missing price in service step");
+      return false;
+    }
+  }
+
+  // Scheduling step should mention weekdays (Mon–Fri)
+  if (state === STATES.STATE_4_PRESCRIPTION || state === STATES.STATE_5_SCHEDULE) {
+    const hasWeekday = /\b(monday|tuesday|wednesday|thursday|friday|mon\-fri|monday to friday|lunes|martes|mi[eé]rcoles|jueves|viernes|lunes a viernes)\b/i.test(response);
+    if (!hasWeekday) {
+      console.warn("[VALIDATION] Response missing weekday proposal");
       return false;
     }
   }
@@ -2217,7 +2365,7 @@ function mergeMemoryIntoContext(
     if (mergedContext.usageContext && mergedContext.benefitIntent) {
       mergedContext.currentState = STATES.STATE_4_PRESCRIPTION;
     } else if (mergedContext.benefitIntent) {
-      mergedContext.currentState = STATES.STATE_3_USAGE;
+      mergedContext.currentState = STATES.STATE_4_PRESCRIPTION;
     } else if (mergedContext.vehicleInfo?.brand || mergedContext.vehicleInfo?.model) {
       mergedContext.currentState = STATES.STATE_2_BENEFIT;
     }
@@ -2235,6 +2383,72 @@ function mergeMemoryIntoContext(
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  if (req.method === "DELETE") {
+    try {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+      const body = await req.json().catch(() => ({}));
+      const { businessId, conversationId, customerIdentifier } = body || {};
+
+      if (!businessId || !conversationId) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Missing businessId or conversationId" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Delete messages for this conversation
+      await supabase
+        .from("messages")
+        .delete()
+        .eq("business_id", businessId)
+        .eq("conversation_id", conversationId);
+
+      // Delete conversation state
+      await supabase
+        .from("conversations")
+        .delete()
+        .eq("business_id", businessId)
+        .eq("conversation_id", conversationId);
+
+      // Delete follow-ups tied to this conversation
+      await supabase
+        .from("follow_up_queue")
+        .delete()
+        .eq("business_id", businessId)
+        .eq("conversation_id", conversationId);
+
+      // Delete lead for this conversation (if any)
+      await supabase
+        .from("leads")
+        .delete()
+        .eq("business_id", businessId)
+        .eq("conversation_id", conversationId);
+
+      if (customerIdentifier) {
+        await supabase
+          .from("customer_memory")
+          .delete()
+          .eq("business_id", businessId)
+          .eq("customer_identifier", customerIdentifier);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    } catch (err) {
+      const error = err as Error;
+      console.error("[AI-CHAT] Delete Error:", error);
+      return new Response(
+        JSON.stringify({ success: false, error: error.message }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
   }
 
   if (req.method !== "POST") {
@@ -2263,7 +2477,8 @@ serve(async (req: Request) => {
       customerName,
       channel,
       userMessage, 
-      conversationHistory = [] 
+      conversationHistory = [],
+      model: requestedModel
     } = body;
 
     if (!businessId || !userMessage) {
@@ -2300,6 +2515,7 @@ serve(async (req: Request) => {
 
     // Log service count for debugging real-time updates
     const serviceCount = services?.length || 0;
+    const modelToUse = requestedModel || Deno.env.get("GROQ_MODEL") || DEFAULT_MODEL;
     console.log(`[AI-CHAT] Loaded ${serviceCount} active services for business ${businessId}`);
 
     // Detect language from first message, then persist it
@@ -2317,7 +2533,7 @@ serve(async (req: Request) => {
           success: true,
           reply: failsafeMsg,
           intent: null,
-          model: DEFAULT_MODEL,
+          model: modelToUse,
           currentState: STATES.STATE_7_HANDOFF,
           handoffRequired: true,
           leadQualified: false,
@@ -2355,82 +2571,28 @@ serve(async (req: Request) => {
     
     console.log(`[AI-CHAT] Business: ${business?.name}, Services: ${serviceCount}, State: ${context.currentState}, Language: ${language}, Returning: ${isReturning}`);
 
-    // Build Groq prompt to match WhatsApp/Instagram behavior
-    const channelLabel = channel === "instagram" ? "Instagram" : "WhatsApp";
-    const languageLabel = language === "es" ? "Spanish" : "English";
-    const intent = detectWebhookIntent(userMessage);
-    const detectedService = detectServiceNameSimple(userMessage, services || []);
+    // Use consultative state machine for all replies (single source of truth)
     const detectedVehicleType = detectVehicleTypeSimple(userMessage);
-    const schedulePref = parseScheduleResponse(userMessage);
-    const knownFacts = [
-  detectedService ? `Service: ${detectedService}` : null,
-  detectedVehicleType ? `Vehicle: ${detectedVehicleType}` : null,
-  schedulePref.time ? `Timing: ${schedulePref.time}` : null,
-].filter(Boolean).join(" | ");
+    const stateResult = await processStateMachine(
+      userMessage,
+      context,
+      language,
+      business,
+      services || [],
+      conversationHistory,
+      GROQ_API_KEY,
+      modelToUse
+    );
 
-    const { data: knowledge } = await supabase
-  .from("knowledge_chunks")
-  .select("content")
-  .eq("business_id", businessId)
-  .textSearch("content_tsv", userMessage.split(" ").slice(0, 5).join(" | "))
-  .limit(3);
-
-    const knowledgeContext = knowledge?.map((k: any) => k.content).join("\n") || "";
-    const servicesContext = (services || []).map((s: any) =>
-  `${s.name}: ${s.description || ""} - $${s.base_price || "TBD"} (${s.duration_minutes || "?"} min)`
-).join("\n") || "No services configured.";
-
-    const systemPrompt = `You are a helpful AI assistant for ${business?.name || "a car detailing business"} responding on ${channelLabel}.
-Respond in ${languageLabel}.
-Be professional and concise (1-2 sentences max).
-Ask at most one short follow-up question, only if needed.
-Do not ask to book unless the customer explicitly asks about booking or availability.
-Do not assume a vehicle type; only ask if needed to answer.
-Avoid emojis and hype.
-
-Your goals:
-1. Answer questions about services, pricing, and hours
-2. Qualify leads by identifying booking interest
-3. If customer wants to book, ask for preferred date/time and vehicle type
-
-Detected intent: ${intent}
-Known facts: ${knownFacts || "None"}
-
-Business Services:
-${servicesContext}
-
-Knowledge Base:
-${knowledgeContext}
-
-Greeting: ${business?.greeting_message || "Hi! How can I help you today?"}
-
-Rules:
-- Keep responses short for ${channelLabel} format
-- Be direct and actionable
-- If you don't know something, offer to connect them with the team
-- When discussing services/pricing, mention you can share a visual service menu
-- If intent is services/pricing/packages and service is unknown, ask which service they want (no booking question)
-- If service is known and intent is pricing but vehicle is unknown, ask for vehicle type`;
-
-    const messages: ChatMessage[] = [
-  { role: "system", content: systemPrompt },
-  { role: "user", content: userMessage }
-];
-
-    const { content, error, latencyMs } = await callGroqAPI(messages, GROQ_API_KEY);
-    const usedFallback = Boolean(error || !content);
-    const fallbackReply = language === "es"
-  ? "Gracias por tu mensaje. ¿En qué puedo ayudarte?"
-  : "Thanks for your message. How can I help?";
-    const reply = trimResponse(content || fallbackReply);
-    const newContext = { ...context };
+    const reply = trimResponse(stateResult.reply);
+    const newContext = { ...stateResult.newContext };
     if (detectedVehicleType && !newContext.vehicleInfo?.type) {
-  newContext.vehicleInfo = { ...(newContext.vehicleInfo || {}), type: detectedVehicleType };
-}
+      newContext.vehicleInfo = { ...(newContext.vehicleInfo || {}), type: detectedVehicleType };
+    }
     newContext.detectedLanguage = language;
-    const performance = { responseTimeMs: latencyMs, isFallback: usedFallback, aiModel: DEFAULT_MODEL };
+    const performance = stateResult.performance;
 
-    console.log(`[AI-CHAT] Response generated in ${performance.responseTimeMs}ms, fallback: ${performance.isFallback}`);// Check if user is asking about services/menu/prices and look for matching flyer
+    console.log(`[AI-CHAT] Response generated in ${performance.responseTimeMs}ms, fallback: ${performance.isFallback}`);
     let flyerResult: FlyerResult = { url: null, type: null };
     const detectedFlyerType = detectFlyerType(userMessage);
     if (detectedFlyerType) {
@@ -2533,7 +2695,7 @@ Rules:
       success: true,
       reply,
       intent: newContext.benefitIntent || null,
-      model: DEFAULT_MODEL,
+      model: modelToUse,
       currentState: newContext.currentState,
       handoffRequired: newContext.handoffRequired,
       leadQualified: newContext.leadQualified,
@@ -2555,10 +2717,6 @@ Rules:
     );
   }
 });
-
-
-
-
 
 
 

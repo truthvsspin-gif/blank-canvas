@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Send,
   Sparkles,
+  Trash2,
   User,
   Zap,
 } from "lucide-react";
@@ -20,8 +21,15 @@ function generateConversationId(): string {
   return `sim_${Date.now()}_${crypto.randomUUID().split('-')[0]}`;
 }
 
-// Simulated customer identifier for memory testing
-const SIMULATED_CUSTOMER_PHONE = "+1234567890";
+const SESSION_STORAGE_PREFIX = "dev_chatbot_session";
+
+function getSessionStorageKey(businessId: string) {
+  return `${SESSION_STORAGE_PREFIX}:${businessId}`;
+}
+
+function generateCustomerIdentifier(): string {
+  return `sim_customer_${Date.now()}_${crypto.randomUUID().split("-")[0]}`;
+}
 
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
@@ -51,6 +59,13 @@ type ConversationState = {
   handoffRequired: boolean;
   leadQualified: boolean;
   recoveryAttemptCount: number;
+};
+
+const DEFAULT_CONVERSATION_STATE: ConversationState = {
+  currentState: "STATE_0_OPENING",
+  handoffRequired: false,
+  leadQualified: false,
+  recoveryAttemptCount: 0,
 };
 
 // State display names
@@ -127,14 +142,11 @@ export default function DevChatbotPage() {
   
   // Conversation ID for state persistence across messages
   const [conversationId, setConversationId] = useState<string>(() => generateConversationId());
+  const [customerIdentifier, setCustomerIdentifier] = useState<string>(() => generateCustomerIdentifier());
+  const [sessionReady, setSessionReady] = useState(false);
   
   // State machine tracking
-  const [conversationState, setConversationState] = useState<ConversationState>({
-    currentState: "STATE_0_OPENING",
-    handoffRequired: false,
-    leadQualified: false,
-    recoveryAttemptCount: 0,
-  });
+  const [conversationState, setConversationState] = useState<ConversationState>(DEFAULT_CONVERSATION_STATE);
 
   // Fetch services for dynamic prompts
   useEffect(() => {
@@ -189,6 +201,90 @@ export default function DevChatbotPage() {
   const [isTyping, setIsTyping] = useState(false);
   const [selectedChannel, setSelectedChannel] = useState<"whatsapp" | "instagram">("whatsapp");
 
+  // Load persisted session when business changes
+  useEffect(() => {
+    if (!businessId) {
+      setSessionReady(false);
+      return;
+    }
+
+    const storageKey = getSessionStorageKey(businessId);
+    const raw = typeof window !== "undefined" ? localStorage.getItem(storageKey) : null;
+
+    if (!raw) {
+      setConversationId(generateConversationId());
+      setCustomerIdentifier(generateCustomerIdentifier());
+      setMessages([]);
+      setConversationState(DEFAULT_CONVERSATION_STATE);
+      setSessionReady(true);
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed?.conversationId) {
+        setConversationId(parsed.conversationId);
+      } else {
+        setConversationId(generateConversationId());
+      }
+
+      if (parsed?.customerIdentifier) {
+        setCustomerIdentifier(parsed.customerIdentifier);
+      } else {
+        setCustomerIdentifier(generateCustomerIdentifier());
+      }
+
+      if (Array.isArray(parsed?.messages)) {
+        const hydrated = parsed.messages.map((m: Message & { timestamp: string }) => ({
+          ...m,
+          timestamp: new Date(m.timestamp),
+        }));
+        setMessages(hydrated);
+      } else {
+        setMessages([]);
+      }
+
+      if (parsed?.conversationState) {
+        setConversationState({
+          ...DEFAULT_CONVERSATION_STATE,
+          ...parsed.conversationState,
+        });
+      } else {
+        setConversationState(DEFAULT_CONVERSATION_STATE);
+      }
+
+      if (parsed?.selectedChannel === "whatsapp" || parsed?.selectedChannel === "instagram") {
+        setSelectedChannel(parsed.selectedChannel);
+      }
+    } catch {
+      setConversationId(generateConversationId());
+      setCustomerIdentifier(generateCustomerIdentifier());
+      setMessages([]);
+      setConversationState(DEFAULT_CONVERSATION_STATE);
+    }
+
+    setSessionReady(true);
+  }, [businessId]);
+
+  // Persist session state locally
+  useEffect(() => {
+    if (!businessId || !sessionReady) return;
+    const storageKey = getSessionStorageKey(businessId);
+    const payload = {
+      conversationId,
+      customerIdentifier,
+      conversationState,
+      selectedChannel,
+      messages: messages.map((m) => ({
+        ...m,
+        timestamp: m.timestamp.toISOString(),
+      })),
+    };
+    if (typeof window !== "undefined") {
+      localStorage.setItem(storageKey, JSON.stringify(payload));
+    }
+  }, [businessId, sessionReady, conversationId, customerIdentifier, conversationState, selectedChannel, messages]);
+
   const copy = useMemo(
     () =>
       isEs
@@ -202,7 +298,8 @@ export default function DevChatbotPage() {
             errorFetch: "Error al enviar el mensaje.",
             hint: "Flujo de ventas consultivas - NO es un bot de FAQ",
             quickPrompts: "Simulador de flujo",
-            clearChat: "Reiniciar conversación",
+            clearChat: "Eliminar conversación",
+            clearChatDesc: "Se borrará el chat actual y se iniciará uno nuevo.",
             typing: "Escribiendo...",
             noMessages: "Inicia una conversación",
             noMessagesDesc: "Envía un mensaje o usa una de las sugerencias rápidas",
@@ -226,7 +323,8 @@ export default function DevChatbotPage() {
             errorFetch: "Failed to send message.",
             hint: "Consultative sales flow - NOT an FAQ bot",
             quickPrompts: "Flow Simulator",
-            clearChat: "Reset conversation",
+            clearChat: "Delete conversation",
+            clearChatDesc: "This will delete the current chat and start a new one.",
             typing: "Typing...",
             noMessages: "Start a conversation",
             noMessagesDesc: "Send a message or use one of the quick prompts",
@@ -256,6 +354,8 @@ export default function DevChatbotPage() {
       const trimmed = (messageText || input).trim();
       if (!trimmed || loading) return;
       
+      if (!sessionReady) return;
+
       // Don't allow sending if handoff is required
       if (conversationState.handoffRequired) {
         return;
@@ -296,7 +396,7 @@ export default function DevChatbotPage() {
                 businessId,
                 userMessage: trimmed,
                 conversationId, // Session persistence
-                customerIdentifier: SIMULATED_CUSTOMER_PHONE, // Simulated customer for memory testing
+                customerIdentifier, // Simulated customer for memory testing
                 channel: selectedChannel,
                 conversationHistory: messages.map((m) => ({
                   role: m.role === "user" ? "user" : "assistant",
@@ -357,20 +457,48 @@ export default function DevChatbotPage() {
       setLoading(false);
       setIsTyping(false);
     },
-    [input, loading, businessId, copy, conversationState.handoffRequired, messages, conversationId, selectedChannel]
+    [input, loading, businessId, copy, conversationState.handoffRequired, messages, conversationId, customerIdentifier, selectedChannel, sessionReady]
   );
 
-  const handleClearChat = () => {
-    setMessages([]);
+  const handleDeleteChat = async () => {
+    if (!businessId || !conversationId) {
+      return;
+    }
+
+    setLoading(true);
     setError(null);
+    try {
+      await fetch(
+        "https://ybifjdlelpvgzmzvgwls.supabase.co/functions/v1/ai-chat",
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            businessId,
+            conversationId,
+            customerIdentifier,
+          }),
+        }
+      );
+    } catch {
+      // If delete fails, still reset locally to avoid blocking the user.
+    }
+
+    setMessages([]);
+    setConversationState(DEFAULT_CONVERSATION_STATE);
+    setError(null);
+
     // Generate new conversation ID for fresh session
-    setConversationId(generateConversationId());
-    setConversationState({
-      currentState: "STATE_0_OPENING",
-      handoffRequired: false,
-      leadQualified: false,
-      recoveryAttemptCount: 0,
-    });
+    const nextId = generateConversationId();
+    setConversationId(nextId);
+    setCustomerIdentifier(generateCustomerIdentifier());
+
+    if (typeof window !== "undefined") {
+      const storageKey = getSessionStorageKey(businessId);
+      localStorage.removeItem(storageKey);
+    }
+
+    setLoading(false);
   };
 
   const formatTime = (date: Date) => {
@@ -508,10 +636,11 @@ export default function DevChatbotPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={handleClearChat}
+                onClick={handleDeleteChat}
+                title={copy.clearChatDesc}
                 className="w-full mt-4 text-muted-foreground hover:text-destructive"
               >
-                <RefreshCw className="mr-2 h-3 w-3" />
+                <Trash2 className="mr-2 h-3 w-3" />
                 {copy.clearChat}
               </Button>
             )}
@@ -555,7 +684,20 @@ export default function DevChatbotPage() {
                   <CardDescription className="text-xs">{copy.hint}</CardDescription>
                 </div>
               </div>
-              <Bot className="h-5 w-5 text-muted-foreground" />
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDeleteChat}
+                  title={copy.clearChatDesc}
+                  className="text-muted-foreground hover:text-destructive"
+                  disabled={messages.length === 0}
+                >
+                  <Trash2 className="mr-2 h-3 w-3" />
+                  {copy.clearChat}
+                </Button>
+                <Bot className="h-5 w-5 text-muted-foreground" />
+              </div>
             </div>
           </CardHeader>
 
