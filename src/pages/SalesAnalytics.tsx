@@ -51,7 +51,7 @@ const STATE_LABELS = {
   STATE_0_OPENING: { en: "Opening", es: "Apertura", step: 0 },
   STATE_1_VEHICLE: { en: "Vehicle ID", es: "Vehículo", step: 1 },
   STATE_2_BENEFIT: { en: "Intent Discovery", es: "Descubrimiento", step: 2 },
-  STATE_3_USAGE: { en: "Usage Context", es: "Contexto", step: 3 },
+  STATE_3_USAGE: { en: "Protection Duration", es: "Duraci�n", step: 3 },
   STATE_4_PRESCRIPTION: { en: "Recommendation", es: "Recomendación", step: 4 },
   STATE_5_ACTION: { en: "Soft Close", es: "Cierre Suave", step: 5 },
   STATE_6_HANDOFF: { en: "Human Handoff", es: "Traspaso", step: 6 },
@@ -751,3 +751,4 @@ export default function SalesAnalytics() {
     </div>
   );
 }
+

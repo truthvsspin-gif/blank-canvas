@@ -237,6 +237,7 @@ export default function BookingDetailPage() {
     setSaving(true)
     setError(null)
     setSuccess(false)
+    const previousStatus = booking.status
     const form = new FormData(e.currentTarget)
     const payload = {
       service_name: (form.get("service_name") as string) || booking.service_name,
@@ -264,6 +265,23 @@ export default function BookingDetailPage() {
     } else {
       setBooking(data as Booking)
       setSuccess(true)
+      if (previousStatus !== "confirmed" && payload.status === "confirmed") {
+        supabase.functions
+          .invoke("booking-notify", {
+            body: {
+              businessId,
+              bookingId: (data as Booking).id,
+            },
+          })
+          .then(({ error: notifyError }) => {
+            if (notifyError) {
+              console.error("booking-notify failed:", notifyError.message)
+            }
+          })
+          .catch((notifyErr) => {
+            console.error("booking-notify failed:", notifyErr)
+          })
+      }
     }
   }
 

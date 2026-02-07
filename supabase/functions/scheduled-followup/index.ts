@@ -24,24 +24,16 @@ interface BusinessContext {
 // Follow-up message templates per DetaPRO v1.2 spec
 const followUpTemplates = {
   es: {
-    "24h": (businessName: string) => 
-      `¡Hola! 👋 Ayer estuvimos conversando sobre cómo podemos ayudarte con tu vehículo. ¿Tienes alguna pregunta adicional? Estamos aquí para ayudarte.`,
-    "48h": (businessName: string) =>
-      `¡Hola de nuevo! Solo quería asegurarme de que recibiste toda la información que necesitabas. Si tienes alguna duda sobre nuestros servicios, no dudes en escribirnos. 🚗✨`,
-    "5d": (businessName: string) =>
-      `¡Hola! Ha pasado un tiempo desde nuestra última conversación. Si aún estás pensando en darle ese cuidado especial a tu vehículo, aquí estamos para ayudarte cuando estés listo. 😊`,
-    "7d": (businessName: string) =>
-      `¡Hola! Solo un recordatorio amigable de que seguimos aquí para ayudarte con tu vehículo. Si tienes alguna pregunta o quieres agendar una cita, escríbenos. ¡Que tengas un excelente día! 🌟`,
+    "24h": () =>
+      "Hola, solo quer�a confirmar si el enfoque que te recomend� se ajusta a lo que buscas para tu veh�culo. Si quieres, podemos revisar disponibilidad.",
+    "5d": () =>
+      "Se abri� un espacio esta semana para este tipo de servicio. Av�same si te gustar�a avanzar.",
   },
   en: {
-    "24h": (businessName: string) =>
-      `Hi there! 👋 We were chatting yesterday about how we can help with your vehicle. Do you have any additional questions? We're here to help.`,
-    "48h": (businessName: string) =>
-      `Hi again! Just wanted to make sure you got all the information you needed. If you have any questions about our services, don't hesitate to reach out. 🚗✨`,
-    "5d": (businessName: string) =>
-      `Hi! It's been a while since we last chatted. If you're still thinking about giving your vehicle that special care, we're here to help whenever you're ready. 😊`,
-    "7d": (businessName: string) =>
-      `Hi! Just a friendly reminder that we're still here to help with your vehicle. If you have any questions or want to schedule an appointment, reach out anytime. Have a great day! 🌟`,
+    "24h": () =>
+      "Hi, just checking whether the approach I recommended fits what you're looking for with your vehicle. If you'd like, we can check availability.",
+    "5d": () =>
+      "An opening became available this week for this type of service. Let me know if you'd like to move forward.",
   },
 };
 
@@ -53,6 +45,10 @@ async function sendFollowUpMessage(
   try {
     const lang = business.language_preference === "es" ? "es" : "en";
     const templates = followUpTemplates[lang];
+    const allowedTypes = ["24h", "5d"];
+    if (!allowedTypes.includes(followUp.follow_up_type)) {
+      return { success: false, error: "skipping: deprecated follow-up type" };
+    }
     const messageText = templates[followUp.follow_up_type as keyof typeof templates](business.name);
 
     // Get the thread info to determine channel and contact
@@ -236,3 +232,5 @@ Deno.serve(async (req) => {
     });
   }
 });
+
+

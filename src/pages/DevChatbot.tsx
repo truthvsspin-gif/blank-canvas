@@ -73,7 +73,7 @@ const STATE_LABELS: Record<string, { en: string; es: string }> = {
   STATE_0_OPENING: { en: "Opening", es: "Apertura" },
   STATE_1_VEHICLE: { en: "Vehicle Info", es: "Info Vehículo" },
   STATE_2_BENEFIT: { en: "Benefit Discovery", es: "Descubrimiento" },
-  STATE_3_USAGE: { en: "Usage Context", es: "Contexto de Uso" },
+  STATE_3_USAGE: { en: "Protection Duration", es: "Duraci�n de protecci�n" },
   STATE_4_PRESCRIPTION: { en: "Recommendation", es: "Recomendación" },
   STATE_5_ACTION: { en: "Closing", es: "Cierre" },
   STATE_6_HANDOFF: { en: "Human Handoff", es: "Transferencia" },
@@ -85,14 +85,14 @@ const basePrompts = {
     opening: ["Hi, I need help with my car", "Hello, what services do you offer?"],
     vehicles: ["Toyota Camry sedan", "BMW X5 SUV", "Ford F-150 pickup"],
     benefits: ["I want it to look like new", "I want to protect it long-term", "The interior needs work"],
-    usage: ["It's my daily driver", "Weekend car only"],
+    duration: ["A few months", "1-3 years"],
     closing: ["Yes, let's move forward", "What about pricing?"],
   },
   es: {
     opening: ["Hola, necesito ayuda con mi carro", "Hola, ¿qué servicios ofrecen?"],
     vehicles: ["Toyota Camry sedán", "BMW X5 SUV", "Ford F-150 pickup"],
     benefits: ["Quiero que luzca como nuevo", "Quiero protegerlo a largo plazo", "El interior necesita trabajo"],
-    usage: ["Es mi carro de diario", "Solo de fin de semana"],
+    duration: ["Unos meses", "1-3 a�os"],
     closing: ["Sí, avancemos", "¿Cuánto cuesta?"],
   },
 };
@@ -180,13 +180,13 @@ export default function DevChatbotPage() {
     const base = basePrompts[lang];
     const servicePrompts = generateServicePrompts(services, isEs);
     
-    // Combine: opening + service-specific + vehicles + benefits + usage + closing
+    // Combine: opening + service-specific + vehicles + benefits + duration + closing
     return [
       ...base.opening,
       ...servicePrompts,
       ...base.vehicles,
       ...base.benefits,
-      ...base.usage,
+      ...base.duration,
       ...base.closing,
     ];
   }, [isEs, services]);
@@ -837,4 +837,7 @@ export default function DevChatbotPage() {
     </div>
   );
 }
+
+
+
 

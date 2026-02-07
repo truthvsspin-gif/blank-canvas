@@ -109,47 +109,41 @@ serve(async (req: Request) => {
         await trackConversationWindow(supabase, message);
 
         if (business.ai_reply_enabled) {
-          const aiResponse = await generateAIResponse(supabase, message, business, intent);
+          const aiResult = await generateAIResponse(supabase, message, business);
 
-          if (aiResponse) {
+          if (aiResult?.reply) {
             await recordMessage(supabase, {
               ...message,
-              message_text: aiResponse,
+              message_text: aiResult.reply,
             }, threadId, "outbound", null);
 
-            await sendInstagramMessage(supabase, businessId, message.sender_phone_or_handle!, aiResponse);
-
-            // Check if we should send a flyer for this intent
-            if (FLYER_INTENTS.includes(intent)) {
-              const flyerSent = await maybeSendFlyer(
-                supabase, 
-                businessId, 
-                message.sender_phone_or_handle!, 
-                message.conversation_id,
-                threadId,
-                business.flyer_cooldown_hours || 24
-              );
-              
-              if (flyerSent) {
-                results.push({
-                  conversation_id: message.conversation_id,
-                  response_sent: true,
-                  flyer_sent: true,
-                  intent,
-                });
-                continue;
-              }
-            }
+            await sendInstagramMessage(supabase, businessId, message.sender_phone_or_handle!, aiResult.reply);
 
             results.push({
               conversation_id: message.conversation_id,
               response_sent: true,
               intent,
+              handoff_required: aiResult.handoffRequired,
             });
           }
         }
 
-        await qualifyLead(supabase, message, intent);
+        const requestedFlyerType = detectFlyerType(message.message_text || "");
+        const flyerCooldownHours = Number.isFinite(business.flyer_cooldown_hours)
+          ? business.flyer_cooldown_hours
+          : 24;
+        if (requestedFlyerType) {
+          await maybeSendFlyer(
+            supabase,
+            message,
+            threadId,
+            flyerCooldownHours,
+            requestedFlyerType,
+            business.language_preference || null
+          );
+        }
+
+        // Record inbound even if no AI reply
         results.push({ conversation_id: message.conversation_id, recorded: true, intent });
       }
 
@@ -243,6 +237,94 @@ function detectIntent(text: string): string {
     if (keywords.some((kw) => lower.includes(kw))) return intent;
   }
   return "general_question";
+}
+
+type FlyerType = "menu" | "price_list" | "services_flyer";
+
+function detectFlyerType(text: string): FlyerType | null {
+  const lower = text.toLowerCase();
+
+  const menuPatterns = [
+    /\bmenu\b/i,
+    /\bfood\b/i,
+    /\bcomida\b/i,
+    /\bdishes\b/i,
+    /\bplatos\b/i,
+    /\bdrink\b/i,
+    /\bbebida\b/i,
+    /\bbeverage\b/i,
+  ];
+
+  const priceListPatterns = [
+    /\bprice\s*list\b/i,
+    /\bpricing\b/i,
+    /\bprices\b/i,
+    /\brate[s]?\b/i,
+    /\bcost\b/i,
+    /\bquote\b/i,
+    /\bcotizacion\b/i,
+    /\bpresupuesto\b/i,
+    /\bprecio\b/i,
+    /\bcuanto\b/i,
+    /\bhow\s+much\b/i,
+  ];
+
+  const servicesFlyerPatterns = [
+    /\bservices?\b/i,
+    /\bservicios?\b/i,
+    /\bpackages?\b/i,
+    /\bpaquetes?\b/i,
+    /\boptions?\b/i,
+    /\bopciones?\b/i,
+    /\bwhat\s+do\s+you\s+offer\b/i,
+    /\bque\s+ofrecen\b/i,
+    /\bofferings\b/i,
+    /\bbrochure\b/i,
+    /\bcatalog\b/i,
+  ];
+
+  if (menuPatterns.some((p) => p.test(lower))) return "menu";
+  if (priceListPatterns.some((p) => p.test(lower))) return "price_list";
+  if (servicesFlyerPatterns.some((p) => p.test(lower))) return "services_flyer";
+
+  return null;
+}
+
+async function lookupFlyerAsset(
+  supabase: any,
+  businessId: string,
+  flyerType: FlyerType
+): Promise<{ id: string; file_url: string; title: string | null; asset_type: string; mime_type?: string | null } | null> {
+  const { data: preferredFlyer } = await supabase
+    .from("media_assets")
+    .select("id, file_url, title, asset_type, mime_type")
+    .eq("business_id", businessId)
+    .eq("is_active", true)
+    .eq("asset_type", flyerType)
+    .eq("is_default", true)
+    .maybeSingle();
+
+  if (preferredFlyer?.file_url) return preferredFlyer;
+
+  const { data: anyFlyer } = await supabase
+    .from("media_assets")
+    .select("id, file_url, title, asset_type, mime_type")
+    .eq("business_id", businessId)
+    .eq("is_active", true)
+    .eq("asset_type", flyerType)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (anyFlyer?.file_url) return anyFlyer;
+
+  return null;
+}
+
+function buildFlyerCaption(language: string | null | undefined, title?: string | null): string {
+  const cleanTitle = (title || "").trim();
+  if (cleanTitle) return cleanTitle;
+  return language === "es" ? "Aqui esta el flyer que pediste." : "Here is the flyer you requested.";
 }
 
 type ChatbotThreadState = {
@@ -492,202 +574,121 @@ async function trackConversationWindow(supabase: any, message: NormalizedMessage
 async function generateAIResponse(
   supabase: any,
   message: NormalizedMessage,
-  business: any,
-  intent: string
-): Promise<string | null> {
-  const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
-  if (!GROQ_API_KEY) {
-    console.error("GROQ_API_KEY not configured");
+  business: any
+): Promise<{ reply: string; handoffRequired: boolean } | null> {
+  const threadKey = message.sender_phone_or_handle || message.conversation_id;
+
+  // If already handed off, stop responding
+  const { data: existingConversation } = await supabase
+    .from("conversations")
+    .select("handoff_required, current_state")
+    .eq("conversation_id", threadKey)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingConversation?.handoff_required) {
     return null;
   }
 
-  const { data: services } = await supabase
-    .from("services")
-    .select("name, description, base_price, duration_minutes")
-    .eq("business_id", message.business_id)
-    .eq("is_active", true);
-
-  const { data: knowledge } = await supabase
-    .from("knowledge_chunks")
-    .select("content")
-    .eq("business_id", message.business_id)
-    .textSearch("content_tsv", message.message_text.split(" ").slice(0, 5).join(" | "))
-    .limit(3);
-
-  const knowledgeContext = knowledge?.map((k: any) => k.content).join("\n") || "";
-  const servicesContext = services?.map((s: any) =>
-    `${s.name}: ${s.description || ""} - $${s.base_price || "TBD"} (${s.duration_minutes || "?"} min)`
-  ).join("\n") || "No services configured.";
-
-  const language = business.language_preference === "es" ? "Spanish" : "English";
-  const threadState = await loadThreadState(supabase, message);
-  const detectedVehicle = detectVehicleType(message.message_text);
-  const detectedService = detectServiceName(message.message_text, services || []);
-  const detectedTime = detectTimePreference(message.message_text);
-  const mergedState: ChatbotThreadState = {
-    vehicleType: detectedVehicle || threadState.vehicleType || null,
-    serviceName: detectedService || threadState.serviceName || null,
-    timePreference: detectedTime || threadState.timePreference || null,
-  };
-  await saveThreadState(supabase, message, mergedState);
-  const knownFacts = [
-    mergedState.serviceName ? `Service: ${mergedState.serviceName}` : null,
-    mergedState.vehicleType ? `Vehicle: ${mergedState.vehicleType}` : null,
-    mergedState.timePreference ? `Timing: ${mergedState.timePreference}` : null,
-  ].filter(Boolean).join(" | ");
-
-    const systemPrompt = `You are a helpful AI assistant for ${business.name || "a car detailing business"} responding on Instagram.
-Respond in ${language}.
-Be professional and concise (1-2 sentences max).
-Ask at most one short follow-up question, only if needed.
-Do not ask to book unless the customer explicitly asks about booking or availability.
-Do not assume a vehicle type; only ask if needed to answer.
-Avoid emojis and hype.
-
-Your goals:
-1. Answer questions about services, pricing, and hours
-2. Qualify leads by identifying booking interest
-3. If customer wants to book, ask for preferred date/time and vehicle type
-
-Detected intent: ${intent}
-Known facts: ${knownFacts || "None"}
-
-Business Services:
-${servicesContext}
-
-Knowledge Base:
-${knowledgeContext}
-
-Greeting: ${business.greeting_message || "Hi! How can I help you today?"}
-
-Rules:
-- Keep responses short for Instagram DM format
-- Be direct and actionable
-- If you don't know something, offer to connect them with the team
-- When discussing services/pricing, mention you can share a visual service menu
-- If intent is services/pricing/packages and service is unknown, ask which service they want (no booking question)
-- If service is known and intent is pricing but vehicle is unknown, ask for vehicle type`;
-
   try {
-    const response = await fetch(GROQ_API_URL, {
+    const response = await fetch(`${supabaseUrl}/functions/v1/ai-chat`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: DEFAULT_MODEL,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: message.message_text },
-        ],
-        max_tokens: 300,
-        temperature: 0.7,
+        businessId: message.business_id,
+        userMessage: message.message_text,
+        conversationId: threadKey,
+        customerIdentifier: message.sender_phone_or_handle || threadKey,
+        customerName: message.sender_name,
+        channel: message.channel,
       }),
     });
 
     if (!response.ok) {
-      console.error("Groq API error:", response.status);
+      const errorText = await response.text();
+      console.error("ai-chat error:", response.status, errorText);
       return null;
     }
 
     const data = await response.json();
-    const reply = data.choices?.[0]?.message?.content || null;
-    return reply ? trimResponse(reply) : null;
+    const reply = data?.reply;
+    if (!reply) return null;
+
+    return { reply, handoffRequired: !!data?.handoffRequired };
   } catch (error) {
     console.error("AI response generation failed:", error);
     return null;
   }
 }
-
 async function maybeSendFlyer(
   supabase: any,
-  businessId: string,
-  recipientId: string,
-  conversationId: string,
+  message: NormalizedMessage,
   threadId: string,
-  cooldownHours: number
+  cooldownHours: number,
+  preferredType: FlyerType | null,
+  languagePreference?: string | null
 ): Promise<boolean> {
-  // Check if flyer was sent recently
-  const cooldownMs = cooldownHours * 60 * 60 * 1000;
-  const cutoff = new Date(Date.now() - cooldownMs).toISOString();
-  
-  const { data: recentSend } = await supabase
-    .from("flyer_send_log")
-    .select("id")
-    .eq("business_id", businessId)
-    .eq("conversation_id", conversationId)
-    .gte("sent_at", cutoff)
-    .limit(1)
-    .maybeSingle();
+  if (!preferredType) return false;
+  const recipientId = message.sender_phone_or_handle;
+  if (!recipientId) return false;
 
-  if (recentSend) {
-    console.log("Flyer already sent recently, skipping");
+  const conversationId = message.sender_phone_or_handle || message.conversation_id;
+
+  const cooldownMs = Math.max(0, cooldownHours) * 60 * 60 * 1000;
+  if (cooldownMs > 0) {
+    const cutoff = new Date(Date.now() - cooldownMs).toISOString();
+    const { data: recentSend } = await supabase
+      .from("flyer_send_log")
+      .select("id")
+      .eq("business_id", message.business_id)
+      .eq("conversation_id", conversationId)
+      .gte("sent_at", cutoff)
+      .limit(1)
+      .maybeSingle();
+
+    if (recentSend) {
+      console.log("Flyer already sent recently, skipping");
+      return false;
+    }
+  }
+
+  const flyer = await lookupFlyerAsset(supabase, message.business_id, preferredType);
+  if (!flyer?.file_url) {
+    console.log("No flyer configured for type:", preferredType);
     return false;
   }
 
-  // Get default active flyer
-  const { data: flyer } = await supabase
-    .from("media_assets")
-    .select("id, file_url, title, mime_type")
-    .eq("business_id", businessId)
-    .eq("asset_type", "services_flyer")
-    .eq("is_active", true)
-    .eq("is_default", true)
-    .maybeSingle();
+  const caption = buildFlyerCaption(languagePreference || null, flyer.title);
+  const sent = await sendInstagramImage(supabase, message.business_id, recipientId, flyer.file_url, caption);
 
-  if (!flyer) {
-    console.log("No default flyer configured");
-    return false;
-  }
-
-  // Try to send via Instagram image API, fallback to URL link
-  const sent = await sendInstagramImage(supabase, businessId, recipientId, flyer.file_url, flyer.title);
-  
   if (sent) {
-    // Log the send
     await supabase.from("flyer_send_log").insert({
-      business_id: businessId,
+      business_id: message.business_id,
       conversation_id: conversationId,
       media_asset_id: flyer.id,
       sent_at: new Date().toISOString(),
     });
 
-    // Record the image message
     const now = new Date().toISOString();
-    await supabase.from("inbox_messages").insert({
-      business_id: businessId,
-      thread_id: threadId,
-      channel: "instagram",
-      conversation_id: conversationId,
-      direction: "outbound",
-      sender_name: "Chatbot",
-      sender_handle: recipientId,
-      message_text: flyer.title || "Service Menu",
-      message_timestamp: now,
-      metadata: { flyer: true },
-      message_type: "image",
-      media_asset_id: flyer.id,
-      file_url: flyer.file_url,
-    });
-
-    await supabase.from("messages").insert({
-      business_id: businessId,
-      conversation_id: conversationId,
-      direction: "outbound",
-      sender: "Chatbot",
-      message_text: flyer.title || "Service Menu",
+    const outboundMessage: NormalizedMessage = {
+      ...message,
+      message_text: caption,
       timestamp: now,
-      channel: "instagram",
-      message_type: "image",
-      media_asset_id: flyer.id,
-      file_url: flyer.file_url,
+      metadata: { ...(message.metadata || {}), flyer: true, flyer_type: preferredType },
+    };
+
+    await recordMessage(supabase, outboundMessage, threadId, "outbound", null, {
+      messageType: "image",
+      mediaAssetId: flyer.id,
+      fileUrl: flyer.file_url,
     });
   }
 
   return sent;
 }
-
 async function sendInstagramImage(
   supabase: any,
   businessId: string,
@@ -709,11 +710,9 @@ async function sendInstagramImage(
     return false;
   }
 
-  const language = caption?.toLowerCase().includes("menú") || caption?.toLowerCase().includes("servicio") ? "es" : "en";
-  const defaultCaption = language === "es" 
-    ? "📋 Aquí está nuestro menú de servicios. ¿En qué paquete estás interesado?"
-    : "📋 Here's our service menu. Which package are you interested in?";
-  const messageCaption = caption || defaultCaption;
+  const messageCaption = caption && caption.trim().length > 0
+    ? caption
+    : "Here is the flyer you requested.";
 
   // Instagram Messaging API has limited image sending support
   // Try image attachment first, fallback to text with link
@@ -752,7 +751,7 @@ async function sendInstagramImage(
 
     // If image sending fails, fallback to text message with link
     console.log("Instagram image API failed, sending fallback text with link");
-    const fallbackMessage = `${messageCaption}\n\n🔗 Ver menú: ${imageUrl}`;
+    const fallbackMessage = `${messageCaption}\n\nView flyer: ${imageUrl}`;
     await sendInstagramMessage(supabase, businessId, recipientId, fallbackMessage);
     return true;
 
@@ -761,7 +760,7 @@ async function sendInstagramImage(
     
     // Fallback: send text with public URL
     try {
-      const fallbackMessage = `${messageCaption}\n\n🔗 Ver menú: ${imageUrl}`;
+      const fallbackMessage = `${messageCaption}\n\nView flyer: ${imageUrl}`;
       await sendInstagramMessage(supabase, businessId, recipientId, fallbackMessage);
       return true;
     } catch (fallbackError) {
@@ -864,6 +863,8 @@ async function qualifyLead(
     qualification_reason: `intent=${intent}`,
   });
 }
+
+
 
 
 
