@@ -10,7 +10,7 @@ const corsHeaders = {
 
 // Groq API configuration
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-const DEFAULT_MODEL = "llama-3.1-8b-instant";
+const DEFAULT_MODEL = "openai/gpt-oss-120b";
 
 // ============================================================================
 // STATE MACHINE DEFINITIONS
@@ -33,6 +33,7 @@ interface ConversationContext {
   vehicleInfo: {
     brand?: string;
     model?: string;
+    year?: string;
     type?: string;
     sizeClass?: string;
   };
@@ -52,14 +53,21 @@ interface ChatMessage {
   content: string;
 }
 
+interface StoredMessageRow {
+  direction: "inbound" | "outbound";
+  message_text: string | null;
+  timestamp?: string | null;
+}
+
 interface AIRequest {
   businessId: string;
+  action?: "chat" | "clearConversation";
   conversationId?: string;
   customerId?: string;
   customerIdentifier?: string; // phone or handle for memory lookup
   customerName?: string;
   channel?: string;
-  userMessage: string;
+  userMessage?: string;
   conversationHistory?: ChatMessage[];
 }
 
@@ -198,7 +206,7 @@ function parseVehicleInfo(text: string): ConversationContext["vehicleInfo"] | nu
   ];
   
   const typePatterns = {
-    sedan: /\b(sedan|sedán|car|carro|coche|auto)\b/i,
+    sedan: /\b(sedan|sedán)\b/i,
     suv: /\b(suv|crossover|camioneta|truck|4x4)\b/i,
     pickup: /\b(pickup|pick-up|pick up|troca|truck)\b/i,
     coupe: /\b(coupe|coupé|deportivo|sports car)\b/i,
@@ -208,6 +216,7 @@ function parseVehicleInfo(text: string): ConversationContext["vehicleInfo"] | nu
   
   let detectedBrand: string | undefined;
   let detectedModel: string | undefined;
+  let detectedYear: string | undefined;
   let detectedType: string | undefined;
   
   for (const brand of brands) {
@@ -243,6 +252,11 @@ function parseVehicleInfo(text: string): ConversationContext["vehicleInfo"] | nu
       break;
     }
   }
+
+  const yearMatch = text.match(/\b(19[8-9]\d|20[0-3]\d)\b/);
+  if (yearMatch) {
+    detectedYear = yearMatch[1];
+  }
   
   let sizeClass = "medium";
   if (detectedType === "pickup" || detectedType === "suv") {
@@ -252,16 +266,25 @@ function parseVehicleInfo(text: string): ConversationContext["vehicleInfo"] | nu
   }
   
   // Return vehicle info if ANY identifier was detected (brand, model, or type)
-  if (detectedBrand || detectedModel || detectedType) {
+  if (detectedBrand || detectedModel || detectedYear || detectedType) {
     return {
       brand: detectedBrand,
       model: detectedModel,
+      year: detectedYear,
       type: detectedType,
       sizeClass,
     };
   }
   
   return null;
+}
+
+function hasVehicleIdentity(vehicleInfo?: ConversationContext["vehicleInfo"]): boolean {
+  return Boolean(vehicleInfo?.brand || vehicleInfo?.model || vehicleInfo?.type);
+}
+
+function hasVehicleIdentityAndYear(vehicleInfo?: ConversationContext["vehicleInfo"]): boolean {
+  return hasVehicleIdentity(vehicleInfo) && Boolean(vehicleInfo?.year);
 }
 
 // ============================================================================
@@ -1017,10 +1040,11 @@ async function callGroqAPI(
 function buildConfirmedFactsBlock(context: ConversationContext, language: "en" | "es"): string {
   const facts: string[] = [];
   
-  if (context.vehicleInfo?.brand || context.vehicleInfo?.model || context.vehicleInfo?.type) {
+  if (hasVehicleIdentity(context.vehicleInfo)) {
     const vehicleParts = [
       context.vehicleInfo.brand,
       context.vehicleInfo.model,
+      context.vehicleInfo.year ? `(${context.vehicleInfo.year})` : null,
       context.vehicleInfo.type ? `(${context.vehicleInfo.type})` : null,
       context.vehicleInfo.sizeClass ? `- ${context.vehicleInfo.sizeClass} size` : null
     ].filter(Boolean).join(" ");
@@ -1068,11 +1092,18 @@ function buildConfirmedFactsBlock(context: ConversationContext, language: "en" |
 function buildNegativeConstraints(context: ConversationContext, language: "en" | "es"): string {
   const constraints: string[] = [];
   
-  if (context.vehicleInfo?.brand || context.vehicleInfo?.model || context.vehicleInfo?.type) {
-    constraints.push(language === "es"
-      ? "❌ YA SABES el vehículo. NO preguntes qué carro/vehículo/tipo tienen."
-      : "❌ You ALREADY KNOW the vehicle. DO NOT ask what car/vehicle/type they have."
-    );
+  if (hasVehicleIdentity(context.vehicleInfo)) {
+    if (!context.vehicleInfo?.year) {
+      constraints.push(language === "es"
+        ? "No repitas preguntas de marca/modelo/tipo. Solo pide el anio si aun falta."
+        : "Do not re-ask make/model/type. You may ask only the year if still missing."
+      );
+    } else {
+      constraints.push(language === "es"
+        ? "No preguntes de nuevo por marca/modelo/tipo/anio."
+        : "Do not ask again for make/model/type/year."
+      );
+    }
   }
   
   if (context.benefitIntent) {
@@ -1148,13 +1179,31 @@ ABSOLUTE RULES (NEVER BREAK):
   let stateGoal = "";
   switch (state) {
     case STATES.STATE_0_OPENING:
-      stateGoal = language === "es"
-        ? `OBJETIVO: Obtener información del vehículo.
-Pregunta amablemente qué vehículo tienen (marca, modelo, tipo como sedán/SUV/pickup).
-Sé amigable y acogedor.`
-        : `GOAL: Get vehicle information.
-Ask what vehicle this is for (brand, model, type like sedan/SUV/pickup).
-Be friendly and welcoming.`;
+      if (!hasVehicleIdentity(context.vehicleInfo)) {
+        stateGoal = language === "es"
+          ? `OBJETIVO: Obtener datos basicos del vehiculo primero.
+Pregunta por marca, modelo y anio en una sola pregunta corta.
+No recomiendes servicios todavia.`
+          : `GOAL: Collect basic vehicle details first.
+Ask for make, model, and year in one short question.
+Do not recommend services yet.`;
+      } else if (!context.vehicleInfo?.year) {
+        stateGoal = language === "es"
+          ? `OBJETIVO: Ya tienes el vehiculo. Solo falta el anio.
+Pide unicamente el anio del vehiculo en una pregunta corta.
+No recomiendes servicios todavia.`
+          : `GOAL: You already have the vehicle. Only year is missing.
+Ask only for the vehicle year in one short question.
+Do not recommend services yet.`;
+      } else {
+        stateGoal = language === "es"
+          ? `OBJETIVO: Confirmar y avanzar.
+Confirma el vehiculo brevemente y pregunta cual es su principal preocupacion.
+No listes servicios en este paso.`
+          : `GOAL: Confirm and move forward.
+Briefly confirm the vehicle and ask their main concern.
+Do not list services at this step.`;
+      }
       break;
       
     case STATES.STATE_2_BENEFIT:
@@ -1472,9 +1521,11 @@ async function processStateMachine(
   business: any,
   services: any[],
   conversationHistory: ChatMessage[],
+  fullHistory: ChatMessage[],
   apiKey: string
 ): Promise<StateMachineResult> {
   const newContext = { ...context };
+  const effectiveHistory = fullHistory && fullHistory.length > 0 ? fullHistory : conversationHistory;
   let lastLatencyMs = 0;
   let usedFallback = false;
   
@@ -1484,7 +1535,7 @@ async function processStateMachine(
   if (isLowIntent(userMessage)) {
     // If we still have recovery attempts, don't exit yet
     if (context.recoveryAttemptCount < 2 && 
-        (context.currentState === STATES.STATE_4_PRESCRIPTION || context.currentState === STATES.STATE_5_ACTION)) {
+        (context.currentState === STATES.STATE_4_PRESCRIPTION || context.currentState === STATES.STATE_5_SCHEDULE)) {
       console.log(`[RECOVERY] Low intent detected but attempting recovery (attempt ${context.recoveryAttemptCount + 1})`);
       newContext.recoveryAttemptCount = context.recoveryAttemptCount + 1;
       // Fall through to recovery logic below
@@ -1538,7 +1589,7 @@ async function processStateMachine(
     
     const messages: ChatMessage[] = [
       { role: "system", content: `${basePrompt}\n\n${recoveryInstructions}` },
-      ...conversationHistory.slice(-4),
+      ...effectiveHistory.slice(-20),
       { role: "user", content: userMessage }
     ];
     
@@ -1585,7 +1636,7 @@ async function processStateMachine(
     const systemPrompt = buildSystemPrompt(STATES.STATE_7_HANDOFF, newContext, language, business, services);
     const messages: ChatMessage[] = [
       { role: "system", content: systemPrompt },
-      ...conversationHistory.slice(-4),
+      ...effectiveHistory.slice(-20),
       { role: "user", content: userMessage }
     ];
     
@@ -1614,9 +1665,12 @@ async function processStateMachine(
     case STATES.STATE_0_OPENING: {
       const vehicleInfo = parseVehicleInfo(userMessage);
       if (vehicleInfo) {
-        newContext.vehicleInfo = vehicleInfo;
+        newContext.vehicleInfo = { ...(newContext.vehicleInfo || {}), ...vehicleInfo };
+        console.log(`[STATE MACHINE] Vehicle updated: ${JSON.stringify(newContext.vehicleInfo)}`);
+      }
+      if (hasVehicleIdentityAndYear(newContext.vehicleInfo)) {
         newContext.currentState = STATES.STATE_2_BENEFIT;
-        console.log(`[STATE MACHINE] Vehicle detected: ${JSON.stringify(vehicleInfo)}`);
+        console.log("[STATE MACHINE] Vehicle + year complete, moving to benefit");
       }
       break;
     }
@@ -1627,16 +1681,11 @@ async function processStateMachine(
       
       if (benefit) {
         newContext.benefitIntent = benefit;
-        // If user also provided usage context in the same message, capture it and skip to prescription
         if (usage) {
           newContext.usageContext = usage;
-          newContext.currentState = STATES.STATE_4_PRESCRIPTION;
-          console.log(`[STATE MACHINE] Benefit (${benefit}) + Usage (${usage}) detected together, skipping to prescription`);
-        } else if (benefit === "unsure") {
-          newContext.currentState = STATES.STATE_4_PRESCRIPTION;
-        } else {
-          newContext.currentState = STATES.STATE_3_USAGE;
         }
+        newContext.currentState = STATES.STATE_4_PRESCRIPTION;
+        console.log(`[STATE MACHINE] Benefit (${benefit}) captured, moving to prescription`);
       } else if (usage) {
         // User mentioned usage without explicit benefit - infer shine as default and advance
         newContext.benefitIntent = "shine"; // default benefit
@@ -1719,12 +1768,16 @@ async function processStateMachine(
   const contextSummary = buildContextSummary(newContext, language);
   
   // Build prompt for current/new state and call Groq
-  const systemPrompt = buildSystemPrompt(newContext.currentState, newContext, language, business, services);
+  const baseSystemPrompt = buildSystemPrompt(newContext.currentState, newContext, language, business, services);
+  const longHistoryBlock = buildLongHistoryMemoryBlock(effectiveHistory, language);
+  const systemPrompt = longHistoryBlock
+    ? `${baseSystemPrompt}\n\n${longHistoryBlock}`
+    : baseSystemPrompt;
   
   // Inject context summary at the start of history
   const historyWithContext: ChatMessage[] = contextSummary
-    ? [{ role: "assistant" as const, content: contextSummary }, ...conversationHistory.slice(-6)]
-    : conversationHistory.slice(-6);
+    ? [{ role: "assistant" as const, content: contextSummary }, ...effectiveHistory.slice(-30)]
+    : effectiveHistory.slice(-30);
   
   const messages: ChatMessage[] = [
     { role: "system", content: systemPrompt },
@@ -1760,8 +1813,8 @@ async function processStateMachine(
     // Fallback responses if Groq fails
     const fallbacks: Record<State, { en: string; es: string }> = {
       STATE_0_OPENING: {
-        en: "To help you best, what vehicle is this for? (brand, model, type)",
-        es: "Para ayudarte mejor, ¿para qué vehículo es? (marca, modelo, tipo)"
+        en: "To guide you correctly, what vehicle is this for and what year is it? (make/model/year)",
+        es: "Para orientarte bien, que vehiculo es y de que anio? (marca/modelo/anio)"
       },
       STATE_1_VEHICLE: { en: "", es: "" },
       STATE_2_BENEFIT: {
@@ -1811,8 +1864,8 @@ async function processStateMachine(
 function buildContextSummary(context: ConversationContext, language: "en" | "es"): string | null {
   const parts: string[] = [];
   
-  if (context.vehicleInfo?.brand || context.vehicleInfo?.model) {
-    const vehicle = `${context.vehicleInfo.brand || ""} ${context.vehicleInfo.model || ""} ${context.vehicleInfo.type || ""}`.trim();
+  if (hasVehicleIdentity(context.vehicleInfo) || context.vehicleInfo?.year) {
+    const vehicle = `${context.vehicleInfo.brand || ""} ${context.vehicleInfo.model || ""} ${context.vehicleInfo.year || ""} ${context.vehicleInfo.type || ""}`.trim();
     parts.push(language === "es" ? `vehículo: ${vehicle}` : `vehicle: ${vehicle}`);
   }
   
@@ -1837,19 +1890,25 @@ function buildContextSummary(context: ConversationContext, language: "en" | "es"
 function validateResponse(response: string, context: ConversationContext): boolean {
   const lowerResponse = response.toLowerCase();
   
-  // If we have vehicle info, the response should NOT ask about vehicle
-  if (context.vehicleInfo?.brand || context.vehicleInfo?.model || context.vehicleInfo?.type) {
-    const asksVehicle = /what (type|kind|make|model|year)?\s*(of\s*)?(vehicle|car|truck|suv|carro|veh[ií]culo|coche)/i.test(response) ||
-                        /qu[ée]\s*(tipo|marca|modelo)\s*(de\s*)?(veh[ií]culo|carro|coche|auto)/i.test(response) ||
-                        /what.*do you (have|drive|own)/i.test(response) ||
-                        /tell me about your (car|vehicle)/i.test(response);
-    if (asksVehicle) {
-      console.warn("[VALIDATION] Response asks about vehicle despite having info");
+    // Vehicle re-ask validation: allow asking year only if year is missing.
+  if (hasVehicleIdentity(context.vehicleInfo)) {
+    const asksCoreVehicle = /what (type|kind|make|model)\s*(of\s*)?(vehicle|car|truck|suv)/i.test(response) ||
+                            /qu[ée]\s*(tipo|marca|modelo)\s*(de\s*)?(veh[ií]culo|carro|coche|auto)/i.test(response) ||
+                            /what.*do you (have|drive|own)/i.test(response) ||
+                            /tell me about your (car|vehicle)/i.test(response);
+    const asksYear = /\bwhat year\b|\byear is\b|\bde que anio\b|\banio de\b/i.test(lowerResponse);
+
+    if (context.vehicleInfo?.year) {
+      if (asksCoreVehicle || asksYear) {
+        console.warn("[VALIDATION] Response asks for vehicle details despite having them");
+        return false;
+      }
+    } else if (asksCoreVehicle) {
+      console.warn("[VALIDATION] Response re-asks vehicle identity while only year is missing");
       return false;
     }
   }
-  
-  // If we have benefit intent, should NOT ask what they're looking for
+// If we have benefit intent, should NOT ask what they're looking for
   if (context.benefitIntent) {
     const asksIntent = /what are you (looking|trying|hoping|wanting) to (achieve|do|accomplish|get)/i.test(response) ||
                        /what would you like to/i.test(response) ||
@@ -2119,6 +2178,107 @@ async function cancelPendingFollowUps(
   }
 }
 
+function buildLongHistoryMemoryBlock(
+  history: ChatMessage[],
+  language: "en" | "es",
+  recentWindow = 30,
+  maxChars = 9000
+): string {
+  if (!history || history.length <= recentWindow) return "";
+
+  const older = history.slice(0, -recentWindow);
+  if (older.length === 0) return "";
+
+  const header = language === "es"
+    ? "RESUMEN DE HISTORIAL (turnos anteriores, usar como memoria):"
+    : "LONG HISTORY SUMMARY (earlier turns, use as memory):";
+
+  const lines: string[] = [];
+  let used = header.length + 2;
+
+  for (const msg of older) {
+    const role = msg.role === "user" ? (language === "es" ? "Cliente" : "Customer") : (language === "es" ? "Asesor" : "Assistant");
+    const cleaned = msg.content.replace(/\s+/g, " ").trim();
+    if (!cleaned) continue;
+    const compact = cleaned.length > 160 ? `${cleaned.slice(0, 157)}...` : cleaned;
+    const line = `- ${role}: ${compact}`;
+
+    if (used + line.length + 1 > maxChars) {
+      lines.push(language === "es" ? "- [historial anterior truncado por longitud]" : "- [earlier history truncated for length]");
+      break;
+    }
+
+    lines.push(line);
+    used += line.length + 1;
+  }
+
+  return `${header}\n${lines.join("\n")}`;
+}
+
+async function clearConversationData(
+  supabase: any,
+  businessId: string,
+  conversationId: string | null,
+  customerIdentifier: string | null
+): Promise<void> {
+  if (!businessId) return;
+
+  const safeDelete = async (label: string, op: () => Promise<any>) => {
+    try {
+      const { error } = await op();
+      if (error) {
+        console.warn(`[CLEAR] ${label} delete warning:`, error.message || error);
+      }
+    } catch (err) {
+      console.warn(`[CLEAR] ${label} delete failed:`, err);
+    }
+  };
+
+  if (conversationId) {
+    await safeDelete("messages", () =>
+      supabase
+        .from("messages")
+        .delete()
+        .eq("business_id", businessId)
+        .eq("conversation_id", conversationId)
+    );
+
+    await safeDelete("conversations", () =>
+      supabase
+        .from("conversations")
+        .delete()
+        .eq("business_id", businessId)
+        .eq("conversation_id", conversationId)
+    );
+
+    await safeDelete("follow_up_queue", () =>
+      supabase
+        .from("follow_up_queue")
+        .delete()
+        .eq("business_id", businessId)
+        .eq("conversation_id", conversationId)
+    );
+
+    await safeDelete("leads", () =>
+      supabase
+        .from("leads")
+        .delete()
+        .eq("business_id", businessId)
+        .eq("conversation_id", conversationId)
+    );
+  }
+
+  if (customerIdentifier) {
+    await safeDelete("customer_memory", () =>
+      supabase
+        .from("customer_memory")
+        .delete()
+        .eq("business_id", businessId)
+        .eq("customer_identifier", customerIdentifier)
+    );
+  }
+}
+
 // ============================================================================
 // LOAD CONVERSATION CONTEXT
 // ============================================================================
@@ -2170,6 +2330,39 @@ async function loadConversationContext(
   }
 
   return defaultContext;
+}
+
+async function loadConversationHistoryFromDb(
+  supabase: any,
+  businessId: string,
+  conversationId: string | null
+): Promise<ChatMessage[]> {
+  if (!conversationId) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from("messages")
+      .select("direction, message_text, timestamp")
+      .eq("business_id", businessId)
+      .eq("conversation_id", conversationId)
+      .order("timestamp", { ascending: true });
+
+    if (error) {
+      console.warn("[HISTORY] Failed to load conversation history:", error.message || error);
+      return [];
+    }
+
+    const rows = (data || []) as StoredMessageRow[];
+    return rows
+      .filter((row) => typeof row.message_text === "string" && row.message_text.trim().length > 0)
+      .map((row) => ({
+        role: row.direction === "inbound" ? "user" : "assistant",
+        content: (row.message_text || "").trim(),
+      }));
+  } catch (err) {
+    console.warn("[HISTORY] Error loading conversation history:", err);
+    return [];
+  }
 }
 
 // ============================================================================
@@ -2258,6 +2451,7 @@ serve(async (req: Request) => {
     const body: AIRequest = await req.json();
     const { 
       businessId, 
+      action = "chat",
       conversationId, 
       customerIdentifier, 
       customerName,
@@ -2266,9 +2460,34 @@ serve(async (req: Request) => {
       conversationHistory = [] 
     } = body;
 
-    if (!businessId || !userMessage) {
+    if (!businessId) {
       return new Response(
-        JSON.stringify({ success: false, error: "Missing businessId or userMessage" }),
+        JSON.stringify({ success: false, error: "Missing businessId" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (action === "clearConversation") {
+      await clearConversationData(
+        supabase,
+        businessId,
+        conversationId || null,
+        customerIdentifier || null
+      );
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          cleared: true,
+          conversationId: conversationId || null,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!userMessage) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Missing userMessage" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -2329,6 +2548,8 @@ serve(async (req: Request) => {
 
     // Load conversation context (state machine state)
     let context = await loadConversationContext(supabase, conversationId || null);
+    const storedHistory = await loadConversationHistoryFromDb(supabase, businessId, conversationId || null);
+    const mergedHistory = storedHistory.length > 0 ? storedHistory : conversationHistory;
     
     // Use persisted language from context if available, otherwise use detected language
     const language: "en" | "es" = context.detectedLanguage || detectedLang;
@@ -2346,7 +2567,7 @@ serve(async (req: Request) => {
     // Capture vehicle info if present in current message (for memory)
     const parsedVehicle = parseVehicleInfo(userMessage);
     if (parsedVehicle) {
-      context.vehicleInfo = parsedVehicle;
+      context.vehicleInfo = { ...(context.vehicleInfo || {}), ...parsedVehicle };
     }
 
     if (isReturning && customerMemory) {
@@ -2355,81 +2576,36 @@ serve(async (req: Request) => {
     
     console.log(`[AI-CHAT] Business: ${business?.name}, Services: ${serviceCount}, State: ${context.currentState}, Language: ${language}, Returning: ${isReturning}`);
 
-    // Build Groq prompt to match WhatsApp/Instagram behavior
-    const channelLabel = channel === "instagram" ? "Instagram" : "WhatsApp";
-    const languageLabel = language === "es" ? "Spanish" : "English";
-    const intent = detectWebhookIntent(userMessage);
-    const detectedService = detectServiceNameSimple(userMessage, services || []);
-    const detectedVehicleType = detectVehicleTypeSimple(userMessage);
-    const schedulePref = parseScheduleResponse(userMessage);
-    const knownFacts = [
-  detectedService ? `Service: ${detectedService}` : null,
-  detectedVehicleType ? `Vehicle: ${detectedVehicleType}` : null,
-  schedulePref.time ? `Timing: ${schedulePref.time}` : null,
-].filter(Boolean).join(" | ");
-
     const { data: knowledge } = await supabase
-  .from("knowledge_chunks")
-  .select("content")
-  .eq("business_id", businessId)
-  .textSearch("content_tsv", userMessage.split(" ").slice(0, 5).join(" | "))
-  .limit(3);
+      .from("knowledge_chunks")
+      .select("content")
+      .eq("business_id", businessId)
+      .textSearch("content_tsv", userMessage.split(" ").slice(0, 5).join(" | "))
+      .limit(3);
 
     const knowledgeContext = knowledge?.map((k: any) => k.content).join("\n") || "";
-    const servicesContext = (services || []).map((s: any) =>
-  `${s.name}: ${s.description || ""} - $${s.base_price || "TBD"} (${s.duration_minutes || "?"} min)`
-).join("\n") || "No services configured.";
 
-    const systemPrompt = `You are a helpful AI assistant for ${business?.name || "a car detailing business"} responding on ${channelLabel}.
-Respond in ${languageLabel}.
-Be professional and concise (1-2 sentences max).
-Ask at most one short follow-up question, only if needed.
-Do not ask to book unless the customer explicitly asks about booking or availability.
-Do not assume a vehicle type; only ask if needed to answer.
-Avoid emojis and hype.
+    const businessWithKnowledge = knowledgeContext
+      ? {
+          ...business,
+          ai_instructions: `${business?.ai_instructions ? `${business.ai_instructions}\n\n` : ""}KNOWLEDGE BASE FACTS:\n${knowledgeContext}`,
+        }
+      : business;
 
-Your goals:
-1. Answer questions about services, pricing, and hours
-2. Qualify leads by identifying booking interest
-3. If customer wants to book, ask for preferred date/time and vehicle type
+    const stateMachine = await processStateMachine(
+      userMessage,
+      context,
+      language,
+      businessWithKnowledge,
+      services || [],
+      conversationHistory,
+      mergedHistory,
+      GROQ_API_KEY
+    );
 
-Detected intent: ${intent}
-Known facts: ${knownFacts || "None"}
-
-Business Services:
-${servicesContext}
-
-Knowledge Base:
-${knowledgeContext}
-
-Greeting: ${business?.greeting_message || "Hi! How can I help you today?"}
-
-Rules:
-- Keep responses short for ${channelLabel} format
-- Be direct and actionable
-- If you don't know something, offer to connect them with the team
-- When discussing services/pricing, mention you can share a visual service menu
-- If intent is services/pricing/packages and service is unknown, ask which service they want (no booking question)
-- If service is known and intent is pricing but vehicle is unknown, ask for vehicle type`;
-
-    const messages: ChatMessage[] = [
-  { role: "system", content: systemPrompt },
-  { role: "user", content: userMessage }
-];
-
-    const { content, error, latencyMs } = await callGroqAPI(messages, GROQ_API_KEY);
-    const usedFallback = Boolean(error || !content);
-    const fallbackReply = language === "es"
-  ? "Gracias por tu mensaje. ¿En qué puedo ayudarte?"
-  : "Thanks for your message. How can I help?";
-    const reply = trimResponse(content || fallbackReply);
-    const newContext = { ...context };
-    if (detectedVehicleType && !newContext.vehicleInfo?.type) {
-  newContext.vehicleInfo = { ...(newContext.vehicleInfo || {}), type: detectedVehicleType };
-}
-    newContext.detectedLanguage = language;
-    const performance = { responseTimeMs: latencyMs, isFallback: usedFallback, aiModel: DEFAULT_MODEL };
-
+    const reply = trimResponse(stateMachine.reply);
+    const newContext = { ...stateMachine.newContext, detectedLanguage: language };
+    const performance = stateMachine.performance;
     console.log(`[AI-CHAT] Response generated in ${performance.responseTimeMs}ms, fallback: ${performance.isFallback}`);// Check if user is asking about services/menu/prices and look for matching flyer
     let flyerResult: FlyerResult = { url: null, type: null };
     const detectedFlyerType = detectFlyerType(userMessage);
@@ -2555,10 +2731,3 @@ Rules:
     );
   }
 });
-
-
-
-
-
-
-

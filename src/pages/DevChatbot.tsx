@@ -20,8 +20,9 @@ function generateConversationId(): string {
   return `sim_${Date.now()}_${crypto.randomUUID().split('-')[0]}`;
 }
 
-// Simulated customer identifier for memory testing
-const SIMULATED_CUSTOMER_PHONE = "+1234567890";
+function generateSimulatedCustomerIdentifier(): string {
+  return `sim_customer_${crypto.randomUUID().split("-")[0]}`;
+}
 
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,20 @@ type ConversationState = {
   leadQualified: boolean;
   recoveryAttemptCount: number;
 };
+
+type PersistedSession = {
+  messages: Array<Omit<Message, "timestamp"> & { timestamp: string }>;
+  conversationId: string;
+  customerIdentifier: string;
+  conversationState: ConversationState;
+  selectedChannel: "whatsapp" | "instagram";
+};
+
+const DEV_CHATBOT_STORAGE_PREFIX = "devchatbot_session_v1";
+
+function getDevChatbotStorageKey(businessId: string): string {
+  return `${DEV_CHATBOT_STORAGE_PREFIX}:${businessId}`;
+}
 
 // State display names
 const STATE_LABELS: Record<string, { en: string; es: string }> = {
@@ -127,6 +142,9 @@ export default function DevChatbotPage() {
   
   // Conversation ID for state persistence across messages
   const [conversationId, setConversationId] = useState<string>(() => generateConversationId());
+  const [customerIdentifier, setCustomerIdentifier] = useState<string>(() =>
+    generateSimulatedCustomerIdentifier()
+  );
   
   // State machine tracking
   const [conversationState, setConversationState] = useState<ConversationState>({
@@ -187,7 +205,56 @@ export default function DevChatbotPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
+  const [isDeletingChat, setIsDeletingChat] = useState(false);
   const [selectedChannel, setSelectedChannel] = useState<"whatsapp" | "instagram">("whatsapp");
+  const isBackgroundProcessing = loading || isDeletingChat || servicesLoading;
+
+  useEffect(() => {
+    if (!businessId) return;
+    try {
+      const raw = localStorage.getItem(getDevChatbotStorageKey(businessId));
+      if (!raw) return;
+      const saved = JSON.parse(raw) as PersistedSession;
+
+      if (Array.isArray(saved.messages)) {
+        setMessages(
+          saved.messages.map((msg) => ({
+            ...msg,
+            timestamp: new Date(msg.timestamp),
+          }))
+        );
+      }
+      if (typeof saved.conversationId === "string" && saved.conversationId) {
+        setConversationId(saved.conversationId);
+      }
+      if (typeof saved.customerIdentifier === "string" && saved.customerIdentifier) {
+        setCustomerIdentifier(saved.customerIdentifier);
+      }
+      if (saved.conversationState) {
+        setConversationState(saved.conversationState);
+      }
+      if (saved.selectedChannel === "whatsapp" || saved.selectedChannel === "instagram") {
+        setSelectedChannel(saved.selectedChannel);
+      }
+    } catch (err) {
+      console.error("Failed to restore chatbot session", err);
+    }
+  }, [businessId]);
+
+  useEffect(() => {
+    if (!businessId) return;
+    const payload: PersistedSession = {
+      messages: messages.map((msg) => ({
+        ...msg,
+        timestamp: msg.timestamp.toISOString(),
+      })),
+      conversationId,
+      customerIdentifier,
+      conversationState,
+      selectedChannel,
+    };
+    localStorage.setItem(getDevChatbotStorageKey(businessId), JSON.stringify(payload));
+  }, [businessId, messages, conversationId, customerIdentifier, conversationState, selectedChannel]);
 
   const copy = useMemo(
     () =>
@@ -254,7 +321,7 @@ export default function DevChatbotPage() {
   const handleSend = useCallback(
     async (messageText?: string) => {
       const trimmed = (messageText || input).trim();
-      if (!trimmed || loading) return;
+      if (!trimmed || loading || isDeletingChat) return;
       
       // Don't allow sending if handoff is required
       if (conversationState.handoffRequired) {
@@ -296,7 +363,7 @@ export default function DevChatbotPage() {
                 businessId,
                 userMessage: trimmed,
                 conversationId, // Session persistence
-                customerIdentifier: SIMULATED_CUSTOMER_PHONE, // Simulated customer for memory testing
+                customerIdentifier, // Keep memory isolated per test session
                 channel: selectedChannel,
                 conversationHistory: messages.map((m) => ({
                   role: m.role === "user" ? "user" : "assistant",
@@ -357,20 +424,51 @@ export default function DevChatbotPage() {
       setLoading(false);
       setIsTyping(false);
     },
-    [input, loading, businessId, copy, conversationState.handoffRequired, messages, conversationId, selectedChannel]
+    [input, loading, businessId, copy, conversationState.handoffRequired, messages, conversationId, customerIdentifier, selectedChannel, isDeletingChat]
   );
 
-  const handleClearChat = () => {
-    setMessages([]);
-    setError(null);
-    // Generate new conversation ID for fresh session
-    setConversationId(generateConversationId());
-    setConversationState({
-      currentState: "STATE_0_OPENING",
-      handoffRequired: false,
-      leadQualified: false,
-      recoveryAttemptCount: 0,
-    });
+  const handleClearChat = async () => {
+    if (isDeletingChat) return;
+    setIsDeletingChat(true);
+    const previousConversationId = conversationId;
+    const previousCustomerIdentifier = customerIdentifier;
+
+    try {
+      if (businessId) {
+        try {
+          await fetch("https://ybifjdlelpvgzmzvgwls.supabase.co/functions/v1/ai-chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "clearConversation",
+              businessId,
+              conversationId: previousConversationId,
+              customerIdentifier: previousCustomerIdentifier,
+            }),
+          });
+        } catch (err) {
+          console.error("Failed to clear backend conversation data", err);
+        }
+      }
+
+      if (businessId) {
+        localStorage.removeItem(getDevChatbotStorageKey(businessId));
+      }
+
+      setMessages([]);
+      setError(null);
+      // Generate new IDs for fresh session
+      setConversationId(generateConversationId());
+      setCustomerIdentifier(generateSimulatedCustomerIdentifier());
+      setConversationState({
+        currentState: "STATE_0_OPENING",
+        handoffRequired: false,
+        leadQualified: false,
+        recoveryAttemptCount: 0,
+      });
+    } finally {
+      setIsDeletingChat(false);
+    }
   };
 
   const formatTime = (date: Date) => {
@@ -448,6 +546,13 @@ export default function DevChatbotPage() {
           </Badge>
         )}
       </div>
+
+      {isBackgroundProcessing && (
+        <div className="flex items-center gap-2 rounded-md border border-accent/30 bg-accent/5 px-3 py-2 text-sm text-accent">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>{isEs ? "Procesando..." : "Processing..."}</span>
+        </div>
+      )}
 
       {/* Channel Selector */}
       <div className="flex items-center gap-3">
@@ -555,7 +660,23 @@ export default function DevChatbotPage() {
                   <CardDescription className="text-xs">{copy.hint}</CardDescription>
                 </div>
               </div>
-              <Bot className="h-5 w-5 text-muted-foreground" />
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleClearChat}
+                  disabled={isBackgroundProcessing}
+                  className="text-destructive border-destructive/40 hover:bg-destructive/10"
+                >
+                  {isDeletingChat ? (
+                    <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-2 h-3.5 w-3.5" />
+                  )}
+                  {isDeletingChat ? (isEs ? "Eliminando..." : "Deleting...") : (isEs ? "Eliminar chat" : "Delete chat")}
+                </Button>
+                <Bot className="h-5 w-5 text-muted-foreground" />
+              </div>
             </div>
           </CardHeader>
 
@@ -699,7 +820,7 @@ export default function DevChatbotPage() {
               </div>
               <Button
                 onClick={() => handleSend()}
-                disabled={loading || !input.trim() || conversationState.handoffRequired}
+                disabled={isBackgroundProcessing || !input.trim() || conversationState.handoffRequired}
                 size="icon"
                 className="h-12 w-12 rounded-full bg-accent text-white hover:bg-accent/90 shadow-lg shadow-accent/25 transition-all hover:shadow-accent/40 disabled:opacity-50"
               >
