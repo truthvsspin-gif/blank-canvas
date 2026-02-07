@@ -362,7 +362,7 @@ function parseProtectionDuration(text: string): "short" | "long" | null {
 }
 
 // ============================================================================
-// HANDOFF TRIGGER DETECTION (STATE 6)
+// BOOKING INTENT DETECTION (STATE 6)
 // ============================================================================
 function shouldTriggerHandoff(text: string): boolean {
   const lowerText = text.toLowerCase();
@@ -729,7 +729,7 @@ async function createOrUpdateLead(
 }
 
 // ============================================================================
-// BOOKING CREATION - Auto-create CRM booking when handoff is triggered
+// BOOKING CREATION - Auto-create CRM booking when schedule is set
 // ============================================================================
 async function createBookingFromConversation(
   supabase: ReturnType<typeof createClient>,
@@ -797,24 +797,32 @@ async function createBookingFromConversation(
       return null;
     }
 
-    // Step 2: Check if booking already exists for this conversation
+    // Determine service name for matching
+    const serviceName = recommendedService || context.recommendationSummary || "TBD";
+
+    // Step 2: Check if booking already exists for this customer recently
     const { data: existingBooking } = await supabase
       .from("bookings")
-      .select("id")
+      .select("id, service_name, status, created_at, scheduled_at")
       .eq("business_id", businessId)
       .eq("customer_id", customerId)
       .eq("source", "chatbot")
-      .eq("status", "pending")
-      .is("scheduled_at", null)
+      .in("status", ["pending", "confirmed"])
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (existingBooking?.id) {
-      console.log(`[BOOKING] Booking already exists: ${existingBooking.id}`);
-      return existingBooking.id;
+      const createdAt = existingBooking.created_at ? new Date(existingBooking.created_at) : null;
+      const isRecent = createdAt ? (Date.now() - createdAt.getTime() <= 24 * 60 * 60 * 1000) : false;
+      const sameService = (existingBooking.service_name || "").toLowerCase() === serviceName.toLowerCase();
+      if (isRecent && sameService) {
+        console.log(`[BOOKING] Booking already exists recently: ${existingBooking.id}`);
+        return existingBooking.id;
+      }
     }
 
     // Step 3: Create new booking with scheduled date if available
-    const serviceName = recommendedService || context.recommendationSummary || "TBD";
     
     // Calculate scheduled date if day was selected
     let scheduledAt: string | null = null;
@@ -832,13 +840,15 @@ async function createBookingFromConversation(
       console.log(`[BOOKING] Calculated scheduled_at: ${scheduledAt} from day: ${context.scheduledDay}, time: ${context.scheduledTime || 'default'}`);
     }
 
+    const bookingStatus = scheduledAt ? "confirmed" : "pending";
+
     const { data: newBooking, error: bookError } = await supabase
       .from("bookings")
       .insert({
         business_id: businessId,
         customer_id: customerId,
         service_name: serviceName,
-        status: "pending",
+        status: bookingStatus,
         source: "chatbot",
         scheduled_at: scheduledAt,
       })
@@ -1200,7 +1210,7 @@ REGLAS ABSOLUTAS (NUNCA ROMPER):
 8. NUNCA presionar - sé consultivo, no vendedor agresivo
 9. SIEMPRE incluir el precio cuando menciones un servicio
 10. SOLO recomienda servicios que existen en tu CONTEXTO DE NEGOCIO
-11. Si no hay servicio que aplique, guía hacia handoff humano
+11. Si no hay servicio que aplique, haz UNA pregunta de aclaracion o cierra con amabilidad
 12. Sé cálido, profesional y humano - responde en Español`
     : `=== CONSULTATIVE SALES AGENT - CORE RULES ===
 IDENTITY: You are a consultative sales advisor, NOT an informational bot.
@@ -1217,7 +1227,7 @@ ABSOLUTE RULES (NEVER BREAK):
 8. NEVER pressure - be consultative, not pushy
 9. ALWAYS include the price when mentioning a service
 10. ONLY recommend services that exist in your BUSINESS CONTEXT
-11. If no service applies, guide toward human handoff
+11. If no service applies, ask ONE clarifying question or close politely
 12. Be warm, professional, and human - reply in English`;
 
   // State-specific goals
@@ -1296,8 +1306,8 @@ Ask: "Are you looking for something that lasts a few months, or long-term protec
 2. Enmarca el beneficio principal (no proceso técnico)
 3. Haz UNA recomendación del servicio que MEJOR APLICA de tu contexto
 4. INCLUYE el precio exacto del servicio (ej: '$199')
-5. Cierra con dirección: ofrece avanzar y conectar con el equipo
-6. Haz UNA sola pregunta: si desean avanzar
+5. Cierra con direccion: ofrece agendar ahora mismo
+6. Haz UNA sola pregunta: si desean agendar
 
 IMPORTANTE: Selecciona el servicio que mejor encaja basándote en:
 - Vehículo del cliente (tamaño, tipo)
@@ -1308,8 +1318,8 @@ IMPORTANTE: Selecciona el servicio que mejor encaja basándote en:
 2. Frame the primary benefit (not technical process)
 3. Make ONE recommendation for the BEST MATCHING service from your context
 4. INCLUDE the exact price (e.g., '$199')
-5. Close with direction: offer to move forward and connect with the team
-6. Ask ONE question: if they'd like to move forward
+5. Close with direction: offer to book now
+6. Ask ONE question: if they'd like to book now
 
 IMPORTANT: Select the service that best fits based on:
 - Customer's vehicle (size, type)
@@ -1317,34 +1327,54 @@ IMPORTANT: Select the service that best fits based on:
 - Protection duration if applicable`;
       break;
 
-    case STATES.STATE_5_SCHEDULE:
+    case STATES.STATE_5_SCHEDULE: {
+      const hasDay = !!context.scheduledDay;
+      const hasTime = !!context.scheduledTime;
+      const askEs = !hasDay && !hasTime
+        ? "Que dia te queda mejor (lunes a viernes) y prefieres manana o tarde?"
+        : !hasDay
+          ? "Que dia te queda mejor (lunes a viernes)?"
+          : !hasTime
+            ? "Prefieres manana o tarde?"
+            : "Confirmo tu reserva. Si necesitas cambios, avisame.";
+      const askEn = !hasDay && !hasTime
+        ? "What day works best (Mon-Fri), and do you prefer morning or afternoon?"
+        : !hasDay
+          ? "What day works best (Mon-Fri)?"
+          : !hasTime
+            ? "Do you prefer morning or afternoon?"
+            : "Your booking is confirmed. If you need changes, just let me know.";
+
       stateGoal = language === "es"
-        ? `OBJETIVO: Mantener el control y avanzar a handoff.
-Refuerza la recomendación y pregunta si desean avanzar para conectar con el equipo.
-Respuesta CORTA (1-2 oraciones).`
-        : `GOAL: Maintain control and move to handoff.
-Reinforce the recommendation and ask if they'd like to move forward so you can connect them with the team.
-SHORT response (1-2 sentences).`;
+        ? `OBJETIVO: Agendar la reserva.
+${vehicleRef ? `Referencia su ${vehicleRef}.` : ""}
+Pregunta: "${askEs}"`
+        : `GOAL: Schedule the booking.
+${vehicleRef ? `Reference their ${vehicleRef}.` : ""}
+Ask: "${askEn}"`;
       break;
+    }
 
     case STATES.STATE_6_ACTION:
       stateGoal = language === "es"
-        ? `OBJETIVO: Confirmar avance y conectar con humano.
-Confirma que estás listo para conectar al equipo y pregunta si quieren avanzar.
+        ? `OBJETIVO: Confirmar la reserva creada.
+Menciona el dia/horario si ya lo tienes.
+No transfieras a humano.
 Respuesta CORTA (1-2 oraciones).`
-        : `GOAL: Confirm readiness and connect with a human.
-Confirm you're ready to connect the team and ask if they want to move forward.
+        : `GOAL: Confirm the booking is created.
+Mention the day/time if available.
+Do not hand off to a human.
 SHORT response (1-2 sentences).`;
       break;
 
     case STATES.STATE_7_HANDOFF:
       stateGoal = language === "es"
-        ? `OBJETIVO: Confirmar traspaso a humano.
-Hazles saber que los conectarás con el equipo para coordinar.
-Sé entusiasta pero breve. Usa máximo un emoji.`
-        : `GOAL: Confirm handoff to human.
-Let them know you'll connect them with the team to coordinate.
-Be enthusiastic but brief. Use one emoji max.`;
+        ? `OBJETIVO: Confirmar la reserva.
+Indica que la reserva esta confirmada y que puede pedir cambios si los necesita.
+Respuesta breve.`
+        : `GOAL: Confirm the booking.
+State the booking is confirmed and they can request changes if needed.
+Brief response.`;
       break;
 
     default:
@@ -1382,12 +1412,12 @@ function buildBusinessContextBlock(
       ? `=== CONTEXTO DE NEGOCIO (SOLO INTERNO) ===
 ?? ADVERTENCIA: No hay servicios configurados para este negocio.
 NO intentes vender ni recomendar servicios específicos.
-Guía al cliente hacia contacto humano para asistencia.
+Indica que ahora no hay servicios configurados y ofrece intentar mas tarde.
 ===========================================`
       : `=== BUSINESS CONTEXT (INTERNAL ONLY) ===
 ?? WARNING: No services configured for this business.
 DO NOT attempt to sell or recommend specific services.
-Guide customer toward human contact for assistance.
+Let them know no services are configured and offer to try again later.
 =========================================`;
   }
 
@@ -1443,21 +1473,21 @@ Guide customer toward human contact for assistance.
 
   const rulesBlock = language === "es"
     ? `REGLAS DE USO:
-- SOLO puedes recomendar servicios listados aquí
+- SOLO puedes recomendar servicios listados aqui
 - NUNCA inventes servicios, paquetes o precios
 - NUNCA listes todos los servicios al cliente
-- Selecciona UNA mejor opción basada en su situación
-- Si nada aplica, guía hacia handoff humano
+- Selecciona UNA mejor opcion basada en su situacion
+- Si nada aplica, haz UNA pregunta de aclaracion o cierra de forma amable
 - SIEMPRE menciona el precio cuando recomiendes un servicio
-- Si preguntan por disponibilidad o agenda, TRASPASA a humano (handoff)${trojanHorseRule}`
+- Si preguntan por disponibilidad o agenda, pasa al flujo de reserva (dia y horario)${trojanHorseRule}`
     : `USAGE RULES:
 - You may ONLY recommend services listed here
 - NEVER invent services, packages, or prices
 - NEVER list all services to the customer
 - Select ONE best option based on their situation
-- If nothing fits, guide toward human handoff
+- If nothing fits, ask ONE clarifying question or close politely
 - ALWAYS mention the price when recommending a service
-- If they ask about availability/scheduling, TRIGGER human handoff${trojanHorseRule}`;
+- If they ask about availability/scheduling, proceed to booking (day/time)${trojanHorseRule}`;
 
   let contextBlock = `${header}
 Business: ${businessName}
@@ -1679,16 +1709,26 @@ async function processStateMachine(
     console.log(`[RECOVERY] Customer engaged meaningfully, resetting recovery count`);
   }
   
-  // Check for handoff triggers once a recommendation exists (spec: handoff on acceptance/availability)
+  // Check for booking intent once a recommendation exists
   if ((context.currentState === STATES.STATE_4_PRESCRIPTION ||
        context.currentState === STATES.STATE_5_SCHEDULE ||
        context.currentState === STATES.STATE_6_ACTION) &&
       (shouldTriggerHandoff(userMessage) || hasContactInfo(userMessage))) {
-    newContext.currentState = STATES.STATE_7_HANDOFF;
-    newContext.handoffRequired = true;
     newContext.leadQualified = true;
+    const schedule = parseScheduleResponse(userMessage);
+    if (schedule.day) {
+      newContext.scheduledDay = schedule.day;
+    }
+    if (schedule.time) {
+      newContext.scheduledTime = schedule.time;
+    }
+    if (newContext.scheduledDay && newContext.scheduledTime) {
+      newContext.currentState = STATES.STATE_6_ACTION;
+    } else {
+      newContext.currentState = STATES.STATE_5_SCHEDULE;
+    }
 
-    const systemPrompt = buildSystemPrompt(STATES.STATE_7_HANDOFF, newContext, language, business, services);
+    const systemPrompt = buildSystemPrompt(newContext.currentState, newContext, language, business, services);
     const messages: ChatMessage[] = [
       { role: "system", content: systemPrompt },
       ...effectiveHistory.slice(-RECENT_HISTORY_WINDOW),
@@ -1699,11 +1739,17 @@ async function processStateMachine(
     lastLatencyMs = latencyMs;
     if (error || !content) {
       usedFallback = true;
-      const fallback = language === "es"
-        ? "Perfecto. Te conecto con la persona encargada para coordinar los siguientes pasos."
-        : "Perfect. I'll connect you with the person in charge to coordinate next steps.";
+      const dayText = newContext.scheduledDay ? newContext.scheduledDay : null;
+      const timeText = newContext.scheduledTime ? newContext.scheduledTime : null;
+      const scheduleFallback = newContext.currentState === STATES.STATE_6_ACTION
+        ? (language === "es"
+            ? `Perfecto. Tu reserva queda para ${dayText || "el dia elegido"} ${timeText || ""}. Si necesitas cambiar algo, avisame.`
+            : `Perfect. Your booking is set for ${dayText || "the selected day"} ${timeText || ""}. If you need changes, just let me know.`)
+        : (language === "es"
+            ? "Perfecto. Que dia te queda mejor (lunes a viernes) y prefieres manana o tarde?"
+            : "Perfect. What day works best (Mon-Fri), and do you prefer morning or afternoon?");
       return {
-        reply: fallback,
+        reply: scheduleFallback,
         newContext,
         performance: { responseTimeMs: lastLatencyMs, isFallback: true, aiModel: DEFAULT_MODEL }
       };
@@ -1714,7 +1760,7 @@ async function processStateMachine(
       performance: { responseTimeMs: lastLatencyMs, isFallback: false, aiModel: DEFAULT_MODEL }
     };
   }
-  
+
   // Process based on current state
   switch (context.currentState) {
     case STATES.STATE_0_OPENING: {
@@ -1778,12 +1824,23 @@ case STATES.STATE_4_PRESCRIPTION: {
       break;
     }
 case STATES.STATE_5_SCHEDULE: {
-      // Legacy state retained; no scheduling logic in DetaPRO v1.2
-      newContext.currentState = STATES.STATE_5_SCHEDULE;
+      const schedule = parseScheduleResponse(userMessage);
+      if (schedule.day) {
+        newContext.scheduledDay = schedule.day;
+      }
+      if (schedule.time) {
+        newContext.scheduledTime = schedule.time;
+      }
+
+      if (newContext.scheduledDay && newContext.scheduledTime) {
+        newContext.currentState = STATES.STATE_6_ACTION;
+      } else {
+        newContext.currentState = STATES.STATE_5_SCHEDULE;
+      }
       break;
     }
-case STATES.STATE_6_ACTION: {
-      // Legacy state retained; handoff triggers are handled globally
+
+    case STATES.STATE_6_ACTION: {
       newContext.currentState = STATES.STATE_6_ACTION;
       break;
     }
@@ -1855,20 +1912,20 @@ case STATES.STATE_7_HANDOFF: {
         es: "¿Buscas algo que dure unos meses, o protección a largo plazo (1 a 3 años)?"
       },
       STATE_4_PRESCRIPTION: {
-        en: "Based on what you shared, I'd recommend a service focused on your priority. If you'd like, I can connect you with the team to move forward. Would you like to proceed?",
-        es: "Basándome en lo que me compartiste, recomiendo un servicio enfocado en tu prioridad. Si quieres, te conecto con el equipo para avanzar. ¿Quieres proceder?"
+        en: "Based on what you shared, I'd recommend a service focused on your priority. I can book it now. Would you like to schedule?",
+        es: "Basandome en lo que me compartiste, recomiendo un servicio enfocado en tu prioridad. Puedo agendarlo ahora. Quieres agendar?"
       },
       STATE_5_SCHEDULE: {
-        en: "If you'd like to move forward, I can connect you with the team. Would you like me to do that?",
-        es: "Si quieres avanzar, puedo conectarte con el equipo. ¿Quieres que lo haga?"
+        en: "Great. What day works best (Mon-Fri), and do you prefer morning or afternoon?",
+        es: "Perfecto. Que dia te queda mejor (lunes a viernes) y prefieres manana o tarde?"
       },
       STATE_6_ACTION: {
-        en: "I can connect you with the team to move forward. Would you like me to do that?",
-        es: "Puedo conectarte con el equipo para avanzar. ¿Quieres que lo haga?"
+        en: "Your booking is confirmed. If you need changes, just let me know.",
+        es: "Tu reserva esta confirmada. Si necesitas cambios, avisame."
       },
       STATE_7_HANDOFF: {
-        en: "Perfect. I'll connect you with our team to finalize the details.",
-        es: "Perfecto. Te conecto con nuestro equipo para finalizar los detalles."
+        en: "Perfect. Your booking is confirmed.",
+        es: "Perfecto. Tu reserva esta confirmada."
       }
     };
     
@@ -2640,11 +2697,11 @@ serve(async (req: Request) => {
     // If context already has language, use that (consistency across conversation)
     let detectedLang = detectLanguage(userMessage);
 
-    // FAIL-SAFE: If no business found, return neutral handoff message
+    // FAIL-SAFE: If no business found, return neutral message
     if (!business) {
       const failsafeMsg = detectedLang === "es"
-        ? "Quiero asegurarme de darte la orientación correcta. Permíteme conectarte con el equipo para asistirte mejor."
-        : "I want to make sure you get the right guidance. Let me connect you with the team to assist you properly.";
+        ? "Quiero asegurarme de darte la orientacion correcta. Por favor intenta de nuevo en un momento."
+        : "I want to make sure you get the right guidance. Please try again in a moment.";
       
       return new Response(
         JSON.stringify({
@@ -2652,8 +2709,8 @@ serve(async (req: Request) => {
           reply: failsafeMsg,
           intent: null,
           model: DEFAULT_MODEL,
-          currentState: STATES.STATE_7_HANDOFF,
-          handoffRequired: true,
+          currentState: STATES.STATE_0_OPENING,
+          handoffRequired: false,
           leadQualified: false,
           returningCustomer: false,
         }),
@@ -2692,6 +2749,13 @@ serve(async (req: Request) => {
     context = hydratedContext;
     if (historyHydrated) {
       console.log("[MEMORY] Rehydrated context from conversation history");
+    }
+
+    if (context.handoffRequired) {
+      context.handoffRequired = false;
+    }
+    if (context.currentState === STATES.STATE_7_HANDOFF) {
+      context.currentState = deriveStateFromContext(context);
     }
 
     if (isReturning && customerMemory) {
@@ -2781,15 +2845,19 @@ serve(async (req: Request) => {
       }
     }
     
-    // Create booking when handoff is triggered (new handoff, not repeat)
+    // Create booking when schedule details are captured
     let createdBookingId: string | null = null;
-    if (newContext.handoffRequired && !context.handoffRequired) {
-      console.log(`[EVENT] handoff_required for business ${businessId}`);
-      
-      // Extract recommended service from AI response or context
+    const shouldCreateBooking =
+      newContext.currentState === STATES.STATE_6_ACTION &&
+      newContext.scheduledDay &&
+      newContext.scheduledTime &&
+      (!context.scheduledDay || !context.scheduledTime);
+
+    if (shouldCreateBooking) {
+      console.log(`[EVENT] booking_requested for business ${businessId}`);
+
       const recommendedService = extractRecommendedService(reply, services || [], newContext);
-      
-      // Auto-create a CRM booking for this conversation
+
       createdBookingId = await createBookingFromConversation(supabase, {
         businessId,
         conversationId: conversationId || `auto-${Date.now()}`,
@@ -2799,7 +2867,7 @@ serve(async (req: Request) => {
         context: newContext,
         recommendedService: recommendedService,
       });
-      
+
       if (createdBookingId) {
         console.log(`[EVENT] booking_created for business ${businessId}, bookingId: ${createdBookingId}, service: ${recommendedService}`);
       }
@@ -2854,6 +2922,23 @@ serve(async (req: Request) => {
     );
   }
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
