@@ -58,6 +58,8 @@ interface ConversationContext {
   recoveryAttemptCount: number; // Intent Recovery Window (0-2)
   scheduledDay?: string; // Mon-Fri day selection
   scheduledTime?: string; // morning/afternoon
+  scheduledHour?: number; // exact hour when provided (0-23)
+  scheduledMinute?: number; // exact minute when provided (0-59)
   detectedLanguage?: "en" | "es"; // Persisted language preference
 }
 
@@ -94,6 +96,8 @@ interface AIResponse {
   handoffRequired: boolean;
   leadQualified: boolean;
   returningCustomer: boolean;
+  bookingCreated?: boolean;
+  bookingId?: string | null;
   flyerUrl?: string | null; // Services flyer URL when applicable
   flyerType?: string | null; // Type of flyer (services_flyer, etc.)
   error?: string;
@@ -417,7 +421,7 @@ function hasContactInfo(text: string): boolean {
 // ============================================================================
 // SCHEDULE RESPONSE PARSING (STATE_5_SCHEDULE)
 // ============================================================================
-function parseScheduleResponse(text: string): { day: string | null; time: string | null } {
+function parseScheduleResponse(text: string): { day: string | null; time: string | null; hour: number | null; minute: number | null } {
   const lowerText = text.toLowerCase();
   
   // Day detection (Spanish & English)
@@ -437,18 +441,44 @@ function parseScheduleResponse(text: string): { day: string | null; time: string
     }
   }
   
-  // Time detection (morning/afternoon) - use phrase patterns to handle Spanish expressions
   let detectedTime: string | null = null;
-  // Morning patterns: "por la mañana", "en la mañana", "morning", "am", "temprano"
-  if (/(?:por\s+la\s+mañana|en\s+la\s+mañana|de\s+la\s+mañana|\bmorning\b|\bam\b|\btemprano\b)/i.test(lowerText)) {
-    detectedTime = "morning";
-  } 
-  // Afternoon patterns: "por la tarde", "en la tarde", "afternoon", "pm"
-  else if (/(?:por\s+la\s+tarde|en\s+la\s+tarde|de\s+la\s+tarde|\bafternoon\b|\bpm\b)/i.test(lowerText)) {
-    detectedTime = "afternoon";
+  let detectedHour: number | null = null;
+  let detectedMinute: number | null = null;
+
+  // Exact 12-hour time (e.g., 3 pm, 10:30am)
+  const twelveHourMatch = lowerText.match(/\b(1[0-2]|0?[1-9])(?::([0-5]\d))?\s*(am|pm)\b/i);
+  if (twelveHourMatch) {
+    const rawHour = parseInt(twelveHourMatch[1], 10);
+    const rawMinute = twelveHourMatch[2] ? parseInt(twelveHourMatch[2], 10) : 0;
+    const meridiem = twelveHourMatch[3].toLowerCase();
+    let hour24 = rawHour % 12;
+    if (meridiem === "pm") hour24 += 12;
+
+    detectedHour = hour24;
+    detectedMinute = rawMinute;
+    detectedTime = hour24 < 12 ? "morning" : "afternoon";
+  } else {
+    // Exact 24-hour time (e.g., 15:00)
+    const twentyFourHourMatch = lowerText.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+    if (twentyFourHourMatch) {
+      const hour24 = parseInt(twentyFourHourMatch[1], 10);
+      const minute = parseInt(twentyFourHourMatch[2], 10);
+      detectedHour = hour24;
+      detectedMinute = minute;
+      detectedTime = hour24 < 12 ? "morning" : "afternoon";
+    }
+  }
+
+  // If exact time wasn't provided, fall back to broad time windows
+  if (!detectedTime) {
+    if (/(?:por\s+la\s+mañana|en\s+la\s+mañana|de\s+la\s+mañana|\bmorning\b|\bam\b|\btemprano\b)/i.test(lowerText)) {
+      detectedTime = "morning";
+    } else if (/(?:por\s+la\s+tarde|en\s+la\s+tarde|de\s+la\s+tarde|\bafternoon\b|\bpm\b)/i.test(lowerText)) {
+      detectedTime = "afternoon";
+    }
   }
   
-  return { day: detectedDay, time: detectedTime };
+  return { day: detectedDay, time: detectedTime, hour: detectedHour, minute: detectedMinute };
 }
 
 // ============================================================================
@@ -767,6 +797,12 @@ async function createOrUpdateLead(
 // ============================================================================
 // BOOKING CREATION - Auto-create CRM booking when schedule is set
 // ============================================================================
+interface BookingCreationResult {
+  bookingId: string | null;
+  created: boolean;
+  updated: boolean;
+}
+
 async function createBookingFromConversation(
   supabase: ReturnType<typeof createClient>,
   params: {
@@ -778,7 +814,7 @@ async function createBookingFromConversation(
     context: ConversationContext;
     recommendedService: string | null;
   }
-): Promise<string | null> {
+): Promise<BookingCreationResult> {
   const { businessId, conversationId, customerIdentifier, customerName, channel, context, recommendedService } = params;
 
   try {
@@ -821,7 +857,7 @@ async function createBookingFromConversation(
 
       if (custError) {
         console.error("[BOOKING] Failed to create customer:", custError);
-        return null;
+        return { bookingId: null, created: false, updated: false };
       }
 
       customerId = newCustomer?.id || null;
@@ -830,13 +866,37 @@ async function createBookingFromConversation(
 
     if (!customerId) {
       console.error("[BOOKING] No customer ID available");
-      return null;
+      return { bookingId: null, created: false, updated: false };
     }
 
-    // Determine service name for matching
     const serviceName = recommendedService || context.recommendationSummary || "TBD";
 
-    // Step 2: Check if booking already exists for this customer recently
+    // Compute scheduled datetime before dedupe check so we can update an existing booking.
+    let scheduledAt: string | null = null;
+    if (context.scheduledDay) {
+      const scheduledDate = getNextWeekday(context.scheduledDay);
+      let hour = 10;
+      let minute = 0;
+
+      if (typeof context.scheduledHour === "number") {
+        hour = Math.max(0, Math.min(23, context.scheduledHour));
+        minute = typeof context.scheduledMinute === "number"
+          ? Math.max(0, Math.min(59, context.scheduledMinute))
+          : 0;
+      } else if (context.scheduledTime === "afternoon") {
+        hour = 14;
+      } else if (context.scheduledTime === "morning") {
+        hour = 10;
+      }
+
+      scheduledDate.setHours(hour, minute, 0, 0);
+      scheduledAt = scheduledDate.toISOString();
+      console.log(`[BOOKING] Calculated scheduled_at: ${scheduledAt} from day: ${context.scheduledDay}, time: ${context.scheduledTime || 'default'}, exact: ${context.scheduledHour ?? 'none'}:${context.scheduledMinute ?? 0}`);
+    }
+
+    const bookingStatus = scheduledAt ? "confirmed" : "pending";
+
+    // Step 2: Check if booking already exists recently for same customer/service
     const { data: existingBooking } = await supabase
       .from("bookings")
       .select("id, service_name, status, created_at, scheduled_at")
@@ -853,31 +913,39 @@ async function createBookingFromConversation(
       const isRecent = createdAt ? (Date.now() - createdAt.getTime() <= 24 * 60 * 60 * 1000) : false;
       const sameService = (existingBooking.service_name || "").toLowerCase() === serviceName.toLowerCase();
       if (isRecent && sameService) {
-        console.log(`[BOOKING] Booking already exists recently: ${existingBooking.id}`);
-        return existingBooking.id;
+        const updatePayload: Record<string, any> = { updated_at: new Date().toISOString() };
+        let updated = false;
+
+        if (scheduledAt && existingBooking.scheduled_at !== scheduledAt) {
+          updatePayload.scheduled_at = scheduledAt;
+          updated = true;
+        }
+
+        if (existingBooking.status !== bookingStatus) {
+          updatePayload.status = bookingStatus;
+          updated = true;
+        }
+
+        if (updated) {
+          const { error: updateError } = await supabase
+            .from("bookings")
+            .update(updatePayload)
+            .eq("id", existingBooking.id);
+
+          if (updateError) {
+            console.error("[BOOKING] Failed to update existing booking:", updateError);
+            return { bookingId: null, created: false, updated: false };
+          }
+          console.log(`[BOOKING] Updated existing recent booking: ${existingBooking.id}`);
+        } else {
+          console.log(`[BOOKING] Reused existing recent booking without changes: ${existingBooking.id}`);
+        }
+
+        return { bookingId: existingBooking.id, created: false, updated };
       }
     }
 
-    // Step 3: Create new booking with scheduled date if available
-    
-    // Calculate scheduled date if day was selected
-    let scheduledAt: string | null = null;
-    if (context.scheduledDay) {
-      const scheduledDate = getNextWeekday(context.scheduledDay);
-      // Set time based on morning/afternoon preference (default 10am / 2pm)
-      if (context.scheduledTime === "morning") {
-        scheduledDate.setHours(10, 0, 0, 0);
-      } else if (context.scheduledTime === "afternoon") {
-        scheduledDate.setHours(14, 0, 0, 0);
-      } else {
-        scheduledDate.setHours(10, 0, 0, 0); // Default to morning
-      }
-      scheduledAt = scheduledDate.toISOString();
-      console.log(`[BOOKING] Calculated scheduled_at: ${scheduledAt} from day: ${context.scheduledDay}, time: ${context.scheduledTime || 'default'}`);
-    }
-
-    const bookingStatus = scheduledAt ? "confirmed" : "pending";
-
+    // Step 3: Create new booking
     const { data: newBooking, error: bookError } = await supabase
       .from("bookings")
       .insert({
@@ -893,14 +961,14 @@ async function createBookingFromConversation(
 
     if (bookError) {
       console.error("[BOOKING] Failed to create booking:", bookError);
-      return null;
+      return { bookingId: null, created: false, updated: false };
     }
 
     console.log(`[BOOKING] Created new booking ${newBooking?.id} for service: ${serviceName}`);
-    return newBooking?.id || null;
+    return { bookingId: newBooking?.id || null, created: true, updated: false };
   } catch (err) {
     console.error("[BOOKING] Error in createBookingFromConversation:", err);
-    return null;
+    return { bookingId: null, created: false, updated: false };
   }
 }
 
@@ -1757,6 +1825,10 @@ async function processStateMachine(
     if (schedule.time) {
       newContext.scheduledTime = schedule.time;
     }
+    if (typeof schedule.hour === "number") {
+      newContext.scheduledHour = schedule.hour;
+      newContext.scheduledMinute = typeof schedule.minute === "number" ? schedule.minute : 0;
+    }
     if (newContext.scheduledDay && newContext.scheduledTime) {
       newContext.currentState = STATES.STATE_6_ACTION;
     } else {
@@ -1869,6 +1941,10 @@ case STATES.STATE_5_SCHEDULE: {
       }
       if (schedule.time) {
         newContext.scheduledTime = schedule.time;
+      }
+      if (typeof schedule.hour === "number") {
+        newContext.scheduledHour = schedule.hour;
+        newContext.scheduledMinute = typeof schedule.minute === "number" ? schedule.minute : 0;
       }
 
       if (newContext.scheduledDay && newContext.scheduledTime) {
@@ -2112,6 +2188,8 @@ async function storeConversationState(
         updated_at: new Date().toISOString(),
         metadata: {
           detected_language: context.detectedLanguage || "en",
+          scheduled_hour: typeof context.scheduledHour === "number" ? context.scheduledHour : null,
+          scheduled_minute: typeof context.scheduledMinute === "number" ? context.scheduledMinute : null,
         },
       };
 
@@ -2496,6 +2574,8 @@ async function loadConversationContext(
     if (data) {
       // Extract language from metadata
       const storedLanguage = data.metadata?.detected_language as "en" | "es" | undefined;
+      const storedHour = typeof data.metadata?.scheduled_hour === "number" ? data.metadata.scheduled_hour : undefined;
+      const storedMinute = typeof data.metadata?.scheduled_minute === "number" ? data.metadata.scheduled_minute : undefined;
       
       return {
         currentState: data.current_state || STATES.STATE_0_OPENING,
@@ -2508,6 +2588,8 @@ async function loadConversationContext(
         recoveryAttemptCount: data.recovery_attempt_count || 0,
         scheduledDay: data.scheduled_day || undefined,
         scheduledTime: data.scheduled_time || undefined,
+        scheduledHour: storedHour,
+        scheduledMinute: storedMinute,
         detectedLanguage: storedLanguage,
       };
     }
@@ -2934,19 +3016,26 @@ serve(async (req: Request) => {
     }
     
     // Create booking when schedule details are captured
-    let createdBookingId: string | null = null;
+    let bookingResult: BookingCreationResult = { bookingId: null, created: false, updated: false };
     const shouldCreateBooking =
       newContext.currentState === STATES.STATE_6_ACTION &&
       newContext.scheduledDay &&
       newContext.scheduledTime &&
-      (!context.scheduledDay || !context.scheduledTime);
+      (
+        !context.scheduledDay ||
+        !context.scheduledTime ||
+        context.scheduledDay !== newContext.scheduledDay ||
+        context.scheduledTime !== newContext.scheduledTime ||
+        context.scheduledHour !== newContext.scheduledHour ||
+        context.scheduledMinute !== newContext.scheduledMinute
+      );
 
     if (shouldCreateBooking) {
       console.log(`[EVENT] booking_requested for business ${businessId}`);
 
       const recommendedService = extractRecommendedService(reply, services || [], newContext);
 
-      createdBookingId = await createBookingFromConversation(supabase, {
+      bookingResult = await createBookingFromConversation(supabase, {
         businessId,
         conversationId: conversationId || `auto-${Date.now()}`,
         customerIdentifier: customerIdentifier || null,
@@ -2956,9 +3045,9 @@ serve(async (req: Request) => {
         recommendedService: recommendedService,
       });
 
-      if (createdBookingId) {
-        console.log(`[EVENT] booking_created for business ${businessId}, bookingId: ${createdBookingId}, service: ${recommendedService}`);
-        await notifyBookingConfirmedOwner(supabase, businessId, createdBookingId);
+      if (bookingResult.bookingId) {
+        console.log(`[EVENT] booking_${bookingResult.created ? "created" : "updated"} for business ${businessId}, bookingId: ${bookingResult.bookingId}, service: ${recommendedService}`);
+        await notifyBookingConfirmedOwner(supabase, businessId, bookingResult.bookingId);
       }
     }
 
@@ -2994,6 +3083,8 @@ serve(async (req: Request) => {
       handoffRequired: newContext.handoffRequired,
       leadQualified: newContext.leadQualified,
       returningCustomer: isReturning,
+      bookingCreated: bookingResult.created,
+      bookingId: bookingResult.bookingId,
       flyerUrl: flyerResult.url,
       flyerType: flyerResult.type,
     };
