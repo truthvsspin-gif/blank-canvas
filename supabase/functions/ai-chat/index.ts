@@ -70,6 +70,7 @@ interface StoredMessageRow {
   direction: "inbound" | "outbound";
   message_text: string | null;
   timestamp?: string | null;
+  created_at?: string | null;
 }
 
 interface AIRequest {
@@ -195,7 +196,7 @@ function detectServiceNameSimple(text: string, services: Array<{ name?: string |
   return match?.name || null;
 }
 
-function trimResponse(text: string, maxSentences = 2, maxChars = 360): string {
+function trimResponse(text: string, maxSentences = 3, maxChars = 420): string {
   const cleaned = text.replace(/\s+/g, " ").trim();
   if (cleaned.length <= maxChars) {
     const sentences = cleaned.split(/(?<=[.!?])\s+/);
@@ -367,7 +368,7 @@ function parseProtectionDuration(text: string): "short" | "long" | null {
 function shouldTriggerHandoff(text: string): boolean {
   const lowerText = text.toLowerCase();
   
-  // First check if this is a negative/low-intent phrase - if so, don't trigger handoff
+  // First check if this is a negative/low-intent phrase - if so, don't trigger booking progression
   const negativePatterns = [
     /\b(no|not|don't|doesn't|won't|nada|nunca|tampoco)\s+(me interesa|interesado|quiero|thanks|gracias)/i,
     /\b(no me interesa|no estoy interesado|not interested|don't want|no quiero)\b/i,
@@ -376,18 +377,28 @@ function shouldTriggerHandoff(text: string): boolean {
   if (negativePatterns.some(p => p.test(lowerText))) {
     return false;
   }
+
+  // Keep recommendation flow active when customer asks for a stronger package
+  if (/\b(more robust|stronger option|better option|premium option|higher package|upgrade|m[aá]s robusta?|m[aá]s completo|opcion m[aá]s fuerte|paquete m[aá]s alto)\b/i.test(lowerText)) {
+    return false;
+  }
   
   const patterns = [
-    /\b(interested|interesado|i'm in|me interesa|let's do it|hagámoslo|vamos|proceed|adelante)\b/i,
+    /\b(interested|interesado|i'm in|me interesa|let's do it|hagamoslo|vamos|proceed|adelante)\b/i,
+    /\b(i want that one|i want this one|i'll take it|i will take it|quiero ese|quiero esa|lo quiero|me quedo con ese|me quedo con esa)\b/i,
     /\b(book|reservar|agendar|schedule|programar|cita|appointment)\b/i,
-    /\b(yes|sí|si|sounds good|suena bien|perfect|perfecto|next step|siguiente paso)\b/i,
-    /\b(availability|disponibilidad|when can|cuándo puedo|cuándo pueden)\b/i,
+    /\b(yes|si|sounds good|suena bien|perfect|perfecto|next step|siguiente paso)\b/i,
+    /\b(availability|disponibilidad|when can|cuando puedo|cuando pueden)\b/i,
     /\b(confirm|confirmo|confirmar)\b/i,
   ];
   
   return patterns.some(p => p.test(lowerText));
 }
 
+function wantsMoreRobustOption(text: string): boolean {
+  const lowerText = text.toLowerCase();
+  return /\b(more robust|stronger option|better option|premium option|higher package|upgrade|m[aá]s robusta?|m[aá]s completo|opcion m[aá]s fuerte|paquete m[aá]s alto)\b/i.test(lowerText);
+}
 // Detect if user provided contact information (name + phone)
 function hasContactInfo(text: string): boolean {
   // Phone number patterns
@@ -453,6 +464,31 @@ function getNextWeekday(dayName: string): Date {
   const nextDate = new Date(today);
   nextDate.setDate(today.getDate() + daysUntil);
   return nextDate;
+}
+function getNextBusinessSlotSuggestion(language: "en" | "es"): string {
+  const dayNamesEn = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+  const dayNamesEs: Record<string, string> = {
+    monday: "lunes",
+    tuesday: "martes",
+    wednesday: "miercoles",
+    thursday: "jueves",
+    friday: "viernes",
+  };
+
+  const now = new Date();
+  const candidate = new Date(now);
+  candidate.setDate(now.getDate() + 1);
+
+  while (candidate.getDay() === 0 || candidate.getDay() === 6) {
+    candidate.setDate(candidate.getDate() + 1);
+  }
+
+  const dayEn = dayNamesEn[candidate.getDay()];
+  if (language === "es") {
+    const dayEs = dayNamesEs[dayEn] || "lunes";
+    return `${dayEs} por la manana`;
+  }
+  return `${dayEn} morning`;
 }
 
 // ============================================================================
@@ -981,7 +1017,7 @@ El cliente parece dudar. Tu objetivo es REFORZAR el valor de tu recomendación.
 INSTRUCCIONES:
 1. Reconoce brevemente que entiendes su situación ${vehicleRef ? `con su ${vehicleRef}` : ""}
 2. Reenmarca el BENEFICIO principal (no características técnicas)
-3. Ofrece revisar disponibilidad como siguiente paso natural
+3. Ofrece agendar ahora como siguiente paso natural
 4. NO preguntes si quieren algo diferente
 5. NO ofrezcas alternativas
 6. Mantén el tono confiado pero no agresivo
@@ -992,7 +1028,7 @@ Customer seems hesitant. Your goal is to REINFORCE the value of your recommendat
 INSTRUCTIONS:
 1. Briefly acknowledge you understand their situation ${vehicleRef ? `with their ${vehicleRef}` : ""}
 2. Reframe the PRIMARY BENEFIT (not technical features)
-3. Offer to check availability as natural next step
+3. Offer to book now as the natural next step
 4. DO NOT ask if they want something different
 5. DO NOT offer alternatives
 6. Keep tone confident but not pushy
@@ -1232,6 +1268,7 @@ ABSOLUTE RULES (NEVER BREAK):
 
   // State-specific goals
   let stateGoal = "";
+  const nextSlotSuggestion = getNextBusinessSlotSuggestion(language);
   switch (state) {
     case STATES.STATE_0_OPENING: {
       if (!hasVehicleCore(context.vehicleInfo)) {
@@ -1301,44 +1338,43 @@ Ask: "Are you looking for something that lasts a few months, or long-term protec
 
     case STATES.STATE_4_PRESCRIPTION:
       stateGoal = language === "es"
-        ? `OBJETIVO: Hacer UNA recomendación con PRECIO basada en el CONTEXTO DE NEGOCIO.
-1. Breve resumen mostrando que entiendes su situación
-2. Enmarca el beneficio principal (no proceso técnico)
-3. Haz UNA recomendación del servicio que MEJOR APLICA de tu contexto
+        ? `OBJETIVO: Hacer UNA recomendacion con PRECIO basada en el CONTEXTO DE NEGOCIO.
+1. Breve resumen mostrando que entiendes su situacion
+2. Enmarca el beneficio principal (no proceso tecnico)
+3. Haz UNA recomendacion del servicio que MEJOR APLICA de tu contexto
 4. INCLUYE el precio exacto del servicio (ej: '$199')
-5. Cierra con direccion: ofrece agendar ahora mismo
-6. Haz UNA sola pregunta: si desean agendar
+5. Cierra con UNA pregunta binaria para avanzar venta: "Quieres agendar esta opcion o prefieres que te recomiende una opcion mas robusta?"
+6. Si piden opcion robusta, vuelve a recomendar UNA opcion superior (sin listar menu completo)
 
-IMPORTANTE: Selecciona el servicio que mejor encaja basándote en:
-- Vehículo del cliente (tamaño, tipo)
-- Objetivo deseado (brillo, protección, interior)
-- Duración de protección si aplica`
+IMPORTANTE: Selecciona el servicio que mejor encaja basandote en:
+- Vehiculo del cliente (tamano, tipo)
+- Objetivo deseado (brillo, proteccion, interior)
+- Duracion de proteccion si aplica`
         : `GOAL: Make ONE recommendation with PRICE based on BUSINESS CONTEXT.
 1. Brief summary showing you understand their situation
 2. Frame the primary benefit (not technical process)
 3. Make ONE recommendation for the BEST MATCHING service from your context
 4. INCLUDE the exact price (e.g., '$199')
-5. Close with direction: offer to book now
-6. Ask ONE question: if they'd like to book now
+5. Close with ONE binary sales question: "Would you like to book this option now, or should I recommend a more robust option?"
+6. If they ask for robust option, recommend ONE stronger service (do not list full menu)
 
 IMPORTANT: Select the service that best fits based on:
 - Customer's vehicle (size, type)
 - Desired outcome (shine, protection, interior)
 - Protection duration if applicable`;
       break;
-
     case STATES.STATE_5_SCHEDULE: {
       const hasDay = !!context.scheduledDay;
       const hasTime = !!context.scheduledTime;
       const askEs = !hasDay && !hasTime
-        ? "Que dia te queda mejor (lunes a viernes) y prefieres manana o tarde?"
+        ? `Tengo disponible ${nextSlotSuggestion}. Te funciona ese horario o prefieres otro dia entre lunes y viernes?`
         : !hasDay
           ? "Que dia te queda mejor (lunes a viernes)?"
           : !hasTime
             ? "Prefieres manana o tarde?"
             : "Confirmo tu reserva. Si necesitas cambios, avisame.";
       const askEn = !hasDay && !hasTime
-        ? "What day works best (Mon-Fri), and do you prefer morning or afternoon?"
+        ? `I have ${nextSlotSuggestion} available. Does that work for you, or do you prefer another day (Mon-Fri)?`
         : !hasDay
           ? "What day works best (Mon-Fri)?"
           : !hasTime
@@ -1354,7 +1390,6 @@ ${vehicleRef ? `Reference their ${vehicleRef}.` : ""}
 Ask: "${askEn}"`;
       break;
     }
-
     case STATES.STATE_6_ACTION:
       stateGoal = language === "es"
         ? `OBJETIVO: Confirmar la reserva creada.
@@ -1684,8 +1719,8 @@ async function processStateMachine(
       // Fallback recovery messages
       const recoveryFallback = attemptNumber === 1
         ? (language === "es"
-            ? "Basándome en lo que me compartiste, esta opción realmente se adapta a tu situación. ¿Te gustaría revisar disponibilidad?"
-            : "Based on what you've shared, this option really fits your situation. Would you like to check availability?")
+            ? "Basandome en lo que me compartiste, esta opcion realmente se adapta a tu situacion. Quieres agendarla ahora o prefieres una opcion mas robusta?"
+            : "Based on what you've shared, this option really fits your situation. Would you like to book it now, or prefer a more robust option?")
         : (language === "es"
             ? "Para simplificarlo: ¿buscas el resultado completo que mencionamos, o algo más básico por ahora?"
             : "To simplify: are you looking for the full result we discussed, or something more basic for now?");
@@ -1746,8 +1781,8 @@ async function processStateMachine(
             ? `Perfecto. Tu reserva queda para ${dayText || "el dia elegido"} ${timeText || ""}. Si necesitas cambiar algo, avisame.`
             : `Perfect. Your booking is set for ${dayText || "the selected day"} ${timeText || ""}. If you need changes, just let me know.`)
         : (language === "es"
-            ? "Perfecto. Que dia te queda mejor (lunes a viernes) y prefieres manana o tarde?"
-            : "Perfect. What day works best (Mon-Fri), and do you prefer morning or afternoon?");
+            ? `Perfecto. Tengo disponible ${getNextBusinessSlotSuggestion(language)}. Te funciona ese horario o prefieres otro dia entre lunes y viernes?`
+            : `Perfect. I have ${getNextBusinessSlotSuggestion(language)} available. Does that work, or do you prefer another day (Mon-Fri)?`);
       return {
         reply: scheduleFallback,
         newContext,
@@ -1820,6 +1855,10 @@ case STATES.STATE_3_USAGE: {
     }
 case STATES.STATE_4_PRESCRIPTION: {
       newContext.leadQualified = true;
+      if (wantsMoreRobustOption(userMessage)) {
+        newContext.benefitIntent = "protection";
+        newContext.protectionDuration = "long";
+      }
       newContext.currentState = STATES.STATE_4_PRESCRIPTION;
       break;
     }
@@ -1912,12 +1951,12 @@ case STATES.STATE_7_HANDOFF: {
         es: "¿Buscas algo que dure unos meses, o protección a largo plazo (1 a 3 años)?"
       },
       STATE_4_PRESCRIPTION: {
-        en: "Based on what you shared, I'd recommend a service focused on your priority. I can book it now. Would you like to schedule?",
-        es: "Basandome en lo que me compartiste, recomiendo un servicio enfocado en tu prioridad. Puedo agendarlo ahora. Quieres agendar?"
+        en: "Based on what you shared, I'd recommend this option. Would you like to book it now, or should I suggest a more robust option?",
+        es: "Basandome en lo que me compartiste, recomiendo esta opcion. Quieres agendarla ahora o prefieres que te sugiera una opcion mas robusta?"
       },
       STATE_5_SCHEDULE: {
-        en: "Great. What day works best (Mon-Fri), and do you prefer morning or afternoon?",
-        es: "Perfecto. Que dia te queda mejor (lunes a viernes) y prefieres manana o tarde?"
+        en: `Great. I have ${getNextBusinessSlotSuggestion(language)} available. Does that work, or do you prefer another day (Mon-Fri)?`,
+        es: `Perfecto. Tengo disponible ${getNextBusinessSlotSuggestion(language)}. Te funciona ese horario o prefieres otro dia entre lunes y viernes?`
       },
       STATE_6_ACTION: {
         en: "Your booking is confirmed. If you need changes, just let me know.",
@@ -2099,6 +2138,8 @@ async function storeConversationState(
         direction: "inbound",
         message_text: userMessage,
         channel: "ai-chat",
+        created_at: new Date().toISOString(),
+        timestamp: new Date().toISOString(),
       },
       {
         business_id: businessId,
@@ -2106,6 +2147,8 @@ async function storeConversationState(
         direction: "outbound",
         message_text: aiReply,
         channel: "ai-chat",
+        created_at: new Date().toISOString(),
+        timestamp: new Date().toISOString(),
       },
     ]);
   } catch (err) {
@@ -2279,6 +2322,48 @@ async function cancelPendingFollowUps(
   }
 }
 
+
+async function triggerEdgeNotification(
+  supabase: any,
+  functionName: string,
+  payload: Record<string, any>,
+  label: string
+): Promise<void> {
+  try {
+    const { error } = await supabase.functions.invoke(functionName, { body: payload });
+    if (error) {
+      console.warn(`[NOTIFY] ${label} invoke warning:`, error.message || error);
+    }
+  } catch (err) {
+    console.warn(`[NOTIFY] ${label} invoke failed:`, err);
+  }
+}
+
+async function notifyLeadQualifiedOwner(
+  supabase: any,
+  businessId: string,
+  leadId: string
+): Promise<void> {
+  await triggerEdgeNotification(
+    supabase,
+    "lead-notify",
+    { businessId, leadId },
+    "lead-notify"
+  );
+}
+
+async function notifyBookingConfirmedOwner(
+  supabase: any,
+  businessId: string,
+  bookingId: string
+): Promise<void> {
+  await triggerEdgeNotification(
+    supabase,
+    "booking-notify",
+    { businessId, bookingId },
+    "booking-notify"
+  );
+}
 function buildLongHistoryMemoryBlock(
   history: ChatMessage[],
   language: "en" | "es",
@@ -2443,7 +2528,7 @@ async function loadConversationHistoryFromDb(
   try {
     const { data, error } = await supabase
       .from("messages")
-      .select("direction, message_text, timestamp")
+      .select("direction, message_text, timestamp, created_at")
       .eq("business_id", businessId)
       .eq("conversation_id", conversationId)
       .order("timestamp", { ascending: true });
@@ -2842,6 +2927,9 @@ serve(async (req: Request) => {
       
       if (createdLeadId) {
         console.log(`[EVENT] lead_qualified for business ${businessId}, leadId: ${createdLeadId}`);
+        if (!context.leadQualified) {
+          await notifyLeadQualifiedOwner(supabase, businessId, createdLeadId);
+        }
       }
     }
     
@@ -2870,6 +2958,7 @@ serve(async (req: Request) => {
 
       if (createdBookingId) {
         console.log(`[EVENT] booking_created for business ${businessId}, bookingId: ${createdBookingId}, service: ${recommendedService}`);
+        await notifyBookingConfirmedOwner(supabase, businessId, createdBookingId);
       }
     }
 
@@ -2922,6 +3011,40 @@ serve(async (req: Request) => {
     );
   }
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

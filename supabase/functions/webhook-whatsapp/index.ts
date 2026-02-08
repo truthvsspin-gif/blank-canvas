@@ -505,7 +505,7 @@ async function ensureThread(
   const { data: inserted } = await supabase
     .from("inbox_threads")
     .insert({ ...payload, created_at: now })
-    .select("id")
+    .select("id, stage")
     .single();
 
   return inserted?.id;
@@ -674,7 +674,7 @@ async function maybeSendFlyer(
     const cutoff = new Date(Date.now() - cooldownMs).toISOString();
     const { data: recentSend } = await supabase
       .from("flyer_send_log")
-      .select("id")
+      .select("id, stage")
       .eq("business_id", message.business_id)
       .eq("conversation_id", conversationId)
       .gte("sent_at", cutoff)
@@ -845,12 +845,13 @@ async function qualifyLead(
 
   const { data: existingLead } = await supabase
     .from("leads")
-    .select("id")
+    .select("id, stage")
     .eq("business_id", message.business_id)
     .eq("conversation_id", threadKey)
     .maybeSingle();
 
   if (existingLead?.id) {
+    const wasAlreadyQualified = existingLead.stage === "qualified";
     await supabase
       .from("leads")
       .update({
@@ -860,27 +861,44 @@ async function qualifyLead(
         updated_at: new Date().toISOString(),
       })
       .eq("id", existingLead.id);
+
+    if (!wasAlreadyQualified) {
+      try {
+        await supabase.functions.invoke("lead-notify", {
+          body: { businessId: message.business_id, leadId: existingLead.id },
+        });
+      } catch (err) {
+        console.warn("[WHATSAPP] lead-notify invoke failed:", err);
+      }
+    }
     return;
   }
 
-  await supabase.from("leads").insert({
-    business_id: message.business_id,
-    email,
-    phone,
-    conversation_id: threadKey,
-    name: message.sender_name,
-    source: "whatsapp",
-    stage: "new",
-    qualification_reason: `intent=${intent}`,
-  });
+  const { data: insertedLead } = await supabase
+    .from("leads")
+    .insert({
+      business_id: message.business_id,
+      email,
+      phone,
+      conversation_id: threadKey,
+      name: message.sender_name,
+      source: "whatsapp",
+      stage: "qualified",
+      qualification_reason: `intent=${intent}; source=whatsapp`,
+      updated_at: new Date().toISOString(),
+    })
+    .select("id, stage")
+    .single();
+
+  if (insertedLead?.id) {
+    try {
+      await supabase.functions.invoke("lead-notify", {
+        body: { businessId: message.business_id, leadId: insertedLead.id },
+      });
+    } catch (err) {
+      console.warn("[WHATSAPP] lead-notify invoke failed:", err);
+    }
+  }
 }
-
-
-
-
-
-
-
-
 
 

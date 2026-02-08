@@ -1,4 +1,4 @@
-﻿project_id = "ybifjdlelpvgzmzvgwls"
+project_id = "ybifjdlelpvgzmzvgwls"
 
 [functions.webhook-whatsapp]
 verify_jwt = false
@@ -32,3 +32,7 @@ verify_jwt = false
 
 [functions.booking-notify]
 verify_jwt = false
+
+[functions.lead-notify]
+verify_jwt = false
+
