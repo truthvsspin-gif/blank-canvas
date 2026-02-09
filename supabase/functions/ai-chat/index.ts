@@ -2028,6 +2028,17 @@ case STATES.STATE_7_HANDOFF: {
   
   if (error || !content) {
     usedFallback = true;
+    const preferredService = (services || []).find((s: any) => s.is_trojan_horse) || (services || [])[0];
+    const preferredServiceName = preferredService?.name || null;
+    const preferredServicePrice = preferredService?.base_price
+      ? `$${preferredService.base_price}`
+      : null;
+    const prescriptionFallbackEn = preferredServiceName
+      ? `Based on what you shared, I recommend ${preferredServiceName}${preferredServicePrice ? ` (${preferredServicePrice})` : ""}. Would you like to book this option now, or should I suggest a more robust option?`
+      : "Based on what you shared, I can connect you with our team to recommend the best option and pricing for your vehicle.";
+    const prescriptionFallbackEs = preferredServiceName
+      ? `Basado en lo que me compartiste, te recomiendo ${preferredServiceName}${preferredServicePrice ? ` (${preferredServicePrice})` : ""}. Quieres agendar esta opcion ahora o prefieres que te sugiera una opcion mas robusta?`
+      : "Basado en lo que me compartiste, puedo conectarte con el equipo para recomendarte la mejor opcion y precio para tu vehiculo.";
     // Fallback responses if Groq fails
     const fallbacks: Record<State, { en: string; es: string }> = {
       STATE_0_OPENING: {
@@ -2044,8 +2055,8 @@ case STATES.STATE_7_HANDOFF: {
         es: "¿Buscas algo que dure unos meses, o protección a largo plazo (1 a 3 años)?"
       },
       STATE_4_PRESCRIPTION: {
-        en: "Based on what you shared, I'd recommend this option. Would you like to book it now, or should I suggest a more robust option?",
-        es: "Basandome en lo que me compartiste, recomiendo esta opcion. Quieres agendarla ahora o prefieres que te sugiera una opcion mas robusta?"
+        en: prescriptionFallbackEn,
+        es: prescriptionFallbackEs
       },
       STATE_5_SCHEDULE: {
         en: `Great. I have ${getNextBusinessSlotSuggestion(language)} available. Does that work, or do you prefer another day (Mon-Fri)?`,
