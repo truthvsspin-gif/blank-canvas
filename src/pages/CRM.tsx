@@ -171,7 +171,11 @@ export default function CrmPage() {
         supabase.from("customers").select("id", { count: "exact", head: true }).eq("business_id", businessId),
         supabase.from("leads").select("id", { count: "exact", head: true }).eq("business_id", businessId),
         supabase.from("bookings").select("id", { count: "exact", head: true }).eq("business_id", businessId),
-        supabase.from("bookings").select("id", { count: "exact", head: true }).eq("business_id", businessId).eq("status", "pending"),
+        supabase
+          .from("bookings")
+          .select("id", { count: "exact", head: true })
+          .eq("business_id", businessId)
+          .in("status", ["requested", "pending", "new"]),
         supabase.from("conversations").select("id", { count: "exact", head: true }).eq("business_id", businessId).gte("created_at", startOfMonth.toISOString()),
         supabase.from("services").select("id", { count: "exact", head: true }).eq("business_id", businessId),
         supabase.from("leads").select("id, name, email, phone, stage, source, created_at").eq("business_id", businessId).order("created_at", { ascending: false }).limit(20),

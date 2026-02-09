@@ -19,6 +19,8 @@ export type Vehicle = {
   color: string | null
   license_plate: string | null
   size: string | null
+  condition_notes: string | null
+  photo_urls: string[] | null
   created_at: string
 }
 
@@ -39,12 +41,17 @@ export type Booking = {
   business_id: string
   customer_id: string | null
   vehicle_id: string | null
+  lead_id: string | null
+  assigned_to: string | null
   service_name: string
   price: number | null
   status: string
   scheduled_at: string | null
   source: string | null
+  work_order_no: string | null
+  confirmation_notes: string | null
   created_at: string
+  updated_at: string
 }
 
 export type Note = {

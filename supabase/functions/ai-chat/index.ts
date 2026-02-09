@@ -811,9 +811,10 @@ async function createBookingFromConversation(
     channel: string | null;
     context: ConversationContext;
     recommendedService: string | null;
+    leadId: string | null;
   }
 ): Promise<BookingCreationResult> {
-  const { businessId, conversationId, customerIdentifier, customerName, channel, context, recommendedService } = params;
+  const { businessId, conversationId, customerIdentifier, customerName, channel, context, recommendedService, leadId } = params;
 
   try {
     // Step 1: Find or create customer
@@ -892,7 +893,7 @@ async function createBookingFromConversation(
       console.log(`[BOOKING] Calculated scheduled_at: ${scheduledAt} from day: ${context.scheduledDay}, time: ${context.scheduledTime || 'default'}, exact: ${context.scheduledHour ?? 'none'}:${context.scheduledMinute ?? 0}`);
     }
 
-    const bookingStatus = scheduledAt ? "confirmed" : "pending";
+    const bookingStatus = scheduledAt ? "confirmed" : "requested";
 
     // Step 2: Check if booking already exists recently for same customer/service
     const { data: existingBooking } = await supabase
@@ -901,7 +902,7 @@ async function createBookingFromConversation(
       .eq("business_id", businessId)
       .eq("customer_id", customerId)
       .eq("source", "chatbot")
-      .in("status", ["pending", "confirmed"])
+      .in("status", ["requested", "pending", "confirmed"])
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -921,6 +922,11 @@ async function createBookingFromConversation(
 
         if (existingBooking.status !== bookingStatus) {
           updatePayload.status = bookingStatus;
+          updated = true;
+        }
+
+        if (leadId) {
+          updatePayload.lead_id = leadId;
           updated = true;
         }
 
@@ -949,6 +955,7 @@ async function createBookingFromConversation(
       .insert({
         business_id: businessId,
         customer_id: customerId,
+        lead_id: leadId,
         service_name: serviceName,
         status: bookingStatus,
         source: "chatbot",
@@ -3070,7 +3077,25 @@ Deno.serve(async (req: Request) => {
         channel: channel || null,
         context: newContext,
         recommendedService: recommendedService,
+        leadId: createdLeadId,
       });
+
+      if (!createdLeadId && bookingResult.bookingId && conversationId) {
+        const { data: leadData } = await supabase
+          .from("leads")
+          .select("id")
+          .eq("business_id", businessId)
+          .eq("conversation_id", conversationId)
+          .maybeSingle();
+
+        if (leadData?.id) {
+          await supabase
+            .from("bookings")
+            .update({ lead_id: leadData.id })
+            .eq("business_id", businessId)
+            .eq("id", bookingResult.bookingId);
+        }
+      }
 
       if (bookingResult.bookingId) {
         console.log(`[EVENT] booking_${bookingResult.created ? "created" : "updated"} for business ${businessId}, bookingId: ${bookingResult.bookingId}, service: ${recommendedService}`);

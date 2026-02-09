@@ -60,6 +60,8 @@ export default function CustomerDetailPage() {
         vehicleColor: "Color",
         vehiclePlate: "Placa",
         vehicleSize: "Tamaño",
+        vehicleCondition: "Condición inicial",
+        vehiclePhotos: "Fotos (URLs separadas por coma)",
         vehicleAdd: "Agregar vehículo",
         vehicleNone: "No hay vehículos registrados.",
         unknownVehicle: "Sin identificar",
@@ -102,6 +104,8 @@ export default function CustomerDetailPage() {
         vehicleColor: "Color",
         vehiclePlate: "License plate",
         vehicleSize: "Size",
+        vehicleCondition: "Initial condition",
+        vehiclePhotos: "Photos (comma-separated URLs)",
         vehicleAdd: "Add vehicle",
         vehicleNone: "No vehicles registered.",
         unknownVehicle: "Unidentified",
@@ -175,7 +179,7 @@ export default function CustomerDetailPage() {
         .eq("business_id", businessId)
         .eq("customer_id", id)
         .order("created_at", { ascending: false })
-        .limit(5)
+        .limit(25)
       setBookings((data ?? []) as Booking[])
       setBookingsLoading(false)
     }
@@ -227,6 +231,11 @@ export default function CustomerDetailPage() {
       color: (form.get("color") as string) || null,
       license_plate: (form.get("license_plate") as string) || null,
       size: (form.get("size") as string) || null,
+      condition_notes: (form.get("condition_notes") as string) || null,
+      photo_urls: ((form.get("photo_urls") as string) || "")
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter(Boolean),
     }
     if (!payload.brand && !payload.model && !payload.license_plate) {
       setVehicleError(copy.vehicleRequired)
@@ -581,6 +590,23 @@ export default function CustomerDetailPage() {
                         <option value="van">Van</option>
                       </select>
                     </div>
+                    <div className="space-y-1 md:col-span-3">
+                      <label className="text-xs font-medium text-foreground">{copy.vehicleCondition}</label>
+                      <textarea
+                        name="condition_notes"
+                        rows={2}
+                        className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none"
+                        placeholder={isEs ? "Describe estado inicial, rayones, golpes, etc." : "Describe initial condition, scratches, dents, etc."}
+                      />
+                    </div>
+                    <div className="space-y-1 md:col-span-2">
+                      <label className="text-xs font-medium text-foreground">{copy.vehiclePhotos}</label>
+                      <input
+                        name="photo_urls"
+                        className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                        placeholder={isEs ? "https://... , https://..." : "https://... , https://..."}
+                      />
+                    </div>
                     <div className="flex items-end">
                       <Button
                         type="submit"
@@ -637,6 +663,21 @@ export default function CustomerDetailPage() {
                                 <span className="text-xs text-muted-foreground capitalize">{vehicle.size}</span>
                               )}
                             </div>
+                            {vehicle.condition_notes && (
+                              <p className="mt-2 text-xs text-muted-foreground">{vehicle.condition_notes}</p>
+                            )}
+                            {vehicle.photo_urls && vehicle.photo_urls.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1">
+                                {vehicle.photo_urls.slice(0, 3).map((url) => (
+                                  <a key={url} href={url} target="_blank" rel="noreferrer" className="block">
+                                    <img src={url} alt="Vehicle reference" className="h-10 w-10 rounded border object-cover" />
+                                  </a>
+                                ))}
+                                {vehicle.photo_urls.length > 3 && (
+                                  <span className="text-[11px] text-muted-foreground">+{vehicle.photo_urls.length - 3}</span>
+                                )}
+                              </div>
+                            )}
                           </div>
                           <Button
                             variant="ghost"
@@ -699,7 +740,9 @@ export default function CustomerDetailPage() {
                         <div className={cn(
                           "flex h-8 w-8 items-center justify-center rounded-lg text-xs font-medium",
                           booking.status === "completed" ? "bg-slate-100 text-slate-600" :
+                          booking.status === "in_progress" ? "bg-violet-100 text-violet-600" :
                           booking.status === "confirmed" ? "bg-emerald-100 text-emerald-600" :
+                          booking.status === "no_show" ? "bg-amber-100 text-amber-600" :
                           booking.status === "cancelled" ? "bg-rose-100 text-rose-600" :
                           "bg-blue-100 text-blue-600"
                         )}>
