@@ -298,18 +298,17 @@ function parseVehicleInfo(text: string): ConversationContext["vehicleInfo"] | nu
 }
 
 function hasVehicleIdentity(vehicleInfo?: ConversationContext["vehicleInfo"]): boolean {
-  return Boolean(vehicleInfo?.brand || vehicleInfo?.model || vehicleInfo?.type);
+  return Boolean(vehicleInfo?.brand || vehicleInfo?.model);
 }
 
 function hasVehicleCore(vehicleInfo?: ConversationContext["vehicleInfo"]): boolean {
-  return Boolean(vehicleInfo?.brand && vehicleInfo?.model && vehicleInfo?.type);
+  return Boolean(vehicleInfo?.brand && vehicleInfo?.model);
 }
 
 function getVehicleMissingParts(vehicleInfo?: ConversationContext["vehicleInfo"]): string[] {
   const missing: string[] = [];
   if (!vehicleInfo?.brand) missing.push("brand");
   if (!vehicleInfo?.model) missing.push("model");
-  if (!vehicleInfo?.type) missing.push("type");
   return missing;
 }
 
@@ -1345,22 +1344,21 @@ ABSOLUTE RULES (NEVER BREAK):
           if (language === "es") {
             if (part === "brand") return "marca";
             if (part === "model") return "modelo";
-            return "tipo";
           }
           return part;
         });
         const missingText = missingLabels.length > 0
           ? missingLabels.join(", ")
-          : (language === "es" ? "marca, modelo y tipo" : "brand, model, and type");
+          : (language === "es" ? "marca y modelo" : "brand and model");
 
         stateGoal = language === "es"
           ? `OBJETIVO: Obtener datos básicos del vehículo primero.
-Pregunta por marca, modelo y tipo/tamaño (sedán/SUV/pickup) en UNA sola pregunta.
+Pregunta por marca y modelo en UNA sola pregunta.
 NO pidas el año del vehículo.
 Si ya tienes parte de esto, pide solo lo que falta: ${missingText}.
 No recomiendes servicios todavía.`
           : `GOAL: Collect basic vehicle details first.
-Ask for make, model, and type/size (sedan/SUV/pickup) in ONE short question.
+Ask for make and model in ONE short question.
 Do NOT ask for the vehicle year.
 If you already have some of this, ask only what's missing: ${missingText}.
 Do not recommend services yet.`;
@@ -1411,8 +1409,9 @@ Ask: "Are you looking for something that lasts a few months, or long-term protec
 2. Enmarca el beneficio principal (no proceso tecnico)
 3. Haz UNA recomendacion del servicio que MEJOR APLICA de tu contexto
 4. INCLUYE el precio exacto del servicio (ej: '$199')
-5. Cierra con UNA pregunta binaria para avanzar venta: "Quieres agendar esta opcion o prefieres que te recomiende una opcion mas robusta?"
-6. Si piden opcion robusta, vuelve a recomendar UNA opcion superior (sin listar menu completo)
+5. Si es la primera recomendacion, cierra con UNA pregunta binaria para avanzar venta
+6. Si el cliente pregunta aclaraciones ("cual opcion", "que incluye", "precio"), RESPONDE eso primero y no repitas el mismo pitch literal
+7. Si piden opcion robusta, vuelve a recomendar UNA opcion superior (sin listar menu completo)
 
 IMPORTANTE: Selecciona el servicio que mejor encaja basandote en:
 - Vehiculo del cliente (tamano, tipo)
@@ -1423,8 +1422,9 @@ IMPORTANTE: Selecciona el servicio que mejor encaja basandote en:
 2. Frame the primary benefit (not technical process)
 3. Make ONE recommendation for the BEST MATCHING service from your context
 4. INCLUDE the exact price (e.g., '$199')
-5. Close with ONE binary sales question: "Would you like to book this option now, or should I recommend a more robust option?"
-6. If they ask for robust option, recommend ONE stronger service (do not list full menu)
+5. If this is the first recommendation, close with ONE binary next-step question
+6. If customer asks clarification ("which option", "what is included", "price"), answer that first and avoid repeating the exact same pitch
+7. If they ask for a robust option, recommend ONE stronger service (do not list full menu)
 
 IMPORTANT: Select the service that best fits based on:
 - Customer's vehicle (size, type)
@@ -1876,13 +1876,30 @@ async function processStateMachine(
         newContext.vehicleInfo = { ...(newContext.vehicleInfo || {}), ...vehicleInfo };
         console.log(`[STATE MACHINE] Vehicle updated: ${JSON.stringify(newContext.vehicleInfo)}`);
       }
+      const earlyBenefit = parseBenefitIntent(userMessage);
+      if (earlyBenefit && !newContext.benefitIntent) {
+        newContext.benefitIntent = earlyBenefit;
+      }
+      const earlyDuration = parseProtectionDuration(userMessage);
+      if (earlyDuration && !newContext.protectionDuration) {
+        newContext.protectionDuration = earlyDuration;
+      }
       if (hasVehicleCore(newContext.vehicleInfo)) {
-        newContext.currentState = STATES.STATE_2_BENEFIT;
-        console.log("[STATE MACHINE] Vehicle info complete, moving to benefit");
+        if (newContext.benefitIntent) {
+          if (newContext.benefitIntent === "protection" && !newContext.protectionDuration) {
+            newContext.currentState = STATES.STATE_3_USAGE;
+            console.log("[STATE MACHINE] Vehicle complete with protection intent, moving to duration");
+          } else {
+            newContext.currentState = STATES.STATE_4_PRESCRIPTION;
+            console.log("[STATE MACHINE] Vehicle complete with known intent, moving to prescription");
+          }
+        } else {
+          newContext.currentState = STATES.STATE_2_BENEFIT;
+          console.log("[STATE MACHINE] Vehicle info complete, moving to benefit");
+        }
       }
       break;
     }
-    
     case STATES.STATE_2_BENEFIT: {
       const benefit = parseBenefitIntent(userMessage);
       const duration = parseProtectionDuration(userMessage);
@@ -2014,8 +2031,8 @@ case STATES.STATE_7_HANDOFF: {
     // Fallback responses if Groq fails
     const fallbacks: Record<State, { en: string; es: string }> = {
       STATE_0_OPENING: {
-        en: "To guide you correctly, what vehicle is this for? (make/model/type)",
-        es: "Para orientarte bien, ¿qué vehículo es? (marca/modelo/tipo)"
+        en: "To guide you correctly, what vehicle is this for? (make/model)",
+        es: "Para orientarte bien, ¿qué vehículo es? (marca/modelo)"
       },
       STATE_1_VEHICLE: { en: "", es: "" },
       STATE_2_BENEFIT: {
@@ -2645,7 +2662,7 @@ function mergeMemoryIntoContext(
   }
 
   // Only merge if context is empty (new conversation)
-  const hasVehicle = context.vehicleInfo?.brand || context.vehicleInfo?.model || context.vehicleInfo?.type;
+  const hasVehicle = hasVehicleIdentity(context.vehicleInfo);
   const hasBenefit = !!context.benefitIntent;
   const hasDuration = !!context.protectionDuration;
 
