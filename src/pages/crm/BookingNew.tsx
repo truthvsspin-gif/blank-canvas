@@ -1,5 +1,5 @@
 ﻿import { FormEvent, useEffect, useMemo, useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
+import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import {
   ArrowLeft,
   CalendarDays,
@@ -38,19 +38,40 @@ type LeadOption = {
   name: string | null
   source: string | null
   stage: string | null
+  customer_id: string | null
+  conversation_id: string | null
+  email: string | null
+  phone: string | null
+  qualification_reason: string | null
+}
+
+type ConversationSnapshot = {
+  vehicle_info: Record<string, unknown> | null
+  recommendation_summary: string | null
+  scheduled_day: string | null
+  scheduled_time: string | null
+  scheduled_hour: number | null
+  scheduled_minute: number | null
 }
 
 type StaffOption = {
   user_id: string
   role: string
-  users: {
-    full_name: string | null
-    email: string | null
-  } | null
+  users:
+    | {
+        full_name: string | null
+        email: string | null
+      }
+    | Array<{
+        full_name: string | null
+        email: string | null
+      }>
+    | null
 }
 
 export default function NewBookingPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { businessId } = useCurrentBusiness()
   const { user } = useAuth()
   const { lang } = useLanguage()
@@ -68,11 +89,14 @@ export default function NewBookingPage() {
   const [staffOptions, setStaffOptions] = useState<StaffOption[]>([])
 
   const [selectedCustomerId, setSelectedCustomerId] = useState("")
-  const [selectedService, setSelectedService] = useState<Service | null>(null)
+  const [selectedVehicleId, setSelectedVehicleId] = useState("")
+  const [serviceNameDraft, setServiceNameDraft] = useState("")
+  const [priceDraft, setPriceDraft] = useState("")
   const [selectedLeadId, setSelectedLeadId] = useState("")
   const [statusDraft, setStatusDraft] = useState("requested")
   const [sourceDraft, setSourceDraft] = useState("manual")
   const [scheduledAtDraft, setScheduledAtDraft] = useState("")
+  const [pendingVehicleHint, setPendingVehicleHint] = useState<Record<string, unknown> | null>(null)
   const [scheduleConflicts, setScheduleConflicts] = useState<Booking[]>([])
 
   const [vehiclesLoading, setVehiclesLoading] = useState(false)
@@ -80,6 +104,7 @@ export default function NewBookingPage() {
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [leadHydrating, setLeadHydrating] = useState(false)
 
   const selectedLead = useMemo(() => leads.find((lead) => lead.id === selectedLeadId) || null, [leads, selectedLeadId])
 
@@ -109,6 +134,7 @@ export default function NewBookingPage() {
         selectService: "Selecciona un servicio",
         selectLead: "Selecciona un lead (opcional)",
         noLeads: "No hay leads disponibles",
+        leadSyncing: "Cargando datos del lead...",
         unassigned: "Sin asignar",
         me: "Yo",
         save: "Crear Reserva",
@@ -144,6 +170,7 @@ export default function NewBookingPage() {
         selectService: "Select a service",
         selectLead: "Select a lead (optional)",
         noLeads: "No leads available",
+        leadSyncing: "Loading lead context...",
         unassigned: "Unassigned",
         me: "Me",
         save: "Create Booking",
@@ -191,6 +218,67 @@ export default function NewBookingPage() {
     return adjusted.toISOString()
   }
 
+  const toLocalInputValue = (value: Date | string) => {
+    const date = typeof value === "string" ? new Date(value) : value
+    if (Number.isNaN(date.getTime())) return ""
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    })
+    const parts = Object.fromEntries(formatter.formatToParts(date).map((part) => [part.type, part.value]))
+    return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`
+  }
+
+  const nextDateFromWeekday = (weekday: string) => {
+    const mapping: Record<string, number> = {
+      monday: 1,
+      tuesday: 2,
+      wednesday: 3,
+      thursday: 4,
+      friday: 5,
+      saturday: 6,
+      sunday: 0,
+    }
+    const target = mapping[weekday.toLowerCase()]
+    if (target === undefined) return null
+    const now = new Date()
+    const current = now.getDay()
+    let delta = target - current
+    if (delta <= 0) delta += 7
+    const next = new Date(now)
+    next.setDate(now.getDate() + delta)
+    return next
+  }
+
+  const getSchedulePrefill = (snapshot: ConversationSnapshot) => {
+    if (!snapshot.scheduled_day) return ""
+    const date = nextDateFromWeekday(snapshot.scheduled_day)
+    if (!date) return ""
+    const hour =
+      typeof snapshot.scheduled_hour === "number"
+        ? Math.max(0, Math.min(23, snapshot.scheduled_hour))
+        : snapshot.scheduled_time === "afternoon"
+        ? 14
+        : 10
+    const minute =
+      typeof snapshot.scheduled_minute === "number"
+        ? Math.max(0, Math.min(59, snapshot.scheduled_minute))
+        : 0
+    date.setHours(hour, minute, 0, 0)
+    return toLocalInputValue(date)
+  }
+
+  const findServiceFromText = (text: string | null) => {
+    const value = (text || "").toLowerCase().trim()
+    if (!value) return null
+    return services.find((service) => value.includes(service.name.toLowerCase())) || null
+  }
+
   useEffect(() => {
     const fetchData = async () => {
       if (!businessId) return
@@ -203,7 +291,7 @@ export default function NewBookingPage() {
           supabase.from("services").select("*").eq("business_id", businessId).eq("is_active", true).order("name", { ascending: true }),
           supabase
             .from("leads")
-            .select("id, name, source, stage")
+            .select("id, name, source, stage, customer_id, conversation_id, email, phone, qualification_reason")
             .eq("business_id", businessId)
             .in("stage", ["new", "qualified", "proposal", "negotiation"])
             .order("created_at", { ascending: false })
@@ -234,6 +322,7 @@ export default function NewBookingPage() {
     const fetchVehicles = async () => {
       if (!businessId || !selectedCustomerId) {
         setVehicles([])
+        setSelectedVehicleId("")
         return
       }
 
@@ -250,15 +339,47 @@ export default function NewBookingPage() {
       if (vehiclesErr) {
         setVehiclesError(vehiclesErr.message)
         setVehicles([])
+        setSelectedVehicleId("")
       } else {
-        setVehicles((data as Vehicle[]) || [])
+        const rows = (data as Vehicle[]) || []
+        setVehicles(rows)
+        if (rows.length === 0) {
+          setSelectedVehicleId("")
+          setPendingVehicleHint(null)
+          return
+        }
+
+        if (pendingVehicleHint) {
+          const hintBrand = String(pendingVehicleHint.brand || "").toLowerCase().trim()
+          const hintModel = String(pendingVehicleHint.model || "").toLowerCase().trim()
+          const match = rows.find((vehicle) => {
+            const brand = (vehicle.brand || "").toLowerCase()
+            const model = (vehicle.model || "").toLowerCase()
+            if (hintBrand && hintModel) return brand.includes(hintBrand) && model.includes(hintModel)
+            if (hintBrand) return brand.includes(hintBrand)
+            if (hintModel) return model.includes(hintModel)
+            return false
+          })
+          if (match) {
+            setSelectedVehicleId(match.id)
+          } else if (rows.length === 1) {
+            setSelectedVehicleId(rows[0].id)
+          } else {
+            setSelectedVehicleId("")
+          }
+          setPendingVehicleHint(null)
+        } else if (selectedVehicleId && !rows.some((vehicle) => vehicle.id === selectedVehicleId)) {
+          setSelectedVehicleId("")
+        } else if (!selectedVehicleId && rows.length === 1) {
+          setSelectedVehicleId(rows[0].id)
+        }
       }
 
       setVehiclesLoading(false)
     }
 
     fetchVehicles()
-  }, [businessId, selectedCustomerId])
+  }, [businessId, pendingVehicleHint, selectedCustomerId, selectedVehicleId])
 
   useEffect(() => {
     const findScheduleConflicts = async () => {
@@ -294,18 +415,98 @@ export default function NewBookingPage() {
     findScheduleConflicts()
   }, [businessId, selectedCustomerId, scheduledAtDraft])
 
-  const handleServiceChange = (serviceName: string) => {
+  const handleServiceChange = (serviceName: string, options?: { forcePrice?: boolean }) => {
+    setServiceNameDraft(serviceName)
     const service = services.find((s) => s.name === serviceName) || null
-    setSelectedService(service)
-  }
-
-  const handleLeadChange = (leadId: string) => {
-    setSelectedLeadId(leadId)
-    const lead = leads.find((item) => item.id === leadId)
-    if (lead?.source) {
-      setSourceDraft(lead.source)
+    if (service?.base_price != null) {
+      setPriceDraft(String(service.base_price))
+    } else if (!service && options?.forcePrice) {
+      setPriceDraft("")
     }
   }
+
+  const getStaffLabel = (staff: StaffOption) => {
+    const user = Array.isArray(staff.users) ? staff.users[0] : staff.users
+    return user?.full_name || user?.email || staff.user_id
+  }
+
+  const handleLeadChange = async (leadId: string) => {
+    setSelectedLeadId(leadId)
+    if (!leadId || !businessId) return
+
+    const lead = leads.find((item) => item.id === leadId)
+    if (!lead) return
+
+    setLeadHydrating(true)
+    if (lead?.source && BOOKING_SOURCE_OPTIONS.some((option) => option.value === lead.source)) {
+      setSourceDraft(lead.source)
+    } else {
+      setSourceDraft("chatbot")
+    }
+
+    try {
+      let matchedCustomerId = lead.customer_id || null
+      if (!matchedCustomerId && lead.email) {
+        const { data } = await supabase
+          .from("customers")
+          .select("id")
+          .eq("business_id", businessId)
+          .eq("email", lead.email)
+          .maybeSingle()
+        matchedCustomerId = data?.id || null
+      }
+      if (!matchedCustomerId && lead.phone) {
+        const { data } = await supabase
+          .from("customers")
+          .select("id")
+          .eq("business_id", businessId)
+          .eq("phone", lead.phone)
+          .maybeSingle()
+        matchedCustomerId = data?.id || null
+      }
+      if (matchedCustomerId) {
+        setSelectedCustomerId(matchedCustomerId)
+      }
+
+      if (lead.conversation_id) {
+        const { data: snapshotData } = await supabase
+          .from("conversations")
+          .select("vehicle_info, recommendation_summary, scheduled_day, scheduled_time, scheduled_hour, scheduled_minute")
+          .eq("business_id", businessId)
+          .eq("conversation_id", lead.conversation_id)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (snapshotData) {
+          const snapshot = snapshotData as ConversationSnapshot
+          const matchedService =
+            findServiceFromText(snapshot.recommendation_summary) ||
+            findServiceFromText(lead.qualification_reason)
+          if (matchedService) {
+            handleServiceChange(matchedService.name, { forcePrice: true })
+          }
+
+          const localSlot = getSchedulePrefill(snapshot)
+          if (localSlot) {
+            setScheduledAtDraft(localSlot)
+          }
+
+          if (snapshot.vehicle_info && typeof snapshot.vehicle_info === "object") {
+            setPendingVehicleHint(snapshot.vehicle_info)
+          }
+        }
+      }
+    } finally {
+      setLeadHydrating(false)
+    }
+  }
+
+  useEffect(() => {
+    const leadIdFromQuery = searchParams.get("leadId")
+    if (!leadIdFromQuery || leads.length === 0 || selectedLeadId === leadIdFromQuery) return
+    void handleLeadChange(leadIdFromQuery)
+  }, [leads, searchParams, selectedLeadId])
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -443,9 +644,12 @@ export default function NewBookingPage() {
                   <select
                     name="customer_id"
                     required
-                    onChange={(event) => setSelectedCustomerId(event.target.value)}
+                    value={selectedCustomerId}
+                    onChange={(event) => {
+                      setSelectedCustomerId(event.target.value)
+                      setSelectedVehicleId("")
+                    }}
                     className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
-                    defaultValue=""
                   >
                     <option value="" disabled>
                       {copy.selectCustomer}
@@ -466,8 +670,9 @@ export default function NewBookingPage() {
                   <select
                     key={selectedCustomerId || "vehicle"}
                     name="vehicle_id"
+                    value={selectedVehicleId}
+                    onChange={(event) => setSelectedVehicleId(event.target.value)}
                     className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    defaultValue=""
                     disabled={!selectedCustomerId || vehiclesLoading || vehicles.length === 0}
                   >
                     <option value="">
@@ -504,9 +709,9 @@ export default function NewBookingPage() {
                   <select
                     name="service_name"
                     required
+                    value={serviceNameDraft}
                     onChange={(event) => handleServiceChange(event.target.value)}
                     className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
-                    defaultValue=""
                   >
                     <option value="" disabled>
                       {copy.selectService}
@@ -529,7 +734,8 @@ export default function NewBookingPage() {
                     type="number"
                     min="0"
                     step="0.01"
-                    defaultValue={selectedService?.base_price ?? ""}
+                    value={priceDraft}
+                    onChange={(event) => setPriceDraft(event.target.value)}
                     className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
                     placeholder="0.00"
                   />
@@ -577,7 +783,7 @@ export default function NewBookingPage() {
                           type="radio"
                           name="status"
                           value={statusOption.value}
-                          defaultChecked={statusOption.value === "requested"}
+                          checked={statusDraft === statusOption.value}
                           className="peer sr-only"
                           onChange={(event) => setStatusDraft(event.target.value)}
                         />
@@ -610,8 +816,10 @@ export default function NewBookingPage() {
                   </label>
                   <select
                     name="lead_id"
-                    defaultValue=""
-                    onChange={(event) => handleLeadChange(event.target.value)}
+                    value={selectedLeadId}
+                    onChange={(event) => {
+                      void handleLeadChange(event.target.value)
+                    }}
                     className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
                   >
                     <option value="">{leads.length ? copy.selectLead : copy.noLeads}</option>
@@ -625,6 +833,9 @@ export default function NewBookingPage() {
                     <p className="text-xs text-muted-foreground">
                       {isEs ? "Origen sugerido:" : "Suggested source:"} {selectedLead.source || "chatbot"}
                     </p>
+                  )}
+                  {leadHydrating && (
+                    <p className="text-xs text-muted-foreground">{copy.leadSyncing}</p>
                   )}
                 </div>
 
@@ -657,7 +868,7 @@ export default function NewBookingPage() {
                       .filter((staff) => staff.user_id !== user?.id)
                       .map((staff) => (
                         <option key={staff.user_id} value={staff.user_id}>
-                          {staff.users?.full_name || staff.users?.email || staff.user_id} ({staff.role})
+                          {getStaffLabel(staff)} ({staff.role})
                         </option>
                       ))}
                   </select>

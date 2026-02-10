@@ -135,7 +135,7 @@ export async function syncLeadToCrm(input: LeadSyncInput) {
       .eq("business_id", input.businessId)
       .eq("customer_id", customerId)
       .eq("source", "chatbot")
-      .eq("status", "pending")
+      .in("status", ["requested", "pending"])
       .is("scheduled_at", null)
       .limit(1)
       .maybeSingle()
@@ -144,8 +144,9 @@ export async function syncLeadToCrm(input: LeadSyncInput) {
       await bookingsTable.insert({
         business_id: input.businessId,
         customer_id: customerId,
-        service_name: input.selectedService ?? "TBD",
-        status: "pending",
+        service_name: input.selectedService ?? "Service to confirm",
+        status: "requested",
+        validation_status: "pending",
         source: "chatbot",
       })
     }

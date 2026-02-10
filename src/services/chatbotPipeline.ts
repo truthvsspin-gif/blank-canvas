@@ -440,6 +440,7 @@ export async function runChatbotPipeline(message: NormalizedMessage): Promise<Pi
         senderName: message.sender_name ?? null,
         senderPhone: message.sender_phone_or_handle ?? null,
         bookingIntent: qualification.bookingIntent,
+        selectedService: recentContext.selectedService?.name ?? null,
       })
     }
   } catch (error) {

@@ -12,31 +12,57 @@ import { WorkOrder } from "@/types/crm"
 
 const statuses = ["open", "in_progress", "completed", "cancelled"] as const
 
+type StaffMember = {
+  user_id: string
+  users:
+    | {
+        full_name: string | null
+        email: string | null
+      }
+    | Array<{
+        full_name: string | null
+        email: string | null
+      }>
+    | null
+}
+
 export default function WorkOrdersPage() {
   const { businessId } = useCurrentBusiness()
   const [loading, setLoading] = useState(false)
   const [orders, setOrders] = useState<WorkOrder[]>([])
   const [staffMap, setStaffMap] = useState<Map<string, string>>(new Map())
+  const [staffOptions, setStaffOptions] = useState<Array<{ id: string; label: string }>>([])
+  const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null)
 
   useEffect(() => {
     const load = async () => {
       if (!businessId) return
       setLoading(true)
-      const { data } = await supabase
-        .from("work_orders")
-        .select("*")
-        .eq("business_id", businessId)
-        .order("scheduled_at", { ascending: true, nullsFirst: false })
-      const rows = (data as WorkOrder[]) || []
-      setOrders(rows)
+      const [{ data: ordersData }, { data: membershipData }] = await Promise.all([
+        supabase
+          .from("work_orders")
+          .select("*")
+          .eq("business_id", businessId)
+          .order("scheduled_at", { ascending: true, nullsFirst: false }),
+        supabase
+          .from("memberships")
+          .select("user_id, users(full_name, email)")
+          .eq("business_id", businessId),
+      ])
 
-      const assigneeIds = Array.from(new Set(rows.map((row) => row.assigned_to).filter(Boolean))) as string[]
-      if (assigneeIds.length) {
-        const { data: users } = await supabase.from("users").select("id, full_name, email").in("id", assigneeIds)
-        setStaffMap(new Map((users || []).map((user) => [user.id, user.full_name || user.email || user.id])))
-      } else {
-        setStaffMap(new Map())
-      }
+      const rows = (ordersData as WorkOrder[]) || []
+      setOrders(rows)
+      const memberships = (membershipData as StaffMember[]) || []
+      const map = new Map<string, string>()
+      const options: Array<{ id: string; label: string }> = []
+      memberships.forEach((member) => {
+        const user = Array.isArray(member.users) ? member.users[0] : member.users
+        const label = user?.full_name || user?.email || member.user_id
+        map.set(member.user_id, label)
+        options.push({ id: member.user_id, label })
+      })
+      setStaffMap(map)
+      setStaffOptions(options)
       setLoading(false)
     }
     load()
@@ -44,6 +70,7 @@ export default function WorkOrdersPage() {
 
   const updateOrderStatus = async (orderId: string, status: string) => {
     if (!businessId) return
+    setUpdatingOrderId(orderId)
     const patch: Record<string, unknown> = {
       status,
       updated_at: new Date().toISOString(),
@@ -60,9 +87,33 @@ export default function WorkOrdersPage() {
       .single()
     if (error) {
       console.error("Failed to update work order status", error)
+      setUpdatingOrderId(null)
       return
     }
     setOrders((prev) => prev.map((row) => (row.id === orderId ? (data as WorkOrder) : row)))
+    setUpdatingOrderId(null)
+  }
+
+  const updateOrderAssignee = async (orderId: string, assigneeId: string) => {
+    if (!businessId) return
+    setUpdatingOrderId(orderId)
+    const { data, error } = await supabase
+      .from("work_orders")
+      .update({
+        assigned_to: assigneeId || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("business_id", businessId)
+      .eq("id", orderId)
+      .select("*")
+      .single()
+    if (error) {
+      console.error("Failed to update work order assignee", error)
+      setUpdatingOrderId(null)
+      return
+    }
+    setOrders((prev) => prev.map((row) => (row.id === orderId ? (data as WorkOrder) : row)))
+    setUpdatingOrderId(null)
   }
 
   return (
@@ -105,11 +156,25 @@ export default function WorkOrdersPage() {
                       <select
                         value={order.status}
                         onChange={(event) => updateOrderStatus(order.id, event.target.value)}
+                        disabled={updatingOrderId === order.id}
                         className="w-full rounded border px-2 py-1 text-xs"
                       >
                         {statuses.map((option) => (
                           <option key={option} value={option}>
                             {option.replace("_", " ")}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={order.assigned_to || ""}
+                        onChange={(event) => updateOrderAssignee(order.id, event.target.value)}
+                        disabled={updatingOrderId === order.id}
+                        className="w-full rounded border px-2 py-1 text-xs"
+                      >
+                        <option value="">Unassigned</option>
+                        {staffOptions.map((staff) => (
+                          <option key={staff.id} value={staff.id}>
+                            {staff.label}
                           </option>
                         ))}
                       </select>

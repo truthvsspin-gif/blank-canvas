@@ -30,7 +30,10 @@ type LeadDetail = {
 type StaffOption = {
   user_id: string
   role: string
-  users: { full_name: string | null; email: string | null } | null
+  users:
+    | { full_name: string | null; email: string | null }
+    | Array<{ full_name: string | null; email: string | null }>
+    | null
 }
 
 export default function BookingDetailPage() {
@@ -56,6 +59,11 @@ export default function BookingDetailPage() {
     if (!booking?.lead_id) return null
     return leads.find((lead) => lead.id === booking.lead_id) || null
   }, [booking?.lead_id, leads])
+
+  const getStaffLabel = (member: StaffOption) => {
+    const userRow = Array.isArray(member.users) ? member.users[0] : member.users
+    return userRow?.full_name || userRow?.email || member.user_id
+  }
 
   useEffect(() => {
     const load = async () => {
@@ -386,7 +394,7 @@ export default function BookingDetailPage() {
                   <option value={user?.id || ""}>Me</option>
                   {staff.filter((member) => member.user_id !== user?.id).map((member) => (
                     <option key={member.user_id} value={member.user_id}>
-                      {member.users?.full_name || member.users?.email || member.user_id} ({member.role})
+                      {getStaffLabel(member)} ({member.role})
                     </option>
                   ))}
                 </select>

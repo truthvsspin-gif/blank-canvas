@@ -142,7 +142,7 @@ export default function Dashboard() {
           .from("bookings")
           .select("id", { count: "exact", head: true })
           .eq("business_id", businessId)
-          .eq("status", "pending"),
+          .in("status", ["requested", "pending", "new"]),
         supabase
           .from("bookings")
           .select("id", { count: "exact", head: true })
@@ -371,6 +371,7 @@ export default function Dashboard() {
 
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
+      requested: "bg-gradient-to-r from-amber-100 to-orange-100 text-amber-800 border-amber-200",
       pending: "bg-gradient-to-r from-amber-100 to-orange-100 text-amber-800 border-amber-200",
       confirmed: "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 border-blue-200",
       completed: "bg-gradient-to-r from-emerald-100 to-teal-100 text-emerald-800 border-emerald-200",

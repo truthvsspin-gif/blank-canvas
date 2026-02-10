@@ -1,20 +1,16 @@
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  ArrowUpRight,
   Calendar,
-  ChevronRight,
   Download,
-  Filter,
+  Loader2,
   Mail,
-  MoreHorizontal,
   Phone,
   Plus,
   Search,
   Sparkles,
   Target,
   TrendingUp,
-  User,
   UserCheck,
   UserPlus,
   Users,
@@ -42,6 +38,8 @@ type Lead = {
   name: string | null;
   email: string | null;
   phone: string | null;
+  customer_id: string | null;
+  conversation_id: string | null;
   qualification_reason: string | null;
   source: string | null;
   stage: LeadStage;
@@ -53,30 +51,43 @@ const stageConfig: Record<LeadStage, { labelEs: string; labelEn: string; color: 
   contacted: { labelEs: "Contactado", labelEn: "Contacted", color: "text-purple-600", bg: "bg-purple-100", icon: Phone },
   qualified: { labelEs: "Calificado", labelEn: "Qualified", color: "text-emerald-600", bg: "bg-emerald-100", icon: UserCheck },
   proposal: { labelEs: "Propuesta", labelEn: "Proposal", color: "text-amber-600", bg: "bg-amber-100", icon: Target },
-  negotiation: { labelEs: "Negociación", labelEn: "Negotiation", color: "text-orange-600", bg: "bg-orange-100", icon: TrendingUp },
+  negotiation: { labelEs: "Negociacion", labelEn: "Negotiation", color: "text-orange-600", bg: "bg-orange-100", icon: TrendingUp },
   won: { labelEs: "Ganado", labelEn: "Won", color: "text-green-600", bg: "bg-green-100", icon: Sparkles },
   lost: { labelEs: "Perdido", labelEn: "Lost", color: "text-red-600", bg: "bg-red-100", icon: Users },
 };
+
+const LEAD_STAGES: LeadStage[] = ["new", "contacted", "qualified", "proposal", "negotiation", "won", "lost"];
+
+function csvEscape(value: string) {
+  return `"${value.replace(/"/g, '""')}"`;
+}
 
 export default function CrmLeadsPage() {
   const { businessId } = useCurrentBusiness();
   const { lang } = useLanguage();
   const isEs = lang === "es";
-  
+
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [stageFilter, setStageFilter] = useState<LeadStage | "all">("all");
-  const [stats, setStats] = useState({
-    total: 0,
-    new: 0,
-    qualified: 0,
-    won: 0,
+  const [newLeadOpen, setNewLeadOpen] = useState(false);
+  const [savingLead, setSavingLead] = useState(false);
+  const [leadError, setLeadError] = useState<string | null>(null);
+  const [updatingStageId, setUpdatingStageId] = useState<string | null>(null);
+  const [stats, setStats] = useState({ total: 0, new: 0, qualified: 0, won: 0 });
+  const [newLeadForm, setNewLeadForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    source: "manual",
+    stage: "new" as LeadStage,
+    qualification_reason: "",
   });
 
   const copy = isEs
     ? {
-        title: "Gestión de Leads",
+        title: "Gestion de Leads",
         description: "Rastrea y convierte tus oportunidades de venta.",
         searchPlaceholder: "Buscar leads...",
         allStages: "Todas las etapas",
@@ -86,14 +97,21 @@ export default function CrmLeadsPage() {
         newLeads: "Nuevos",
         qualifiedLeads: "Calificados",
         wonLeads: "Ganados",
-        noLeads: "No hay leads que coincidan con tu búsqueda",
+        noLeads: "No hay leads que coincidan con tu busqueda",
         addFirst: "Agrega tu primer lead",
-        conversionRate: "Tasa de Conversión",
+        conversionRate: "Tasa de Conversion",
         recentLeads: "Leads Recientes",
-        viewAll: "Ver Todo",
         unknown: "Desconocido",
         noEmail: "Sin email",
-        noPhone: "Sin teléfono",
+        noPhone: "Sin telefono",
+        createLead: "Crear Lead",
+        cancel: "Cancelar",
+        leadName: "Nombre",
+        leadSource: "Origen",
+        leadStage: "Etapa",
+        leadReason: "Motivo de calificacion",
+        saveLead: "Guardar lead",
+        convertBooking: "Crear reserva",
       }
     : {
         title: "Lead Management",
@@ -110,51 +128,61 @@ export default function CrmLeadsPage() {
         addFirst: "Add your first lead",
         conversionRate: "Conversion Rate",
         recentLeads: "Recent Leads",
-        viewAll: "View All",
         unknown: "Unknown",
         noEmail: "No email",
         noPhone: "No phone",
+        createLead: "Create Lead",
+        cancel: "Cancel",
+        leadName: "Name",
+        leadSource: "Source",
+        leadStage: "Stage",
+        leadReason: "Qualification reason",
+        saveLead: "Save lead",
+        convertBooking: "Create booking",
       };
+
+  const recomputeStats = (rows: Lead[]) => {
+    const total = rows.length;
+    const newCount = rows.filter((l) => l.stage === "new").length;
+    const qualifiedCount = rows.filter((l) => l.stage === "qualified").length;
+    const wonCount = rows.filter((l) => l.stage === "won").length;
+    setStats({ total, new: newCount, qualified: qualifiedCount, won: wonCount });
+  };
+
+  const loadLeads = async () => {
+    if (!businessId) return;
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("leads")
+      .select("id, name, email, phone, customer_id, conversation_id, qualification_reason, source, stage, created_at")
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: false });
+
+    if (!error && data) {
+      const rows = data as Lead[];
+      setLeads(rows);
+      recomputeStats(rows);
+    }
+    setLoading(false);
+  };
 
   useEffect(() => {
     if (!businessId) return;
-    
-    const loadLeads = async () => {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from("leads")
-        .select("id, name, email, phone, qualification_reason, source, stage, created_at")
-        .eq("business_id", businessId)
-        .order("created_at", { ascending: false });
-
-      if (!error && data) {
-        setLeads(data as Lead[]);
-        
-        // Calculate stats
-        const total = data.length;
-        const newCount = data.filter((l) => l.stage === "new").length;
-        const qualifiedCount = data.filter((l) => l.stage === "qualified").length;
-        const wonCount = data.filter((l) => l.stage === "won").length;
-        
-        setStats({ total, new: newCount, qualified: qualifiedCount, won: wonCount });
-      }
-      setLoading(false);
-    };
-
     loadLeads();
   }, [businessId]);
 
-  const filteredLeads = leads.filter((lead) => {
-    const matchesSearch =
-      !searchTerm ||
-      lead.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      lead.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      lead.phone?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStage = stageFilter === "all" || lead.stage === stageFilter;
-    
-    return matchesSearch && matchesStage;
-  });
+  const filteredLeads = useMemo(() => {
+    return leads.filter((lead) => {
+      const matchesSearch =
+        !searchTerm ||
+        lead.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        lead.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        lead.phone?.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchesStage = stageFilter === "all" || lead.stage === stageFilter;
+      return matchesSearch && matchesStage;
+    });
+  }, [leads, searchTerm, stageFilter]);
 
   const conversionRate = stats.total > 0 ? Math.round((stats.won / stats.total) * 100) : 0;
 
@@ -163,15 +191,116 @@ export default function CrmLeadsPage() {
     const now = new Date();
     const diff = now.getTime() - date.getTime();
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    
+
     if (days === 0) return isEs ? "Hoy" : "Today";
     if (days === 1) return isEs ? "Ayer" : "Yesterday";
-    if (days < 7) return isEs ? `Hace ${days} días` : `${days} days ago`;
-    
+    if (days < 7) return isEs ? `Hace ${days} dias` : `${days} days ago`;
+
     return date.toLocaleDateString(isEs ? "es-ES" : "en-US", {
       month: "short",
       day: "numeric",
     });
+  };
+
+  const handleCreateLead = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!businessId) return;
+
+    setLeadError(null);
+    setSavingLead(true);
+
+    const payload = {
+      business_id: businessId,
+      name: newLeadForm.name.trim() || null,
+      email: newLeadForm.email.trim() || null,
+      phone: newLeadForm.phone.trim() || null,
+      source: newLeadForm.source.trim() || "manual",
+      stage: newLeadForm.stage,
+      qualification_reason: newLeadForm.qualification_reason.trim() || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await supabase.from("leads").insert(payload).select("*").single();
+    setSavingLead(false);
+
+    if (error) {
+      setLeadError(error.message);
+      return;
+    }
+
+    const inserted = data as Lead;
+    setLeads((prev) => {
+      const next = [inserted, ...prev];
+      recomputeStats(next);
+      return next;
+    });
+
+    setNewLeadForm({
+      name: "",
+      email: "",
+      phone: "",
+      source: "manual",
+      stage: "new",
+      qualification_reason: "",
+    });
+    setNewLeadOpen(false);
+  };
+
+  const handleStageChange = async (leadId: string, nextStage: LeadStage) => {
+    if (!businessId) return;
+    setUpdatingStageId(leadId);
+
+    const { error } = await supabase
+      .from("leads")
+      .update({ stage: nextStage, updated_at: new Date().toISOString() })
+      .eq("business_id", businessId)
+      .eq("id", leadId);
+
+    setUpdatingStageId(null);
+    if (error) return;
+
+    setLeads((prev) => {
+      const next = prev.map((lead) => (lead.id === leadId ? { ...lead, stage: nextStage } : lead));
+      recomputeStats(next);
+      return next;
+    });
+  };
+
+  const handleExport = () => {
+    const rows = filteredLeads.map((lead) => ({
+      id: lead.id,
+      name: lead.name || "",
+      email: lead.email || "",
+      phone: lead.phone || "",
+      source: lead.source || "",
+      stage: lead.stage,
+      qualification_reason: lead.qualification_reason || "",
+      created_at: lead.created_at,
+    }));
+
+    const headers = Object.keys(rows[0] || {
+      id: "",
+      name: "",
+      email: "",
+      phone: "",
+      source: "",
+      stage: "",
+      qualification_reason: "",
+      created_at: "",
+    });
+
+    const csv = [
+      headers.join(","),
+      ...rows.map((row) => headers.map((header) => csvEscape(String(row[header as keyof typeof row] ?? ""))).join(",")),
+    ].join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `leads-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
   };
 
   const statCards = [
@@ -212,19 +341,80 @@ export default function CrmLeadsPage() {
         description={copy.description}
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={handleExport}>
               <Download className="mr-2 h-4 w-4" />
               {copy.export}
             </Button>
-            <Button className="bg-accent text-white hover:bg-accent/90">
+            <Button className="bg-accent text-white hover:bg-accent/90" onClick={() => setNewLeadOpen((prev) => !prev)}>
               <Plus className="mr-2 h-4 w-4" />
-              {copy.newLead}
+              {newLeadOpen ? copy.cancel : copy.newLead}
             </Button>
           </div>
         }
       />
 
-      {/* Stats Grid */}
+      {newLeadOpen && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{copy.createLead}</CardTitle>
+            <CardDescription>{copy.description}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {leadError && <p className="mb-3 rounded border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">{leadError}</p>}
+            <form className="grid gap-3 md:grid-cols-2" onSubmit={handleCreateLead}>
+              <input
+                value={newLeadForm.name}
+                onChange={(event) => setNewLeadForm((prev) => ({ ...prev, name: event.target.value }))}
+                className="rounded-lg border px-3 py-2 text-sm"
+                placeholder={copy.leadName}
+              />
+              <input
+                value={newLeadForm.email}
+                onChange={(event) => setNewLeadForm((prev) => ({ ...prev, email: event.target.value }))}
+                className="rounded-lg border px-3 py-2 text-sm"
+                placeholder="Email"
+                type="email"
+              />
+              <input
+                value={newLeadForm.phone}
+                onChange={(event) => setNewLeadForm((prev) => ({ ...prev, phone: event.target.value }))}
+                className="rounded-lg border px-3 py-2 text-sm"
+                placeholder={copy.noPhone}
+              />
+              <input
+                value={newLeadForm.source}
+                onChange={(event) => setNewLeadForm((prev) => ({ ...prev, source: event.target.value }))}
+                className="rounded-lg border px-3 py-2 text-sm"
+                placeholder={copy.leadSource}
+              />
+              <select
+                value={newLeadForm.stage}
+                onChange={(event) => setNewLeadForm((prev) => ({ ...prev, stage: event.target.value as LeadStage }))}
+                className="rounded-lg border px-3 py-2 text-sm"
+              >
+                {LEAD_STAGES.map((stage) => (
+                  <option key={stage} value={stage}>
+                    {isEs ? stageConfig[stage].labelEs : stageConfig[stage].labelEn}
+                  </option>
+                ))}
+              </select>
+              <input
+                value={newLeadForm.qualification_reason}
+                onChange={(event) => setNewLeadForm((prev) => ({ ...prev, qualification_reason: event.target.value }))}
+                className="rounded-lg border px-3 py-2 text-sm"
+                placeholder={copy.leadReason}
+              />
+              <div className="md:col-span-2 flex justify-end">
+                <Button type="submit" disabled={savingLead} className="bg-accent text-white hover:bg-accent/90">
+                  {savingLead ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+                  {copy.saveLead}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {statCards.map((card, idx) => (
           <Card
@@ -236,9 +426,7 @@ export default function CrmLeadsPage() {
             <CardContent className="p-5">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    {card.label}
-                  </p>
+                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{card.label}</p>
                   {loading ? (
                     <div className="mt-2 h-9 w-16 animate-pulse rounded bg-muted" />
                   ) : (
@@ -246,7 +434,18 @@ export default function CrmLeadsPage() {
                   )}
                 </div>
                 <div className={`rounded-xl p-3 ${card.iconBg}`}>
-                  <card.icon className="h-5 w-5" style={{ color: card.gradient.includes('accent') ? 'hsl(var(--accent))' : card.gradient.includes('blue') ? '#3b82f6' : card.gradient.includes('purple') ? '#a855f7' : '#10b981' }} />
+                  <card.icon
+                    className="h-5 w-5"
+                    style={{
+                      color: card.gradient.includes("accent")
+                        ? "hsl(var(--accent))"
+                        : card.gradient.includes("blue")
+                        ? "#3b82f6"
+                        : card.gradient.includes("purple")
+                        ? "#a855f7"
+                        : "#10b981",
+                    }}
+                  />
                 </div>
               </div>
             </CardContent>
@@ -254,7 +453,6 @@ export default function CrmLeadsPage() {
         ))}
       </div>
 
-      {/* Search and Filters */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -271,9 +469,7 @@ export default function CrmLeadsPage() {
             <button
               onClick={() => setStageFilter("all")}
               className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                stageFilter === "all"
-                  ? "bg-accent text-white"
-                  : "text-muted-foreground hover:text-foreground"
+                stageFilter === "all" ? "bg-accent text-white" : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {copy.allStages}
@@ -285,9 +481,7 @@ export default function CrmLeadsPage() {
                   key={stage}
                   onClick={() => setStageFilter(stage)}
                   className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                    stageFilter === stage
-                      ? `${config.bg} ${config.color}`
-                      : "text-muted-foreground hover:text-foreground"
+                    stageFilter === stage ? `${config.bg} ${config.color}` : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   {isEs ? config.labelEs : config.labelEn}
@@ -298,7 +492,6 @@ export default function CrmLeadsPage() {
         </div>
       </div>
 
-      {/* Leads List */}
       <Card>
         <CardHeader className="border-b">
           <div className="flex items-center justify-between">
@@ -327,7 +520,7 @@ export default function CrmLeadsPage() {
               </div>
               <p className="mt-4 text-lg font-medium">{leads.length === 0 ? copy.addFirst : copy.noLeads}</p>
               {leads.length === 0 && (
-                <Button className="mt-4 bg-accent text-white hover:bg-accent/90">
+                <Button className="mt-4 bg-accent text-white hover:bg-accent/90" onClick={() => setNewLeadOpen(true)}>
                   <Plus className="mr-2 h-4 w-4" />
                   {copy.newLead}
                 </Button>
@@ -338,24 +531,20 @@ export default function CrmLeadsPage() {
               {filteredLeads.map((lead, idx) => {
                 const config = stageConfig[lead.stage] || stageConfig.new;
                 const Icon = config.icon;
-                
+
                 return (
                   <div
                     key={lead.id}
                     className="group flex items-center gap-4 p-4 transition-colors hover:bg-muted/50"
                     style={{ animationDelay: `${idx * 50}ms` }}
                   >
-                    {/* Avatar */}
                     <div className={`flex h-12 w-12 items-center justify-center rounded-full ${config.bg}`}>
-                      <User className={`h-6 w-6 ${config.color}`} />
+                      <Icon className={`h-6 w-6 ${config.color}`} />
                     </div>
 
-                    {/* Lead Info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="font-semibold truncate">
-                          {lead.name || copy.unknown}
-                        </p>
+                        <p className="font-semibold truncate">{lead.name || copy.unknown}</p>
                         <Badge className={`${config.bg} ${config.color} border-0`}>
                           {isEs ? config.labelEs : config.labelEn}
                         </Badge>
@@ -372,7 +561,6 @@ export default function CrmLeadsPage() {
                       </div>
                     </div>
 
-                    {/* Source & Date */}
                     <div className="hidden sm:flex flex-col items-end gap-1">
                       {lead.source && (
                         <Badge variant="outline" className="text-xs">
@@ -385,14 +573,23 @@ export default function CrmLeadsPage() {
                       </span>
                     </div>
 
-                    {/* Actions */}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="opacity-0 transition-opacity group-hover:opacity-100"
-                    >
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={lead.stage}
+                        onChange={(event) => handleStageChange(lead.id, event.target.value as LeadStage)}
+                        disabled={updatingStageId === lead.id}
+                        className="rounded border px-2 py-1 text-xs"
+                      >
+                        {LEAD_STAGES.map((stage) => (
+                          <option key={stage} value={stage}>
+                            {isEs ? stageConfig[stage].labelEs : stageConfig[stage].labelEn}
+                          </option>
+                        ))}
+                      </select>
+                      <Button variant="outline" size="sm" asChild>
+                        <Link to={`/crm/bookings/new?leadId=${lead.id}`}>{copy.convertBooking}</Link>
+                      </Button>
+                    </div>
                   </div>
                 );
               })}
