@@ -46,10 +46,31 @@ export type Booking = {
   service_name: string
   price: number | null
   status: string
+  validation_status: string
+  validated_by: string | null
+  validated_at: string | null
+  rejected_reason: string | null
   scheduled_at: string | null
   source: string | null
   work_order_no: string | null
   confirmation_notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type WorkOrder = {
+  id: string
+  business_id: string
+  booking_id: string
+  customer_id: string | null
+  vehicle_id: string | null
+  service_name: string
+  status: string
+  assigned_to: string | null
+  scheduled_at: string | null
+  started_at: string | null
+  completed_at: string | null
+  notes: string | null
   created_at: string
   updated_at: string
 }

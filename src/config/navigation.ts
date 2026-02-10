@@ -3,6 +3,8 @@ import {
   Users, 
   Calendar, 
   Wrench, 
+  ClipboardList,
+  History,
   Target, 
   Inbox, 
   Bot, 
@@ -87,6 +89,28 @@ export const appSections: AppSection[] = [
     },
     badge: { en: "CRM", es: "CRM" },
     icon: Wrench,
+    group: "crm",
+  },
+  {
+    name: { en: "Timeline", es: "Timeline" },
+    href: "/crm/timeline",
+    summary: {
+      en: "Searchable audit timeline for CRM actions.",
+      es: "Timeline auditable y buscable de acciones CRM.",
+    },
+    badge: { en: "Audit", es: "Audit" },
+    icon: History,
+    group: "crm",
+  },
+  {
+    name: { en: "Work Orders", es: "Ordenes" },
+    href: "/crm/work-orders",
+    summary: {
+      en: "Execute approved bookings with staff assignment tracking.",
+      es: "Ejecuta reservas aprobadas con seguimiento de asignaciones.",
+    },
+    badge: { en: "Ops", es: "Ops" },
+    icon: ClipboardList,
     group: "crm",
   },
   {

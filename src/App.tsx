@@ -19,6 +19,8 @@ import Leads from "./pages/crm/Leads";
 import FollowUps from "./pages/crm/FollowUps";
 import Inbox from "./pages/crm/Inbox";
 import Services from "./pages/crm/Services";
+import WorkOrders from "./pages/crm/WorkOrders";
+import Timeline from "./pages/crm/Timeline";
 import Chatbot from "./pages/Chatbot";
 import DevChatbot from "./pages/DevChatbot";
 import Profile from "./pages/Profile";
@@ -61,6 +63,8 @@ function App() {
               <Route path="/crm/bookings/:id" element={<BookingDetail />} />
               <Route path="/crm/leads" element={<Leads />} />
               <Route path="/crm/follow-ups" element={<FollowUps />} />
+              <Route path="/crm/work-orders" element={<WorkOrders />} />
+              <Route path="/crm/timeline" element={<Timeline />} />
               <Route path="/crm/inbox" element={<Inbox />} />
               <Route path="/crm/services" element={<Services />} />
               <Route path="/chatbot" element={<Chatbot />} />

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link, useParams } from "react-router-dom"
-import { ArrowLeft, Bot, Loader2, Save, Trash2 } from "lucide-react"
+import { ArrowLeft, Bot, Loader2, Save, ShieldCheck, ShieldX, Trash2 } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/page-header"
 import { Button } from "@/components/ui/button"
@@ -17,6 +17,8 @@ import {
   normalizeBookingStatus,
   requiresWorkOrder,
 } from "@/lib/crm-bookings"
+import { ensureWorkOrderForBooking } from "@/lib/work-orders"
+import { logCrmAudit } from "@/lib/crm-audit"
 
 type LeadDetail = {
   id: string
@@ -47,6 +49,7 @@ export default function BookingDetailPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [validating, setValidating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const selectedLead = useMemo(() => {
@@ -130,6 +133,18 @@ export default function BookingDetailPage() {
       confirmation_notes: (form.get("confirmation_notes") as string) || null,
       updated_at: new Date().toISOString(),
     }
+    if (["confirmed", "in_progress", "completed"].includes(nextStatus)) {
+      payload.validation_status = "approved"
+      payload.validated_by = user?.id || null
+      payload.validated_at = new Date().toISOString()
+      payload.rejected_reason = null
+    } else if (["cancelled", "no_show"].includes(nextStatus)) {
+      payload.validation_status = "rejected"
+      payload.validated_by = user?.id || null
+      payload.validated_at = new Date().toISOString()
+    } else {
+      payload.validation_status = "pending"
+    }
     if (requiresWorkOrder(nextStatus) && !booking.work_order_no) {
       payload.work_order_no = createWorkOrderNo(booking.id)
     }
@@ -146,7 +161,95 @@ export default function BookingDetailPage() {
       setError(updateError.message)
       return
     }
-    setBooking(data as Booking)
+    const updated = data as Booking
+    setBooking(updated)
+    await logCrmAudit(supabase, {
+      businessId,
+      actorUserId: user?.id || null,
+      entityType: "booking",
+      entityId: updated.id,
+      action: "updated",
+      details: {
+        status: updated.status,
+        validation_status: updated.validation_status,
+      },
+    })
+    if (requiresWorkOrder(updated.status)) {
+      try {
+        await ensureWorkOrderForBooking(supabase, updated)
+        await logCrmAudit(supabase, {
+          businessId,
+          actorUserId: user?.id || null,
+          entityType: "work_order",
+          entityId: updated.id,
+          action: "synced_from_booking",
+        })
+      } catch (workOrderError) {
+        console.error("Failed to sync work order", workOrderError)
+      }
+    }
+  }
+
+  const handleValidationDecision = async (decision: "approved" | "rejected") => {
+    if (!businessId || !booking) return
+    setValidating(true)
+    setError(null)
+
+    const statusForDecision = decision === "approved" ? "confirmed" : "cancelled"
+    const payload: Record<string, unknown> = {
+      validation_status: decision,
+      validated_by: user?.id || null,
+      validated_at: new Date().toISOString(),
+      status: statusForDecision,
+      updated_at: new Date().toISOString(),
+    }
+    if (decision === "rejected") {
+      payload.rejected_reason = "Rejected by owner"
+    }
+    if (decision === "approved" && !booking.work_order_no) {
+      payload.work_order_no = createWorkOrderNo(booking.id)
+    }
+
+    const { data, error: updateError } = await supabase
+      .from("bookings")
+      .update(payload)
+      .eq("business_id", businessId)
+      .eq("id", booking.id)
+      .select("*")
+      .single()
+
+    setValidating(false)
+    if (updateError) {
+      setError(updateError.message)
+      return
+    }
+
+    const updated = data as Booking
+    setBooking(updated)
+    await logCrmAudit(supabase, {
+      businessId,
+      actorUserId: user?.id || null,
+      entityType: "booking",
+      entityId: updated.id,
+      action: decision === "approved" ? "approved" : "rejected",
+      details: {
+        validation_status: decision,
+      },
+    })
+    if (decision === "approved") {
+      try {
+        await ensureWorkOrderForBooking(supabase, updated)
+        await logCrmAudit(supabase, {
+          businessId,
+          actorUserId: user?.id || null,
+          entityType: "work_order",
+          entityId: updated.id,
+          action: "created_on_approval",
+        })
+      } catch (workOrderError) {
+        console.error("Failed to sync work order after validation", workOrderError)
+      }
+    }
   }
 
   const handleDelete = async () => {
@@ -158,6 +261,13 @@ export default function BookingDetailPage() {
       setError(deleteError.message)
       return
     }
+    await logCrmAudit(supabase, {
+      businessId,
+      actorUserId: user?.id || null,
+      entityType: "booking",
+      entityId: booking.id,
+      action: "deleted",
+    })
     window.location.href = "/crm/bookings"
   }
 
@@ -198,7 +308,36 @@ export default function BookingDetailPage() {
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Operational Booking</CardTitle>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <CardTitle>Operational Booking</CardTitle>
+                <p className="text-xs text-muted-foreground">Validation: {booking.validation_status || "pending"}</p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                  onClick={() => handleValidationDecision("approved")}
+                  disabled={validating}
+                >
+                  {validating ? <Loader2 className="mr-2 size-4 animate-spin" /> : <ShieldCheck className="mr-2 size-4" />}
+                  Approve
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="border-amber-200 text-amber-700 hover:bg-amber-50"
+                  onClick={() => handleValidationDecision("rejected")}
+                  disabled={validating}
+                >
+                  {validating ? <Loader2 className="mr-2 size-4 animate-spin" /> : <ShieldX className="mr-2 size-4" />}
+                  Reject
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={handleSave}>

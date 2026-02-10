@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { Link, useParams } from "react-router-dom"
-import { ArrowLeft, CalendarDays, Car, Edit, FileText, Loader2, Mail, Phone, Plus, Save, Tag, Trash2, User } from "lucide-react"
+import { ArrowLeft, CalendarDays, Car, Edit, FileText, Loader2, Mail, Phone, Plus, Save, Tag, Trash2, Upload, User } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/page-header"
 import { Badge } from "@/components/ui/badge"
@@ -12,11 +12,14 @@ import { Customer, Vehicle, Booking } from "@/types/crm"
 import { NotesPanel } from "@/components/crm/notes-panel"
 import { useLanguage } from "@/components/providers/language-provider"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/hooks/useAuth"
+import { logCrmAudit } from "@/lib/crm-audit"
 
 export default function CustomerDetailPage() {
   const params = useParams<{ id: string }>()
   const id = params?.id
   const { businessId } = useCurrentBusiness()
+  const { user } = useAuth()
   const { lang } = useLanguage()
   const isEs = lang === "es"
   const [customer, setCustomer] = useState<Customer | null>(null)
@@ -34,6 +37,12 @@ export default function CustomerDetailPage() {
   const [showAddVehicle, setShowAddVehicle] = useState(false)
   const [bookings, setBookings] = useState<Booking[]>([])
   const [bookingsLoading, setBookingsLoading] = useState(false)
+  const [bookingsPage, setBookingsPage] = useState(1)
+  const [bookingsTotal, setBookingsTotal] = useState(0)
+  const [vehicleBookingMap, setVehicleBookingMap] = useState<Map<string, Booking[]>>(new Map())
+  const [uploadingVehiclePhotos, setUploadingVehiclePhotos] = useState(false)
+
+  const BOOKINGS_PAGE_SIZE = 12
 
   const copy = isEs
     ? {
@@ -70,7 +79,12 @@ export default function CustomerDetailPage() {
         save: "Guardar cambios",
         activity: "Historial de Reservas",
         activityDesc: "Últimas citas y servicios.",
+        activityDescFull: "Historial completo con paginación.",
         noEvents: "Sin reservas registradas.",
+        previous: "Anterior",
+        next: "Siguiente",
+        uploadPhotos: "Subir fotos",
+        vehicleServiceHistory: "Historial por vehículo",
         viewBooking: "Ver",
         deleteTitle: "¿Eliminar cliente?",
         deleteDesc: "Esta acción no se puede deshacer. Se eliminará el cliente y sus datos asociados.",
@@ -114,7 +128,12 @@ export default function CustomerDetailPage() {
         save: "Save changes",
         activity: "Booking History",
         activityDesc: "Recent appointments and services.",
+        activityDescFull: "Full history with pagination.",
         noEvents: "No bookings recorded.",
+        previous: "Previous",
+        next: "Next",
+        uploadPhotos: "Upload photos",
+        vehicleServiceHistory: "Vehicle service history",
         viewBooking: "View",
         deleteTitle: "Delete customer?",
         deleteDesc: "This action cannot be undone. The customer and related data will be removed.",
@@ -173,18 +192,49 @@ export default function CustomerDetailPage() {
     const fetchBookings = async () => {
       if (!businessId || !id) return
       setBookingsLoading(true)
+      const from = (bookingsPage - 1) * BOOKINGS_PAGE_SIZE
+      const to = from + BOOKINGS_PAGE_SIZE - 1
+      const { data, count } = await supabase
+        .from("bookings")
+        .select("*", { count: "exact" })
+        .eq("business_id", businessId)
+        .eq("customer_id", id)
+        .order("created_at", { ascending: false })
+        .range(from, to)
+      setBookings((data ?? []) as Booking[])
+      setBookingsTotal(count || 0)
+      setBookingsLoading(false)
+    }
+    fetchBookings()
+  }, [businessId, id, bookingsPage])
+
+  useEffect(() => {
+    const fetchVehicleHistory = async () => {
+      if (!businessId || !id || vehicles.length === 0) {
+        setVehicleBookingMap(new Map())
+        return
+      }
+      const vehicleIds = vehicles.map((vehicle) => vehicle.id)
       const { data } = await supabase
         .from("bookings")
         .select("*")
         .eq("business_id", businessId)
         .eq("customer_id", id)
+        .in("vehicle_id", vehicleIds)
         .order("created_at", { ascending: false })
-        .limit(25)
-      setBookings((data ?? []) as Booking[])
-      setBookingsLoading(false)
+
+      const map = new Map<string, Booking[]>()
+      ;((data ?? []) as Booking[]).forEach((booking) => {
+        const key = booking.vehicle_id || ""
+        if (!key) return
+        const list = map.get(key) || []
+        list.push(booking)
+        map.set(key, list)
+      })
+      setVehicleBookingMap(map)
     }
-    fetchBookings()
-  }, [businessId, id])
+    fetchVehicleHistory()
+  }, [businessId, id, vehicles])
 
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -223,6 +273,29 @@ export default function CustomerDetailPage() {
     e.preventDefault()
     if (!businessId || !customer) return
     const form = new FormData(e.currentTarget)
+    setVehicleSaving(true)
+    setUploadingVehiclePhotos(true)
+    const photoFiles = form
+      .getAll("photo_files")
+      .filter((entry): entry is File => entry instanceof File && entry.size > 0)
+    const uploadedPhotoUrls: string[] = []
+
+    for (const file of photoFiles) {
+      const safeName = `${Date.now()}-${file.name.replace(/\s+/g, "-")}`
+      const path = `${businessId}/${customer.id}/${safeName}`
+      const { error: uploadError } = await supabase.storage.from("vehicle-photos").upload(path, file, {
+        upsert: false,
+      })
+      if (uploadError) {
+        setUploadingVehiclePhotos(false)
+        setVehicleSaving(false)
+        setVehicleError(uploadError.message)
+        return
+      }
+      const { data: publicData } = supabase.storage.from("vehicle-photos").getPublicUrl(path)
+      if (publicData?.publicUrl) uploadedPhotoUrls.push(publicData.publicUrl)
+    }
+
     const payload = {
       business_id: businessId,
       customer_id: customer.id,
@@ -235,13 +308,15 @@ export default function CustomerDetailPage() {
       photo_urls: ((form.get("photo_urls") as string) || "")
         .split(",")
         .map((entry) => entry.trim())
-        .filter(Boolean),
+        .filter(Boolean)
+        .concat(uploadedPhotoUrls),
     }
     if (!payload.brand && !payload.model && !payload.license_plate) {
+      setUploadingVehiclePhotos(false)
+      setVehicleSaving(false)
       setVehicleError(copy.vehicleRequired)
       return
     }
-    setVehicleSaving(true)
     setVehicleError(null)
     const { data, error: err } = await supabase
       .from("vehicles")
@@ -249,12 +324,21 @@ export default function CustomerDetailPage() {
       .select("*")
       .single()
     setVehicleSaving(false)
+    setUploadingVehiclePhotos(false)
     if (err) {
       setVehicleError(err.message)
       return
     }
     if (data) {
       setVehicles((prev) => [data as Vehicle, ...prev])
+      await logCrmAudit(supabase, {
+        businessId,
+        actorUserId: user?.id || null,
+        entityType: "vehicle",
+        entityId: (data as Vehicle).id,
+        action: "created",
+        details: { customer_id: customer.id },
+      })
       e.currentTarget.reset()
       setShowAddVehicle(false)
     }
@@ -275,6 +359,14 @@ export default function CustomerDetailPage() {
       return
     }
     setVehicles((prev) => prev.filter((vehicle) => vehicle.id !== vehicleId))
+    await logCrmAudit(supabase, {
+      businessId,
+      actorUserId: user?.id || null,
+      entityType: "vehicle",
+      entityId: vehicleId,
+      action: "deleted",
+      details: { customer_id: id },
+    })
   }
 
   const handleDelete = async () => {
@@ -406,7 +498,7 @@ export default function CustomerDetailPage() {
               )}
             </div>
             <div className="flex flex-col items-center gap-1 rounded-xl bg-emerald-100 px-6 py-4">
-              <span className="text-3xl font-bold text-emerald-700">{bookings.length}</span>
+              <span className="text-3xl font-bold text-emerald-700">{bookingsTotal}</span>
               <span className="text-xs text-emerald-600">{copy.totalBookings}</span>
             </div>
           </div>
@@ -606,6 +698,17 @@ export default function CustomerDetailPage() {
                         className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                         placeholder={isEs ? "https://... , https://..." : "https://... , https://..."}
                       />
+                      <label className="mt-2 inline-flex items-center gap-2 text-xs text-blue-700">
+                        <Upload className="h-3.5 w-3.5" />
+                        {copy.uploadPhotos}
+                      </label>
+                      <input
+                        name="photo_files"
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs text-foreground"
+                      />
                     </div>
                     <div className="flex items-end">
                       <Button
@@ -614,7 +717,7 @@ export default function CustomerDetailPage() {
                         className="w-full bg-blue-600 text-white hover:bg-blue-500"
                         disabled={vehicleSaving}
                       >
-                        {vehicleSaving ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Plus className="mr-2 size-4" />}
+                        {(vehicleSaving || uploadingVehiclePhotos) ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Plus className="mr-2 size-4" />}
                         {copy.vehicleAdd}
                       </Button>
                     </div>
@@ -678,6 +781,31 @@ export default function CustomerDetailPage() {
                                 )}
                               </div>
                             )}
+                            <div className="mt-2 border-t pt-2">
+                              <p className="text-[11px] font-medium text-muted-foreground">{copy.vehicleServiceHistory}</p>
+                              {(() => {
+                                const history = vehicleBookingMap.get(vehicle.id) || []
+                                if (history.length === 0) {
+                                  return <p className="text-[11px] text-muted-foreground">No services yet.</p>
+                                }
+                                return (
+                                  <div className="mt-1 space-y-1">
+                                    {history.slice(0, 3).map((entry) => (
+                                      <Link
+                                        key={entry.id}
+                                        to={`/crm/bookings/${entry.id}`}
+                                        className="block text-[11px] text-blue-700 hover:underline"
+                                      >
+                                        {entry.service_name} - {entry.scheduled_at ? formatDate(entry.scheduled_at) : formatDate(entry.created_at)}
+                                      </Link>
+                                    ))}
+                                    {history.length > 3 && (
+                                      <p className="text-[11px] text-muted-foreground">+{history.length - 3} more</p>
+                                    )}
+                                  </div>
+                                )
+                              })()}
+                            </div>
                           </div>
                           <Button
                             variant="ghost"
@@ -713,7 +841,7 @@ export default function CustomerDetailPage() {
                 </div>
                 <div>
                   <CardTitle className="text-lg font-semibold">{copy.activity}</CardTitle>
-                  <CardDescription>{copy.activityDesc}</CardDescription>
+                  <CardDescription>{copy.activityDescFull}</CardDescription>
                 </div>
               </div>
             </CardHeader>
@@ -765,6 +893,30 @@ export default function CustomerDetailPage() {
                       </Button>
                     </div>
                   ))}
+                  <div className="flex items-center justify-between border-t pt-2">
+                    <span className="text-xs text-muted-foreground">
+                      {(bookingsPage - 1) * BOOKINGS_PAGE_SIZE + 1}-
+                      {Math.min(bookingsPage * BOOKINGS_PAGE_SIZE, bookingsTotal)} / {bookingsTotal}
+                    </span>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={bookingsPage <= 1}
+                        onClick={() => setBookingsPage((value) => Math.max(1, value - 1))}
+                      >
+                        {copy.previous}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={bookingsPage * BOOKINGS_PAGE_SIZE >= bookingsTotal}
+                        onClick={() => setBookingsPage((value) => value + 1)}
+                      >
+                        {copy.next}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               )}
             </CardContent>

@@ -20,7 +20,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { supabase } from "@/lib/supabaseClient"
 import { useCurrentBusiness } from "@/hooks/use-current-business"
 import { useAuth } from "@/hooks/useAuth"
-import { Customer, Service, Vehicle } from "@/types/crm"
+import { Booking, Customer, Service, Vehicle } from "@/types/crm"
 import { useLanguage } from "@/components/providers/language-provider"
 import { cn } from "@/lib/utils"
 import {
@@ -30,6 +30,8 @@ import {
   normalizeBookingStatus,
   requiresWorkOrder,
 } from "@/lib/crm-bookings"
+import { ensureWorkOrderForBooking } from "@/lib/work-orders"
+import { logCrmAudit } from "@/lib/crm-audit"
 
 type LeadOption = {
   id: string
@@ -70,6 +72,8 @@ export default function NewBookingPage() {
   const [selectedLeadId, setSelectedLeadId] = useState("")
   const [statusDraft, setStatusDraft] = useState("requested")
   const [sourceDraft, setSourceDraft] = useState("manual")
+  const [scheduledAtDraft, setScheduledAtDraft] = useState("")
+  const [scheduleConflicts, setScheduleConflicts] = useState<Booking[]>([])
 
   const [vehiclesLoading, setVehiclesLoading] = useState(false)
   const [vehiclesError, setVehiclesError] = useState<string | null>(null)
@@ -108,6 +112,8 @@ export default function NewBookingPage() {
         unassigned: "Sin asignar",
         me: "Yo",
         save: "Crear Reserva",
+        scheduleConflictTitle: "Conflicto de agenda detectado",
+        scheduleConflictEmpty: "No hay conflictos para este horario.",
         customerSection: "Informacion del Cliente",
         serviceSection: "Servicio y Precio",
         scheduleSection: "Programacion",
@@ -141,6 +147,8 @@ export default function NewBookingPage() {
         unassigned: "Unassigned",
         me: "Me",
         save: "Create Booking",
+        scheduleConflictTitle: "Schedule conflict detected",
+        scheduleConflictEmpty: "No conflicts for this time.",
         customerSection: "Customer Information",
         serviceSection: "Service & Pricing",
         scheduleSection: "Scheduling",
@@ -252,6 +260,40 @@ export default function NewBookingPage() {
     fetchVehicles()
   }, [businessId, selectedCustomerId])
 
+  useEffect(() => {
+    const findScheduleConflicts = async () => {
+      if (!businessId || !selectedCustomerId || !scheduledAtDraft) {
+        setScheduleConflicts([])
+        return
+      }
+
+      const utc = toUtcISOString(scheduledAtDraft)
+      if (!utc) {
+        setScheduleConflicts([])
+        return
+      }
+
+      const selectedAt = new Date(utc)
+      const from = new Date(selectedAt.getTime() - 60 * 60 * 1000).toISOString()
+      const to = new Date(selectedAt.getTime() + 60 * 60 * 1000).toISOString()
+
+      const { data } = await supabase
+        .from("bookings")
+        .select("*")
+        .eq("business_id", businessId)
+        .eq("customer_id", selectedCustomerId)
+        .gte("scheduled_at", from)
+        .lte("scheduled_at", to)
+        .neq("status", "cancelled")
+        .order("scheduled_at", { ascending: true })
+        .limit(5)
+
+      setScheduleConflicts((data as Booking[]) || [])
+    }
+
+    findScheduleConflicts()
+  }, [businessId, selectedCustomerId, scheduledAtDraft])
+
   const handleServiceChange = (serviceName: string) => {
     const service = services.find((s) => s.name === serviceName) || null
     setSelectedService(service)
@@ -292,6 +334,15 @@ export default function NewBookingPage() {
       scheduled_at: localValue ? toUtcISOString(localValue) ?? localValue : null,
       source: (form.get("source") as string) || "manual",
       confirmation_notes: (form.get("confirmation_notes") as string) || null,
+      validation_status: normalizedStatus === "confirmed" || normalizedStatus === "in_progress" || normalizedStatus === "completed" ? "approved" : "pending",
+      validated_by:
+        normalizedStatus === "confirmed" || normalizedStatus === "in_progress" || normalizedStatus === "completed"
+          ? user?.id || null
+          : null,
+      validated_at:
+        normalizedStatus === "confirmed" || normalizedStatus === "in_progress" || normalizedStatus === "completed"
+          ? new Date().toISOString()
+          : null,
     }
 
     const { data, error: insertError } = await supabase.from("bookings").insert(payload).select("id").single()
@@ -303,11 +354,43 @@ export default function NewBookingPage() {
     }
 
     if (data?.id && requiresWorkOrder(normalizedStatus)) {
-      await supabase
+      const { data: updatedBooking } = await supabase
         .from("bookings")
         .update({ work_order_no: createWorkOrderNo(data.id) })
         .eq("business_id", businessId)
         .eq("id", data.id)
+        .select("*")
+        .single()
+      if (updatedBooking) {
+        try {
+          await ensureWorkOrderForBooking(supabase, updatedBooking as Booking)
+          await logCrmAudit(supabase, {
+            businessId,
+            actorUserId: user?.id || null,
+            entityType: "work_order",
+            entityId: (updatedBooking as Booking).id,
+            action: "auto_created_from_booking",
+            details: { source: "booking_new" },
+          })
+        } catch (workOrderError) {
+          console.error("Failed to create work order", workOrderError)
+        }
+      }
+    }
+
+    if (data?.id) {
+      await logCrmAudit(supabase, {
+        businessId,
+        actorUserId: user?.id || null,
+        entityType: "booking",
+        entityId: data.id,
+        action: "created",
+        details: {
+          status: normalizedStatus,
+          source: payload.source,
+          lead_id: payload.lead_id,
+        },
+      })
     }
 
     setLoading(false)
@@ -465,8 +548,24 @@ export default function NewBookingPage() {
                   <input
                     name="scheduled_at"
                     type="datetime-local"
+                    value={scheduledAtDraft}
+                    onChange={(event) => setScheduledAtDraft(event.target.value)}
                     className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
                   />
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-2">
+                    <p className="text-xs font-medium text-amber-800">{copy.scheduleConflictTitle}</p>
+                    {scheduleConflicts.length === 0 ? (
+                      <p className="text-xs text-amber-700">{copy.scheduleConflictEmpty}</p>
+                    ) : (
+                      <div className="mt-1 space-y-1">
+                        {scheduleConflicts.map((entry) => (
+                          <Link key={entry.id} to={`/crm/bookings/${entry.id}`} className="block text-xs text-amber-800 hover:underline">
+                            {entry.service_name} - {entry.scheduled_at ? new Date(entry.scheduled_at).toLocaleString() : "No date"}
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-2">

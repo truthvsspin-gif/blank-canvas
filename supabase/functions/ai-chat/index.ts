@@ -868,6 +868,46 @@ async function createBookingFromConversation(
       return { bookingId: null, created: false, updated: false };
     }
 
+    let vehicleId: string | null = null;
+    const vehicleBrand = context.vehicleInfo?.brand?.trim() || null;
+    const vehicleModel = context.vehicleInfo?.model?.trim() || null;
+    const vehicleType = context.vehicleInfo?.type?.trim() || null;
+
+    if (customerId && (vehicleBrand || vehicleModel || vehicleType)) {
+      let vehicleQuery = supabase
+        .from("vehicles")
+        .select("id")
+        .eq("business_id", businessId)
+        .eq("customer_id", customerId)
+        .limit(1);
+
+      if (vehicleBrand) vehicleQuery = vehicleQuery.eq("brand", vehicleBrand);
+      if (vehicleModel) vehicleQuery = vehicleQuery.eq("model", vehicleModel);
+
+      const { data: existingVehicle } = await vehicleQuery.maybeSingle();
+      if (existingVehicle?.id) {
+        vehicleId = existingVehicle.id;
+      } else {
+        const { data: createdVehicle, error: vehicleError } = await supabase
+          .from("vehicles")
+          .insert({
+            business_id: businessId,
+            customer_id: customerId,
+            brand: vehicleBrand,
+            model: vehicleModel,
+            size: vehicleType,
+          })
+          .select("id")
+          .single();
+
+        if (vehicleError) {
+          console.error("[BOOKING] Failed to create vehicle:", vehicleError);
+        } else {
+          vehicleId = createdVehicle?.id || null;
+        }
+      }
+    }
+
     const serviceName = recommendedService || context.recommendationSummary || "TBD";
 
     // Compute scheduled datetime before dedupe check so we can update an existing booking.
@@ -898,7 +938,7 @@ async function createBookingFromConversation(
     // Step 2: Check if booking already exists recently for same customer/service
     const { data: existingBooking } = await supabase
       .from("bookings")
-      .select("id, service_name, status, created_at, scheduled_at")
+      .select("id, service_name, status, created_at, scheduled_at, vehicle_id")
       .eq("business_id", businessId)
       .eq("customer_id", customerId)
       .eq("source", "chatbot")
@@ -930,6 +970,11 @@ async function createBookingFromConversation(
           updated = true;
         }
 
+        if (vehicleId && existingBooking.vehicle_id !== vehicleId) {
+          updatePayload.vehicle_id = vehicleId;
+          updated = true;
+        }
+
         if (updated) {
           const { error: updateError } = await supabase
             .from("bookings")
@@ -955,6 +1000,7 @@ async function createBookingFromConversation(
       .insert({
         business_id: businessId,
         customer_id: customerId,
+        vehicle_id: vehicleId,
         lead_id: leadId,
         service_name: serviceName,
         status: bookingStatus,
