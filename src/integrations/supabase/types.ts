@@ -1171,6 +1171,59 @@ export type Database = {
           },
         ]
       }
+      stock_fixed_costs: {
+        Row: {
+          beneficiary: string | null
+          business_id: string
+          created_at: string
+          description: string | null
+          end_date: string | null
+          id: string
+          name: string
+          recurrence: string | null
+          start_date: string | null
+          tax_pct: number | null
+          total: number | null
+          updated_at: string
+        }
+        Insert: {
+          beneficiary?: string | null
+          business_id: string
+          created_at?: string
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          name: string
+          recurrence?: string | null
+          start_date?: string | null
+          tax_pct?: number | null
+          total?: number | null
+          updated_at?: string
+        }
+        Update: {
+          beneficiary?: string | null
+          business_id?: string
+          created_at?: string
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          name?: string
+          recurrence?: string | null
+          start_date?: string | null
+          tax_pct?: number | null
+          total?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_fixed_costs_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stock_items: {
         Row: {
           available_qty: number
@@ -1217,6 +1270,104 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "stock_items_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stock_purchases: {
+        Row: {
+          business_id: string
+          created_at: string
+          id: string
+          item_name: string
+          price: number | null
+          purchase_date: string | null
+          qty: number | null
+          supplier_id: string | null
+          tax_pct: number | null
+          total: number | null
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          id?: string
+          item_name: string
+          price?: number | null
+          purchase_date?: string | null
+          qty?: number | null
+          supplier_id?: string | null
+          tax_pct?: number | null
+          total?: number | null
+          updated_at?: string
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          id?: string
+          item_name?: string
+          price?: number | null
+          purchase_date?: string | null
+          qty?: number | null
+          supplier_id?: string | null
+          tax_pct?: number | null
+          total?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_purchases_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_purchases_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suppliers: {
+        Row: {
+          address: string | null
+          business_id: string
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          business_id: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          business_id?: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suppliers_business_id_fkey"
             columns: ["business_id"]
             isOneToOne: false
             referencedRelation: "businesses"
