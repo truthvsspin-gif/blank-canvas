@@ -1,66 +1,70 @@
-# Plan: Add Inline Pricing Display & Mon-Fri Scheduling Proposals
 
-## Status: ✅ COMPLETED
 
-## Summary
-Updated the chatbot to align with the new specification by:
-1. ✅ Displaying prices immediately with service recommendations (not delayed until "value is established")
-2. ✅ Automatically proposing Mon-Fri scheduling slots instead of triggering human handoff
+# CRM as a Standalone App Section
 
----
+## Overview
+Transform the CRM module into its own self-contained sub-application with a dedicated layout, separate from the main app. CRM pages will have their own sidebar showing only CRM navigation items, while all other pages (Dashboard, Sales Analytics, Chatbot, Admin, etc.) keep the current layout unchanged.
 
-## Implementation Complete
+## What Changes
 
-### Phase 1: Inline Pricing Display ✅
-- Updated `buildAgentBrain()` core rules: Changed "NUNCA dar precios sin contexto" → "SIEMPRE incluir el precio"
-- Updated `buildBusinessContextBlock()` usage rules: Removed "only mention prices AFTER establishing value"
-- Updated STATE_4_PRESCRIPTION goal: Now includes exact price and proposes weekdays
+### 1. New CRM Layout (`src/layouts/CrmLayout.tsx`)
+- A dedicated layout component used exclusively for `/crm/*` routes
+- Its own sidebar with only CRM-specific navigation: CRM Home, Customers, Bookings, Services, Timeline, Work Orders, Leads, Follow-ups, Inbox
+- A "Back to Main" link at the top of the sidebar to return to the main app (e.g., Dashboard)
+- Same header style as AppLayout for visual consistency, but the sidebar content is CRM-only
+- Emerald color theme throughout (matching the existing CRM group color)
 
-### Phase 2: Scheduling State ✅
-- Added `STATE_5_SCHEDULE` between prescription and action
-- Added `STATE_6_ACTION` (renamed from 5)  
-- Added `STATE_7_HANDOFF` (renamed from 6)
-- Added `parseScheduleResponse()` function for day/time detection (Spanish + English)
-- Added `getNextWeekday()` function to calculate actual booking date
+### 2. New CRM Sidebar (`src/components/layout/crm-sidebar-nav.tsx`)
+- Renders only CRM navigation items (filtered from `appSections` where `group === "crm"`)
+- Includes a prominent back button/link to exit CRM and return to Dashboard
+- Collapsible mini-mode support (same as current sidebar)
+- Emerald-themed active states and indicators
 
-### Phase 3: State Machine Updates ✅
-- STATE_4_PRESCRIPTION now moves to STATE_5_SCHEDULE (or STATE_6_ACTION if day detected in same message)
-- STATE_5_SCHEDULE captures day selection, moves to STATE_6_ACTION
-- STATE_6_ACTION requests contact info, moves to STATE_7_HANDOFF
-- Updated recovery window to include new states
-- Updated stall detection to include new states
+### 3. Updated Main Sidebar (`src/components/layout/sidebar-nav.tsx`)
+- Remove individual CRM sub-items (Customers, Bookings, Services, etc.) from the main sidebar
+- Keep only a single "CRM" entry that links to `/crm` as an entry point into the CRM sub-app
+- All other groups (Overview, Messaging, Settings) remain exactly as they are
 
-### Phase 4: Database ✅
-- Added `scheduled_day` and `scheduled_time` columns to conversations table
-- Updated `storeConversationState()` to persist scheduling fields
-- Updated `loadConversationContext()` to load scheduling fields
-- Updated `createBookingFromConversation()` to calculate `scheduled_at` from day/time
+### 4. Updated Routing (`src/App.tsx`)
+- Move all `/crm/*` routes under a new parent route that uses `CrmLayout` instead of `AppLayout`
+- Non-CRM routes continue using `AppLayout` as before
 
-### Fallbacks Updated ✅
-- STATE_4_PRESCRIPTION: Now proposes Mon-Wed-Fri availability
-- STATE_5_SCHEDULE: "We have availability Monday, Wednesday, and Friday"
-- STATE_6_ACTION: "To confirm your appointment, may I have your name and phone?"
-- STATE_7_HANDOFF: Connects with team for final details
+### 5. Navigation Config (`src/config/navigation.ts`)
+- Add a new export `crmSections` filtered for CRM items, used by the CRM sidebar
+- Update `navGroups` for the main sidebar to only include the CRM hub link (not sub-pages)
 
----
-
-## Expected Flow After Changes
+## Visual Flow
 
 ```text
-1. User: "Hola, tengo un BMW X5"
-2. Bot: "¡Excelente! ¿Qué buscas para tu BMW X5 - brillo, protección, o interior?"
-3. User: "Protección"
-4. Bot: "Para tu BMW X5, recomiendo Ceramic Coating - $199. Protección duradera. 
-        Tenemos disponibilidad lunes, miércoles o viernes. ¿Cuál te funciona?"
-5. User: "Viernes"
-6. Bot: "Perfecto, ¿viernes por la mañana o por la tarde?"
-7. User: "Por la mañana"
-8. Bot: "¡Listo! Viernes por la mañana para Ceramic Coating. 
-        Comparte tu nombre y teléfono para confirmar."
+Main App (AppLayout)              CRM Sub-App (CrmLayout)
++--------------------------+      +--------------------------+
+| Header                   |      | Header                   |
+|--------------------------|      |--------------------------|
+| Sidebar    | Content     |      | CRM        | Content     |
+| - Dashboard|             |      | Sidebar    |             |
+| - Analytics|             |  ->  | <- Back    |             |
+| - CRM -----+-- click -->|      | - Home     |             |
+| - Chatbot  |             |      | - Customers|             |
+| - Admin    |             |      | - Bookings |             |
+| - ...      |             |      | - Services |             |
++--------------------------+      | - ...      |             |
+                                  +--------------------------+
 ```
 
----
+## Technical Details
 
-## Files Modified
-- `supabase/functions/ai-chat/index.ts` - All state machine, prompt, and persistence changes
-- Database migration - Added `scheduled_day`, `scheduled_time` columns
+### Files to Create
+- `src/layouts/CrmLayout.tsx` -- mirrors AppLayout structure but uses CRM sidebar
+- `src/components/layout/crm-sidebar-nav.tsx` -- CRM-only sidebar navigation
+
+### Files to Modify
+- `src/App.tsx` -- split CRM routes into their own layout group
+- `src/config/navigation.ts` -- export `crmSections` and adjust main sidebar items
+- `src/components/layout/sidebar-nav.tsx` -- remove CRM sub-items from main nav (keep only CRM hub link)
+
+### No Changes To
+- All page components (CRM.tsx, Customers.tsx, etc.) remain untouched
+- Header component stays the same
+- Auth, providers, and business gate remain unchanged
+- All non-CRM routes and layouts stay exactly as they are
+
