@@ -14,7 +14,14 @@ import {
   Briefcase,
   BarChart3,
   Send,
-  Plug
+  Plug,
+  Database,
+  FileText,
+  Package,
+  Building2,
+  UsersRound,
+  CreditCard,
+  MessageCircle
 } from "lucide-react"
 import { AppSection } from "@/types/navigation"
 
@@ -25,6 +32,7 @@ export type NavGroup = {
 }
 
 export const appSections: AppSection[] = [
+  // ── Main ──
   {
     name: { en: "Dashboard", es: "Dashboard" },
     href: "/dashboard",
@@ -47,94 +55,90 @@ export const appSections: AppSection[] = [
     icon: BarChart3,
     group: "main",
   },
+
+  // ── CRM (matching reference: Panel, Órdenes, Datos, Docs, Stock, Negocio, Equipo, Pagos, WhatsApp, Métricas) ──
   {
-    name: { en: "CRM", es: "CRM" },
+    name: { en: "Panel", es: "Panel" },
     href: "/crm",
-    summary: {
-      en: "Pipeline, accounts, and customer lifecycle touchpoints.",
-      es: "Pipeline, cuentas y ciclo de vida del cliente.",
-    },
-    badge: { en: "Customer", es: "Clientes" },
-    icon: Briefcase,
+    summary: { en: "CRM dashboard with calendar and work requests.", es: "Panel CRM con calendario y solicitudes." },
+    badge: { en: "Home", es: "Inicio" },
+    icon: LayoutDashboard,
     group: "crm",
   },
   {
-    name: { en: "Customers", es: "Clientes" },
-    href: "/crm/customers",
-    summary: {
-      en: "Manage customer profiles, vehicles, and contact info.",
-      es: "Gestiona perfiles de clientes, vehiculos e informacion de contacto.",
-    },
-    badge: { en: "CRM", es: "CRM" },
-    icon: Users,
-    group: "crm",
-  },
-  {
-    name: { en: "Bookings", es: "Reservas" },
-    href: "/crm/bookings",
-    summary: {
-      en: "View and manage all service appointments.",
-      es: "Ver y gestionar todas las citas de servicio.",
-    },
-    badge: { en: "CRM", es: "CRM" },
-    icon: Calendar,
-    group: "crm",
-  },
-  {
-    name: { en: "Services", es: "Servicios" },
-    href: "/crm/services",
-    summary: {
-      en: "Configure service offerings and pricing.",
-      es: "Configura servicios y precios.",
-    },
-    badge: { en: "CRM", es: "CRM" },
-    icon: Wrench,
-    group: "crm",
-  },
-  {
-    name: { en: "Timeline", es: "Timeline" },
-    href: "/crm/timeline",
-    summary: {
-      en: "Searchable audit timeline for CRM actions.",
-      es: "Timeline auditable y buscable de acciones CRM.",
-    },
-    badge: { en: "Audit", es: "Audit" },
-    icon: History,
-    group: "crm",
-  },
-  {
-    name: { en: "Work Orders", es: "Ordenes" },
+    name: { en: "Orders", es: "Órdenes" },
     href: "/crm/work-orders",
-    summary: {
-      en: "Execute approved bookings with staff assignment tracking.",
-      es: "Ejecuta reservas aprobadas con seguimiento de asignaciones.",
-    },
+    summary: { en: "Kanban board for work order management.", es: "Tablero kanban de órdenes de trabajo." },
     badge: { en: "Ops", es: "Ops" },
     icon: ClipboardList,
     group: "crm",
   },
   {
-    name: { en: "Leads", es: "Leads" },
-    href: "/crm/leads",
-    summary: {
-      en: "Qualified leads by conversation intent.",
-      es: "Leads calificados por intencion.",
-    },
-    badge: { en: "Leads", es: "Leads" },
-    icon: Target,
+    name: { en: "Data", es: "Datos" },
+    href: "/crm/datos",
+    summary: { en: "Browse orders, vehicles, customers and requests.", es: "Consulta órdenes, vehículos, clientes y solicitudes." },
+    badge: { en: "DB", es: "BD" },
+    icon: Database,
     group: "crm",
   },
   {
-    name: { en: "Follow-ups", es: "Seguimientos" },
-    href: "/crm/follow-ups",
-    summary: {
-      en: "Automated follow-up message queue.",
-      es: "Cola de mensajes de seguimiento automático.",
-    },
-    badge: { en: "Auto", es: "Auto" },
-    icon: Send,
+    name: { en: "Docs", es: "Docs" },
+    href: "/crm/docs",
+    summary: { en: "Invoices, estimates and documents.", es: "Facturas, presupuestos y documentos." },
+    badge: { en: "Files", es: "Archivos" },
+    icon: FileText,
     group: "crm",
   },
+  {
+    name: { en: "Stock", es: "Stock" },
+    href: "/crm/stock",
+    summary: { en: "Product and material inventory.", es: "Inventario de productos y materiales." },
+    badge: { en: "Inv", es: "Inv" },
+    icon: Package,
+    group: "crm",
+  },
+  {
+    name: { en: "Business", es: "Negocio" },
+    href: "/crm/negocio",
+    summary: { en: "Business settings and configuration.", es: "Configuración del negocio." },
+    badge: { en: "Biz", es: "Biz" },
+    icon: Building2,
+    group: "crm",
+  },
+  {
+    name: { en: "Team", es: "Equipo" },
+    href: "/crm/equipo",
+    summary: { en: "Team members and roles.", es: "Miembros del equipo y roles." },
+    badge: { en: "Team", es: "Equipo" },
+    icon: UsersRound,
+    group: "crm",
+  },
+  {
+    name: { en: "Payments", es: "Pagos" },
+    href: "/crm/pagos",
+    summary: { en: "Billing and payment tracking.", es: "Facturación y seguimiento de pagos." },
+    badge: { en: "Pay", es: "Pagos" },
+    icon: CreditCard,
+    group: "crm",
+  },
+  {
+    name: { en: "WhatsApp", es: "WhatsApp" },
+    href: "/crm/inbox",
+    summary: { en: "WhatsApp and Instagram conversations.", es: "Conversaciones de WhatsApp e Instagram." },
+    badge: { en: "Chat", es: "Chat" },
+    icon: MessageCircle,
+    group: "crm",
+  },
+  {
+    name: { en: "Metrics", es: "Métricas" },
+    href: "/crm/metricas",
+    summary: { en: "Shop statistics and performance.", es: "Estadísticas y rendimiento del taller." },
+    badge: { en: "KPI", es: "KPI" },
+    icon: BarChart3,
+    group: "crm",
+  },
+
+  // ── Messaging ──
   {
     name: { en: "Inbox", es: "Bandeja" },
     href: "/crm/inbox",
@@ -168,6 +172,8 @@ export const appSections: AppSection[] = [
     icon: TestTube,
     group: "messaging",
   },
+
+  // ── Settings ──
   {
     name: { en: "Integrations", es: "Integraciones" },
     href: "/integrations",
