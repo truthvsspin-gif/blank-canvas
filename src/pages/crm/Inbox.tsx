@@ -109,7 +109,7 @@ export default function CrmInboxPage() {
       setLoading(false)
     }
     loadThreads()
-  }, [activeThreadId, businessId])
+  }, [businessId])
 
   useEffect(() => {
     if (!activeThreadId) {
@@ -123,27 +123,22 @@ export default function CrmInboxPage() {
         .eq("thread_id", activeThreadId)
         .order("message_timestamp", { ascending: true })
       if (!error) {
-        setMessages((data ?? []) as InboxMessage[])
+        const rows = (data ?? []) as InboxMessage[]
+        setMessages(rows)
+        if (businessId) fetchAiSuggestion(activeThreadId, rows)
       }
     }
     loadMessages()
-    // Load AI suggestion
-    if (activeThreadId && businessId) {
-      fetchAiSuggestion()
-    }
-  }, [activeThreadId])
+  }, [activeThreadId, businessId])
 
-  const fetchAiSuggestion = async () => {
-    if (!activeThreadId || !businessId) return
+  const fetchAiSuggestion = async (threadId: string, recentMessages: InboxMessage[]) => {
+    if (!businessId) return
     setAiSuggestion(null)
     try {
-      const response = await fetch(`https://ybifjdlelpvgzmzvgwls.supabase.co/functions/v1/ai-suggest`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ threadId: activeThreadId, businessId, lastMessages: messages.slice(-5) }),
+      const { data, error } = await supabase.functions.invoke("ai-suggest", {
+        body: { threadId, businessId, lastMessages: recentMessages.slice(-5) },
       })
-      const data = await response.json()
-      if (data.suggestion) setAiSuggestion(data.suggestion)
+      if (!error && data?.suggestion) setAiSuggestion(String(data.suggestion))
     } catch (e) {
       console.error("AI suggestion error:", e)
     }
@@ -153,12 +148,10 @@ export default function CrmInboxPage() {
     if (!replyText.trim() || !activeThreadId || !businessId || sending) return
     setSending(true)
     try {
-      const response = await fetch(`https://ybifjdlelpvgzmzvgwls.supabase.co/functions/v1/send-reply`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ threadId: activeThreadId, messageText: replyText.trim(), businessId }),
+      const { error } = await supabase.functions.invoke("send-reply", {
+        body: { threadId: activeThreadId, messageText: replyText.trim(), businessId },
       })
-      if (response.ok) {
+      if (!error) {
         // Optimistically add message
         const newMessage: InboxMessage = {
           id: crypto.randomUUID(),
@@ -172,6 +165,7 @@ export default function CrmInboxPage() {
         setThreads((prev) => prev.map((t) => 
           t.id === activeThreadId ? { ...t, last_message_text: replyText.trim(), unread_count: 0 } : t
         ))
+        fetchAiSuggestion(activeThreadId, [...messages, newMessage])
       }
     } catch (e) {
       console.error("Send error:", e)

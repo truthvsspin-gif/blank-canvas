@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { UsersRound, Phone, Mail, X, User, Palette } from "lucide-react";
+import { useMemo, useState, useEffect } from "react";
+import { UsersRound, Phone, Mail, X, User, Palette, Clock3 } from "lucide-react";
 import { useLanguage } from "@/components/providers/language-provider";
 import { useCurrentBusiness } from "@/hooks/use-current-business";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,9 +8,7 @@ import { cn } from "@/lib/utils";
 
 type TabKey = "equipo" | "fichajes";
 
-const COLOR_OPTIONS = [
-  "#3b82f6", "#f97316", "#eab308", "#d1d5db", "#22c55e", "#86efac", "#93c5fd", "#a78bfa",
-];
+const COLOR_OPTIONS = ["#3b82f6", "#f97316", "#eab308", "#d1d5db", "#22c55e", "#86efac", "#93c5fd", "#a78bfa"];
 
 type TeamMember = {
   id: string;
@@ -24,6 +22,24 @@ type TeamMember = {
   created_at: string;
 };
 
+type WorkOrderActivity = {
+  id: string;
+  assigned_to: string | null;
+  scheduled_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  status: string;
+};
+
+type ClockRow = {
+  memberId: string;
+  name: string;
+  firstStart: string | null;
+  lastComplete: string | null;
+  activeOrders: number;
+  completedOrders: number;
+};
+
 export default function Equipo() {
   const { lang } = useLanguage();
   const isEs = lang === "es";
@@ -31,10 +47,11 @@ export default function Equipo() {
 
   const [tab, setTab] = useState<TabKey>("equipo");
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const [activities, setActivities] = useState<WorkOrderActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [activityDate, setActivityDate] = useState(() => new Date().toISOString().slice(0, 10));
 
-  // Form state
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -56,9 +73,28 @@ export default function Equipo() {
     setLoading(false);
   };
 
+  const fetchActivity = async () => {
+    if (!businessId) return;
+    const start = `${activityDate}T00:00:00.000Z`;
+    const end = `${activityDate}T23:59:59.999Z`;
+    const { data } = await supabase
+      .from("work_orders")
+      .select("id, assigned_to, scheduled_at, started_at, completed_at, status")
+      .eq("business_id", businessId)
+      .or(`scheduled_at.gte.${start},started_at.gte.${start},completed_at.gte.${start}`)
+      .lte("created_at", end)
+      .order("created_at", { ascending: false })
+      .limit(400);
+    setActivities((data as WorkOrderActivity[]) || []);
+  };
+
   useEffect(() => {
     fetchMembers();
   }, [businessId]);
+
+  useEffect(() => {
+    fetchActivity();
+  }, [businessId, activityDate]);
 
   const handleSave = async () => {
     if (!businessId || !form.name.trim()) return;
@@ -82,17 +118,34 @@ export default function Equipo() {
     { key: "fichajes", label: isEs ? "Fichajes" : "Clock-ins", extra: true },
   ];
 
+  const clockRows: ClockRow[] = useMemo(() => {
+    return members.map((member) => {
+      const rows = activities.filter((row) => row.assigned_to === member.id);
+      const started = rows.map((r) => r.started_at).filter((v): v is string => !!v).sort();
+      const completed = rows.map((r) => r.completed_at).filter((v): v is string => !!v).sort();
+      return {
+        memberId: member.id,
+        name: member.name,
+        firstStart: started[0] || null,
+        lastComplete: completed[completed.length - 1] || null,
+        activeOrders: rows.filter((r) => r.status === "in_progress").length,
+        completedOrders: rows.filter((r) => r.status === "completed").length,
+      };
+    });
+  }, [activities, members]);
+
+  const formatTime = (iso: string | null) => {
+    if (!iso) return "—";
+    return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  };
+
   return (
     <div className="space-y-6 relative">
-      {/* Header */}
       <div className="flex items-center gap-3">
         <UsersRound className="h-7 w-7 text-foreground" />
-        <h1 className="text-2xl font-bold text-foreground">
-          {isEs ? "Equipo" : "Team"}
-        </h1>
+        <h1 className="text-2xl font-bold text-foreground">{isEs ? "Equipo" : "Team"}</h1>
       </div>
 
-      {/* Tabs */}
       <div className="flex items-center gap-6 border-b">
         {tabs.map((t) => (
           <button
@@ -100,9 +153,7 @@ export default function Equipo() {
             onClick={() => setTab(t.key)}
             className={cn(
               "pb-2 text-sm font-medium transition-colors relative",
-              tab === t.key
-                ? "text-primary border-b-2 border-primary"
-                : "text-muted-foreground hover:text-foreground"
+              tab === t.key ? "text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"
             )}
           >
             {t.label}
@@ -114,24 +165,31 @@ export default function Equipo() {
           </button>
         ))}
         <div className="flex-1" />
-        {tab === "equipo" && (
+        {tab === "equipo" ? (
           <span className="text-sm text-muted-foreground pb-2 cursor-pointer hover:text-foreground">
-            📊 {isEs ? "Ver Estadísticas" : "View Stats"}
+            {isEs ? "Ver estadisticas" : "View Stats"}
           </span>
+        ) : (
+          <div className="pb-2">
+            <input
+              type="date"
+              value={activityDate}
+              onChange={(event) => setActivityDate(event.target.value)}
+              className="rounded-lg border bg-background px-2 py-1 text-xs"
+            />
+          </div>
         )}
       </div>
 
-      {/* Content */}
       {tab === "equipo" && (
         <div className="rounded-xl border bg-card overflow-hidden">
-          {/* Table header */}
           <div className="grid grid-cols-7 gap-2 px-4 py-3 bg-muted/50 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-            <span>{isEs ? "NOMBRE" : "NAME"}</span>
-            <span>{isEs ? "CARGO" : "ROLE"}</span>
-            <span>{isEs ? "TELÉFONO" : "PHONE"}</span>
-            <span>EMAIL</span>
-            <span>{isEs ? "¿ACCESO?" : "ACCESS?"}</span>
-            <span>COLOR</span>
+            <span>{isEs ? "Nombre" : "Name"}</span>
+            <span>{isEs ? "Cargo" : "Role"}</span>
+            <span>{isEs ? "Telefono" : "Phone"}</span>
+            <span>Email</span>
+            <span>{isEs ? "Acceso" : "Access"}</span>
+            <span>Color</span>
             <span className="flex justify-end">
               <Button size="sm" onClick={() => setDrawerOpen(true)} className="bg-primary text-primary-foreground text-xs">
                 + {isEs ? "Trabajador" : "Worker"}
@@ -139,22 +197,15 @@ export default function Equipo() {
             </span>
           </div>
 
-          {/* Rows */}
           {loading ? (
             <div className="flex items-center justify-center py-20 text-muted-foreground text-sm">
               {isEs ? "Cargando..." : "Loading..."}
             </div>
           ) : members.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
-              <p className="text-muted-foreground mt-4">
-                {isEs ? "Aún no hay ningún Trabajador creado" : "No workers created yet"}
-              </p>
+              <p className="text-muted-foreground mt-4">{isEs ? "Aun no hay ningun trabajador creado" : "No workers created yet"}</p>
               <p className="text-sm text-muted-foreground mt-1">
-                {isEs ? (
-                  <>Haz click en <span className="text-primary font-semibold">+ Trabajador</span> para crear uno nuevo</>
-                ) : (
-                  <>Click <span className="text-primary font-semibold">+ Worker</span> to create one</>
-                )}
+                {isEs ? "Haz click en + Trabajador para crear uno nuevo" : "Click + Worker to create one"}
               </p>
             </div>
           ) : (
@@ -164,7 +215,7 @@ export default function Equipo() {
                 <span className="text-muted-foreground truncate">{m.role_title || "—"}</span>
                 <span className="text-muted-foreground truncate">{m.phone || "—"}</span>
                 <span className="text-muted-foreground truncate">{m.email || "—"}</span>
-                <span>{m.has_access ? "✅" : "❌"}</span>
+                <span>{m.has_access ? "Yes" : "No"}</span>
                 <span>
                   <div className="h-5 w-5 rounded-full border" style={{ backgroundColor: m.color || "#3b82f6" }} />
                 </span>
@@ -176,19 +227,36 @@ export default function Equipo() {
       )}
 
       {tab === "fichajes" && (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed bg-muted/30 py-20">
-          <p className="text-muted-foreground font-medium">
-            {isEs ? "Próximamente" : "Coming soon"}
-          </p>
+        <div className="rounded-xl border bg-card overflow-hidden">
+          <div className="grid grid-cols-5 gap-2 px-4 py-3 bg-muted/50 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            <span>{isEs ? "Trabajador" : "Worker"}</span>
+            <span>{isEs ? "Primer inicio" : "First start"}</span>
+            <span>{isEs ? "Ultima salida" : "Last completion"}</span>
+            <span>{isEs ? "En curso" : "In progress"}</span>
+            <span>{isEs ? "Completadas" : "Completed"}</span>
+          </div>
+          {clockRows.length === 0 ? (
+            <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
+              {isEs ? "Sin actividad para la fecha seleccionada." : "No activity for selected date."}
+            </div>
+          ) : (
+            clockRows.map((row) => (
+              <div key={row.memberId} className="grid grid-cols-5 gap-2 border-t px-4 py-3 text-sm">
+                <span className="font-medium">{row.name}</span>
+                <span className="text-muted-foreground inline-flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" />{formatTime(row.firstStart)}</span>
+                <span className="text-muted-foreground inline-flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" />{formatTime(row.lastComplete)}</span>
+                <span>{row.activeOrders}</span>
+                <span>{row.completedOrders}</span>
+              </div>
+            ))
+          )}
         </div>
       )}
 
-      {/* Drawer */}
       {drawerOpen && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div className="absolute inset-0 bg-black/30" onClick={() => setDrawerOpen(false)} />
           <div className="relative w-full max-w-md bg-card shadow-xl flex flex-col h-full animate-in slide-in-from-right">
-            {/* Drawer header */}
             <div className="flex items-center justify-between p-6 border-b">
               <h2 className="text-lg font-bold">{isEs ? "Crear Trabajador" : "Create Worker"}</h2>
               <button onClick={() => setDrawerOpen(false)} className="text-muted-foreground hover:text-foreground">
@@ -196,9 +264,7 @@ export default function Equipo() {
               </button>
             </div>
 
-            {/* Drawer body */}
             <div className="flex-1 overflow-y-auto p-6 space-y-5">
-              {/* Nombre */}
               <div>
                 <label className="flex items-center gap-2 text-sm font-medium mb-1.5">
                   <User className="h-4 w-4 text-muted-foreground" />
@@ -211,11 +277,10 @@ export default function Equipo() {
                 />
               </div>
 
-              {/* Teléfono */}
               <div>
                 <label className="flex items-center gap-2 text-sm font-medium mb-1.5">
                   <Phone className="h-4 w-4 text-muted-foreground" />
-                  {isEs ? "Teléfono" : "Phone"}
+                  {isEs ? "Telefono" : "Phone"}
                 </label>
                 <input
                   value={form.phone}
@@ -224,7 +289,6 @@ export default function Equipo() {
                 />
               </div>
 
-              {/* Color */}
               <div>
                 <label className="flex items-center gap-2 text-sm font-medium mb-2">
                   <Palette className="h-4 w-4 text-muted-foreground" />
@@ -245,11 +309,10 @@ export default function Equipo() {
                 </div>
               </div>
 
-              {/* Comisión */}
               <div>
                 <label className="flex items-center gap-2 text-sm font-medium mb-1.5">
                   <span className="text-muted-foreground">$</span>
-                  {isEs ? "Comisión (%)" : "Commission (%)"}
+                  {isEs ? "Comision (%)" : "Commission (%)"}
                 </label>
                 <input
                   type="number"
@@ -259,13 +322,9 @@ export default function Equipo() {
                 />
               </div>
 
-              {/* Acceso independiente */}
               <div className="rounded-xl border p-4 space-y-4 bg-muted/20">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">
-                    🔐 {isEs ? "Crear acceso independiente" : "Create independent access"}
-                  </span>
-                  <span className="text-[9px] font-bold uppercase bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded">EXTRA</span>
+                  <span className="text-sm font-medium">{isEs ? "Acceso independiente" : "Independent access"}</span>
                 </div>
 
                 <div>
@@ -299,7 +358,6 @@ export default function Equipo() {
               </div>
             </div>
 
-            {/* Drawer footer */}
             <div className="flex items-center justify-end gap-3 p-6 border-t">
               <Button variant="outline" onClick={() => setDrawerOpen(false)}>
                 {isEs ? "Cancelar" : "Cancel"}

@@ -55,7 +55,8 @@ export default function CrmPage() {
   const copy = isEs
     ? {
         workRequests: "Solicitudes de trabajo",
-        comingSoon: "🔥¡Pronto recibirás nuevas citas!",
+        idleMessage: "No hay solicitudes pendientes en este momento.",
+        pendingMessage: "Solicitudes pendientes por revisar.",
         recentOrders: "Últimas órdenes",
         createFirst: "Crea tu primera órden de trabajo",
         newOrder: "+ Orden de trabajo",
@@ -67,7 +68,8 @@ export default function CrmPage() {
       }
     : {
         workRequests: "Work Requests",
-        comingSoon: "🔥 New appointments coming soon!",
+        idleMessage: "No pending requests at the moment.",
+        pendingMessage: "Pending requests waiting for review.",
         recentOrders: "Recent Orders",
         createFirst: "Create your first work order",
         newOrder: "+ Work Order",
@@ -205,7 +207,9 @@ export default function CrmPage() {
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Left Panel - Work Requests */}
         <div className="w-full lg:w-80 shrink-0 space-y-4">
-          <p className="text-sm text-muted-foreground">{copy.comingSoon}</p>
+          <p className="text-sm text-muted-foreground">
+            {pendingCount > 0 ? copy.pendingMessage : copy.idleMessage}
+          </p>
 
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-bold text-foreground">{copy.recentOrders}</h3>
