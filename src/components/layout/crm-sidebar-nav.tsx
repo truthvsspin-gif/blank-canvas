@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link, useLocation } from "react-router-dom"
-import { ArrowLeft, PanelLeftClose, PanelLeft } from "lucide-react"
+import { ArrowLeft, PanelLeftClose, PanelLeft, ChevronDown, ChevronUp, Wrench } from "lucide-react"
 
 import { appSections } from "@/config/navigation"
 import { cn } from "@/lib/utils"
@@ -9,6 +9,11 @@ import { Button } from "@/components/ui/button"
 import { useLanguage } from "@/components/providers/language-provider"
 
 const crmItems = appSections.filter(s => s.group === "crm")
+
+// Sub-items under Negocio
+const negocioSubItems = [
+  { href: "/crm/services", name: { en: "Services", es: "Servicios" }, icon: Wrench },
+]
 
 interface CrmSidebarNavProps {
   className?: string
@@ -20,6 +25,7 @@ export function CrmSidebarNav({ className, collapsed = false, onToggleCollapse }
   const { pathname } = useLocation()
   const { lang } = useLanguage()
   const [hash, setHash] = useState("")
+  const [negocioOpen, setNegocioOpen] = useState(pathname.startsWith("/crm/services") || pathname === "/crm/negocio")
 
   useEffect(() => {
     const updateHash = () => setHash(window.location.hash || "")
@@ -92,58 +98,100 @@ export function CrmSidebarNav({ className, collapsed = false, onToggleCollapse }
         {crmItems.map((item) => {
           const Icon = item.icon
           const isActive = isItemActive(item.href)
+          const isNegocio = item.href === "/crm/negocio"
+          const hasSubItems = isNegocio && !collapsed
 
           return (
-            <Link
-              key={item.href}
-              to={item.href}
-              title={collapsed ? item.name[lang] : undefined}
-              className={cn(
-                "group relative flex items-center rounded-xl transition-all duration-200",
-                collapsed ? "justify-center p-2" : "gap-3 px-3 py-2.5",
-                isActive
-                  ? "bg-card text-foreground shadow-sm ring-1 ring-emerald-500/30"
-                  : "text-foreground/70 hover:bg-muted hover:text-foreground"
-              )}
-            >
-              {isActive && !collapsed && (
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-1 rounded-r-full bg-emerald-500" />
-              )}
-              {Icon && (
-                <div className={cn(
-                  "flex items-center justify-center rounded-lg transition-all duration-200",
-                  collapsed ? "h-10 w-10" : "h-8 w-8",
-                  isActive
-                    ? "bg-emerald-600 text-white shadow-sm"
-                    : "bg-emerald-100 text-emerald-700 group-hover:scale-110"
-                )}>
-                  <Icon className={cn(collapsed ? "h-5 w-5" : "h-4 w-4")} />
-                </div>
-              )}
-              {!collapsed && (
-                <div className="flex flex-1 items-center justify-between min-w-0">
-                  <span className={cn(
-                    "font-semibold truncate text-sm",
-                    isActive ? "text-foreground" : "text-foreground/70"
-                  )}>
-                    {item.name[lang]}
-                  </span>
-                  {item.badge && (
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "ml-2 text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0 h-5 shrink-0 border",
-                        isActive
-                          ? "bg-emerald-600 text-white border-transparent"
-                          : "bg-emerald-100 text-emerald-700 border-emerald-200"
-                      )}
-                    >
-                      {item.badge[lang]}
-                    </Badge>
+            <div key={item.href}>
+              <div className="flex items-center">
+                <Link
+                  to={item.href}
+                  title={collapsed ? item.name[lang] : undefined}
+                  className={cn(
+                    "group relative flex items-center rounded-xl transition-all duration-200 flex-1",
+                    collapsed ? "justify-center p-2" : "gap-3 px-3 py-2.5",
+                    isActive
+                      ? "bg-card text-foreground shadow-sm ring-1 ring-emerald-500/30"
+                      : "text-foreground/70 hover:bg-muted hover:text-foreground"
                   )}
+                >
+                  {isActive && !collapsed && (
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-1 rounded-r-full bg-emerald-500" />
+                  )}
+                  {Icon && (
+                    <div className={cn(
+                      "flex items-center justify-center rounded-lg transition-all duration-200",
+                      collapsed ? "h-10 w-10" : "h-8 w-8",
+                      isActive
+                        ? "bg-emerald-600 text-white shadow-sm"
+                        : "bg-emerald-100 text-emerald-700 group-hover:scale-110"
+                    )}>
+                      <Icon className={cn(collapsed ? "h-5 w-5" : "h-4 w-4")} />
+                    </div>
+                  )}
+                  {!collapsed && (
+                    <div className="flex flex-1 items-center justify-between min-w-0">
+                      <span className={cn(
+                        "font-semibold truncate text-sm",
+                        isActive ? "text-foreground" : "text-foreground/70"
+                      )}>
+                        {item.name[lang]}
+                      </span>
+                      {!hasSubItems && item.badge && (
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "ml-2 text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0 h-5 shrink-0 border",
+                            isActive
+                              ? "bg-emerald-600 text-white border-transparent"
+                              : "bg-emerald-100 text-emerald-700 border-emerald-200"
+                          )}
+                        >
+                          {item.badge[lang]}
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+                </Link>
+                {hasSubItems && (
+                  <button
+                    onClick={() => setNegocioOpen(!negocioOpen)}
+                    className="p-1 text-muted-foreground hover:text-foreground mr-1"
+                  >
+                    {negocioOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </button>
+                )}
+              </div>
+              {/* Sub-items */}
+              {hasSubItems && negocioOpen && (
+                <div className="ml-8 mt-1 space-y-1">
+                  {negocioSubItems.map((sub) => {
+                    const SubIcon = sub.icon
+                    const isSubActive = pathname === sub.href || pathname.startsWith(`${sub.href}/`)
+                    return (
+                      <Link
+                        key={sub.href}
+                        to={sub.href}
+                        className={cn(
+                          "group relative flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 text-sm",
+                          isSubActive
+                            ? "bg-card text-foreground shadow-sm ring-1 ring-emerald-500/30"
+                            : "text-foreground/70 hover:bg-muted hover:text-foreground"
+                        )}
+                      >
+                        {isSubActive && (
+                          <div className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-emerald-500" />
+                        )}
+                        <SubIcon className="h-4 w-4" />
+                        <span className={cn("font-semibold", isSubActive ? "text-foreground" : "text-foreground/70")}>
+                          {sub.name[lang]}
+                        </span>
+                      </Link>
+                    )
+                  })}
                 </div>
               )}
-            </Link>
+            </div>
           )
         })}
       </div>
