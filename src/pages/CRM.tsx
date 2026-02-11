@@ -1,569 +1,495 @@
 import { Link } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowRight,
   Calendar,
+  ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Clock,
-  Filter,
-  Inbox,
-  MessageSquare,
-  MoreHorizontal,
+  Loader2,
   Plus,
-  Search,
-  Settings2,
-  Sparkles,
-  TrendingUp,
-  User,
-  UserPlus,
-  Users,
-  Wrench,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { PageHeader } from "@/components/layout/page-header";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { useLanguage } from "@/components/providers/language-provider";
 import { useCurrentBusiness } from "@/hooks/use-current-business";
 import { supabase } from "@/lib/supabaseClient";
+import { cn } from "@/lib/utils";
 
-type LeadStage = "new" | "contacted" | "qualified" | "proposal" | "negotiation" | "won" | "lost";
-
-type Lead = {
+type RecentBooking = {
   id: string;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  stage: LeadStage;
-  source: string | null;
+  service_name: string;
+  status: string;
+  scheduled_at: string | null;
   created_at: string;
+  customer_id: string | null;
 };
 
-type RecentActivity = {
-  id: string;
-  type: "booking" | "lead" | "customer" | "conversation";
-  title: string;
-  subtitle: string;
-  time: string;
-  status?: string;
-};
+type CalendarView = "day" | "week" | "month";
 
-const stageConfig: Record<LeadStage, { labelEs: string; labelEn: string; color: string; bg: string }> = {
-  new: { labelEs: "Nuevo", labelEn: "New", color: "text-blue-700", bg: "bg-blue-100" },
-  contacted: { labelEs: "Contactado", labelEn: "Contacted", color: "text-purple-700", bg: "bg-purple-100" },
-  qualified: { labelEs: "Calificado", labelEn: "Qualified", color: "text-emerald-700", bg: "bg-emerald-100" },
-  proposal: { labelEs: "Propuesta", labelEn: "Proposal", color: "text-amber-700", bg: "bg-amber-100" },
-  negotiation: { labelEs: "Negociación", labelEn: "Negotiation", color: "text-orange-700", bg: "bg-orange-100" },
-  won: { labelEs: "Ganado", labelEn: "Won", color: "text-green-700", bg: "bg-green-100" },
-  lost: { labelEs: "Perdido", labelEn: "Lost", color: "text-red-700", bg: "bg-red-100" },
+const HOURS = Array.from({ length: 13 }, (_, i) => i + 8); // 8:00 – 20:00
+
+const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const addDays = (d: Date, n: number) => {
+  const c = new Date(d);
+  c.setDate(c.getDate() + n);
+  return c;
 };
 
 export default function CrmPage() {
   const { lang } = useLanguage();
   const isEs = lang === "es";
   const { businessId, loading: bizLoading } = useCurrentBusiness();
-  
+
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    customers: 0,
-    leads: 0,
-    bookings: 0,
-    pendingBookings: 0,
-    conversations: 0,
-    services: 0,
-  });
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [recentBookings, setRecentBookings] = useState<RecentBooking[]>([]);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [calendarBookings, setCalendarBookings] = useState<RecentBooking[]>([]);
+  const [focusDate, setFocusDate] = useState(new Date());
+  const [calView, setCalView] = useState<CalendarView>("day");
+  const [customerMap, setCustomerMap] = useState<Map<string, string>>(new Map());
 
   const copy = isEs
     ? {
-        title: "Centro de Gestión",
-        subtitle: "Tu centro de comando para clientes, leads y operaciones.",
-        customers: "Clientes",
-        leads: "Leads",
-        bookings: "Reservas",
-        pending: "Pendientes",
-        conversations: "Conversaciones",
-        services: "Servicios",
-        quickActions: "Acciones Rápidas",
-        newCustomer: "Nuevo Cliente",
-        newBooking: "Nueva Reserva",
-        newService: "Nuevo Servicio",
-        viewAll: "Ver Todo",
-        pipeline: "Pipeline de Leads",
-        pipelineDesc: "Gestiona tus oportunidades de venta",
-        recentActivity: "Actividad Reciente",
-        recentActivityDesc: "Últimas actualizaciones en tu negocio",
-        noLeads: "No hay leads aún",
-        noActivity: "No hay actividad reciente",
-        searchPlaceholder: "Buscar en CRM...",
-        viewCustomers: "Ver Clientes",
-        viewLeads: "Ver Leads",
-        viewBookings: "Ver Reservas",
-        viewInbox: "Ver Inbox",
-        viewServices: "Ver Servicios",
+        workRequests: "Solicitudes de trabajo",
+        comingSoon: "🔥¡Pronto recibirás nuevas citas!",
+        recentOrders: "Últimas órdenes",
+        createFirst: "Crea tu primera órden de trabajo",
+        newOrder: "+ Orden de trabajo",
         today: "Hoy",
-        thisWeek: "Esta Semana",
-        thisMonth: "Este Mes",
+        day: "Día",
+        week: "Semana",
+        month: "Mes",
+        pending: "pendientes",
       }
     : {
-        title: "Command Center",
-        subtitle: "Your hub for customers, leads, and operations.",
-        customers: "Customers",
-        leads: "Leads",
-        bookings: "Bookings",
-        pending: "Pending",
-        conversations: "Conversations",
-        services: "Services",
-        quickActions: "Quick Actions",
-        newCustomer: "New Customer",
-        newBooking: "New Booking",
-        newService: "New Service",
-        viewAll: "View All",
-        pipeline: "Lead Pipeline",
-        pipelineDesc: "Manage your sales opportunities",
-        recentActivity: "Recent Activity",
-        recentActivityDesc: "Latest updates in your business",
-        noLeads: "No leads yet",
-        noActivity: "No recent activity",
-        searchPlaceholder: "Search CRM...",
-        viewCustomers: "View Customers",
-        viewLeads: "View Leads",
-        viewBookings: "View Bookings",
-        viewInbox: "View Inbox",
-        viewServices: "View Services",
+        workRequests: "Work Requests",
+        comingSoon: "🔥 New appointments coming soon!",
+        recentOrders: "Recent Orders",
+        createFirst: "Create your first work order",
+        newOrder: "+ Work Order",
         today: "Today",
-        thisWeek: "This Week",
-        thisMonth: "This Month",
+        day: "Day",
+        week: "Week",
+        month: "Month",
+        pending: "pending",
       };
+
+  const locale = isEs ? "es-ES" : "en-US";
 
   useEffect(() => {
     if (!businessId) {
       setLoading(false);
       return;
     }
-
     const fetchData = async () => {
       setLoading(true);
-
-      const now = new Date();
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-      const [
-        customersRes,
-        leadsRes,
-        bookingsRes,
-        pendingRes,
-        conversationsRes,
-        servicesRes,
-        leadsDataRes,
-        recentBookingsRes,
-        recentCustomersRes,
-      ] = await Promise.all([
-        supabase.from("customers").select("id", { count: "exact", head: true }).eq("business_id", businessId),
-        supabase.from("leads").select("id", { count: "exact", head: true }).eq("business_id", businessId),
-        supabase.from("bookings").select("id", { count: "exact", head: true }).eq("business_id", businessId),
+      const [{ data: bookings }, { count: pCount }] = await Promise.all([
+        supabase
+          .from("bookings")
+          .select("id, service_name, status, scheduled_at, created_at, customer_id")
+          .eq("business_id", businessId)
+          .order("created_at", { ascending: false })
+          .limit(10),
         supabase
           .from("bookings")
           .select("id", { count: "exact", head: true })
           .eq("business_id", businessId)
           .in("status", ["requested", "pending", "new"]),
-        supabase.from("conversations").select("id", { count: "exact", head: true }).eq("business_id", businessId).gte("created_at", startOfMonth.toISOString()),
-        supabase.from("services").select("id", { count: "exact", head: true }).eq("business_id", businessId),
-        supabase.from("leads").select("id, name, email, phone, stage, source, created_at").eq("business_id", businessId).order("created_at", { ascending: false }).limit(20),
-        supabase.from("bookings").select("id, service_name, status, scheduled_at, created_at").eq("business_id", businessId).order("created_at", { ascending: false }).limit(5),
-        supabase.from("customers").select("id, full_name, created_at").eq("business_id", businessId).order("created_at", { ascending: false }).limit(5),
       ]);
-
-      setStats({
-        customers: customersRes.count ?? 0,
-        leads: leadsRes.count ?? 0,
-        bookings: bookingsRes.count ?? 0,
-        pendingBookings: pendingRes.count ?? 0,
-        conversations: conversationsRes.count ?? 0,
-        services: servicesRes.count ?? 0,
-      });
-
-      if (leadsDataRes.data) {
-        setLeads(leadsDataRes.data as Lead[]);
-      }
-
-      // Build recent activity from bookings and customers
-      const activity: RecentActivity[] = [];
-      
-      if (recentBookingsRes.data) {
-        recentBookingsRes.data.forEach((b) => {
-          activity.push({
-            id: `booking-${b.id}`,
-            type: "booking",
-            title: b.service_name,
-            subtitle: isEs ? "Nueva reserva" : "New booking",
-            time: b.created_at,
-            status: b.status,
-          });
-        });
-      }
-
-      if (recentCustomersRes.data) {
-        recentCustomersRes.data.forEach((c) => {
-          activity.push({
-            id: `customer-${c.id}`,
-            type: "customer",
-            title: c.full_name,
-            subtitle: isEs ? "Nuevo cliente" : "New customer",
-            time: c.created_at,
-          });
-        });
-      }
-
-      // Sort by time and take top 8
-      activity.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-      setRecentActivity(activity.slice(0, 8));
+      setRecentBookings((bookings as RecentBooking[]) || []);
+      setPendingCount(pCount || 0);
       setLoading(false);
     };
-
     fetchData();
-  }, [businessId, isEs]);
+  }, [businessId]);
+
+  // Fetch calendar bookings for current view
+  useEffect(() => {
+    if (!businessId) return;
+    const fetchCalendar = async () => {
+      const start = startOfDay(focusDate);
+      let end: Date;
+      if (calView === "day") {
+        end = addDays(start, 1);
+      } else if (calView === "week") {
+        const dayOfWeek = (start.getDay() + 6) % 7;
+        const weekStart = addDays(start, -dayOfWeek);
+        end = addDays(weekStart, 7);
+      } else {
+        end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
+      }
+      const { data } = await supabase
+        .from("bookings")
+        .select("id, service_name, status, scheduled_at, created_at, customer_id")
+        .eq("business_id", businessId)
+        .gte("scheduled_at", start.toISOString())
+        .lt("scheduled_at", end.toISOString())
+        .order("scheduled_at", { ascending: true });
+      setCalendarBookings((data as RecentBooking[]) || []);
+
+      // Fetch customer names
+      const ids = Array.from(
+        new Set((data || []).map((b: RecentBooking) => b.customer_id).filter(Boolean))
+      ) as string[];
+      if (ids.length) {
+        const { data: custs } = await supabase
+          .from("customers")
+          .select("id, full_name")
+          .in("id", ids);
+        setCustomerMap(new Map((custs || []).map((c: { id: string; full_name: string }) => [c.id, c.full_name])));
+      }
+    };
+    fetchCalendar();
+  }, [businessId, focusDate, calView]);
+
+  const dateLabel = useMemo(() => {
+    const opts: Intl.DateTimeFormatOptions =
+      calView === "day"
+        ? { weekday: "long", day: "numeric", month: "short" }
+        : calView === "week"
+        ? { day: "numeric", month: "short" }
+        : { month: "long", year: "numeric" };
+    return new Intl.DateTimeFormat(locale, opts).format(focusDate);
+  }, [focusDate, calView, locale]);
+
+  const shiftDate = (dir: -1 | 1) => {
+    if (calView === "day") setFocusDate((d) => addDays(d, dir));
+    else if (calView === "week") setFocusDate((d) => addDays(d, dir * 7));
+    else
+      setFocusDate(
+        (d) => new Date(d.getFullYear(), d.getMonth() + dir, 1)
+      );
+  };
+
+  // Group calendar bookings by hour for day view
+  const bookingsByHour = useMemo(() => {
+    const map = new Map<number, RecentBooking[]>();
+    calendarBookings.forEach((b) => {
+      if (!b.scheduled_at) return;
+      const hour = new Date(b.scheduled_at).getHours();
+      const list = map.get(hour) || [];
+      list.push(b);
+      map.set(hour, list);
+    });
+    return map;
+  }, [calendarBookings]);
 
   const isLoading = bizLoading || loading;
 
-  // Group leads by stage for pipeline
-  const pipelineStages: LeadStage[] = ["new", "contacted", "qualified", "proposal", "negotiation"];
-  const leadsByStage = pipelineStages.reduce((acc, stage) => {
-    acc[stage] = leads.filter((l) => l.stage === stage);
-    return acc;
-  }, {} as Record<LeadStage, Lead[]>);
-
-  const filteredLeads = searchTerm
-    ? leads.filter(
-        (l) =>
-          l.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          l.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          l.phone?.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    : leads;
-
-  const formatTime = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    
-    if (hours < 1) return isEs ? "Hace un momento" : "Just now";
-    if (hours < 24) return isEs ? `Hace ${hours}h` : `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    if (days === 1) return isEs ? "Ayer" : "Yesterday";
-    return isEs ? `Hace ${days} días` : `${days} days ago`;
-  };
-
-  const statCards = [
-    {
-      label: copy.customers,
-      value: stats.customers,
-      icon: Users,
-      href: "/crm/customers",
-      gradient: "from-blue-500/10 to-blue-500/5",
-      iconColor: "text-blue-600",
-      iconBg: "bg-blue-100",
-    },
-    {
-      label: copy.leads,
-      value: stats.leads,
-      icon: UserPlus,
-      href: "/crm/leads",
-      gradient: "from-purple-500/10 to-purple-500/5",
-      iconColor: "text-purple-600",
-      iconBg: "bg-purple-100",
-    },
-    {
-      label: copy.bookings,
-      value: stats.bookings,
-      icon: Calendar,
-      href: "/crm/bookings",
-      gradient: "from-emerald-500/10 to-emerald-500/5",
-      iconColor: "text-emerald-600",
-      iconBg: "bg-emerald-100",
-    },
-    {
-      label: copy.pending,
-      value: stats.pendingBookings,
-      icon: Clock,
-      href: "/crm/bookings",
-      gradient: "from-amber-500/10 to-amber-500/5",
-      iconColor: "text-amber-600",
-      iconBg: "bg-amber-100",
-    },
-    {
-      label: copy.conversations,
-      value: stats.conversations,
-      icon: MessageSquare,
-      href: "/crm/inbox",
-      gradient: "from-accent/10 to-accent/5",
-      iconColor: "text-accent",
-      iconBg: "bg-accent/10",
-    },
-    {
-      label: copy.services,
-      value: stats.services,
-      icon: Wrench,
-      href: "/crm/services",
-      gradient: "from-slate-500/10 to-slate-500/5",
-      iconColor: "text-slate-600",
-      iconBg: "bg-slate-100",
-    },
-  ];
-
-  const quickLinks = [
-    { label: copy.viewCustomers, href: "/crm/customers", icon: Users },
-    { label: copy.viewLeads, href: "/crm/leads", icon: TrendingUp },
-    { label: copy.viewBookings, href: "/crm/bookings", icon: Calendar },
-    { label: copy.viewInbox, href: "/crm/inbox", icon: Inbox },
-    { label: copy.viewServices, href: "/crm/services", icon: Settings2 },
-  ];
-
   return (
-    <div className="space-y-8">
-      <PageHeader
-        title={copy.title}
-        description={copy.subtitle}
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <Link to="/crm/customers/new">
-                <Plus className="mr-2 h-4 w-4" />
-                {copy.newCustomer}
-              </Link>
-            </Button>
-            <Button className="bg-accent text-white hover:bg-accent/90" asChild>
-              <Link to="/crm/bookings/new">
-                <Plus className="mr-2 h-4 w-4" />
-                {copy.newBooking}
-              </Link>
-            </Button>
-          </div>
-        }
-      />
-
-      {/* Search Bar */}
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder={copy.searchPlaceholder}
-            className="w-full rounded-lg border border-input bg-background py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-accent/20"
-          />
+    <div className="space-y-0">
+      {/* Title with badge */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-foreground">
+            {copy.workRequests}
+          </h1>
+          {pendingCount > 0 && (
+            <Badge className="bg-destructive text-destructive-foreground rounded-full text-xs px-2">
+              {pendingCount}
+            </Badge>
+          )}
         </div>
-        <Button variant="outline" size="icon">
-          <Filter className="h-4 w-4" />
+        <Button asChild size="sm" className="bg-primary text-primary-foreground">
+          <Link to="/crm/bookings/new">
+            <Plus className="mr-1.5 h-4 w-4" />
+            {copy.newOrder}
+          </Link>
         </Button>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        {statCards.map((stat) => (
-          <Link key={stat.label} to={stat.href}>
-            <Card className={`group relative overflow-hidden border-0 bg-gradient-to-br ${stat.gradient} transition-all hover:shadow-md hover:-translate-y-0.5`}>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      {stat.label}
-                    </p>
-                    {isLoading ? (
-                      <div className="mt-1 h-8 w-12 animate-pulse rounded bg-muted" />
-                    ) : (
-                      <p className="mt-1 text-2xl font-bold">{stat.value}</p>
-                    )}
-                  </div>
-                  <div className={`rounded-lg p-2 ${stat.iconBg}`}>
-                    <stat.icon className={`h-5 w-5 ${stat.iconColor}`} />
-                  </div>
-                </div>
-                <ChevronRight className="absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
-      </div>
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* Left Panel - Work Requests */}
+        <div className="w-full lg:w-80 shrink-0 space-y-4">
+          <p className="text-sm text-muted-foreground">{copy.comingSoon}</p>
 
-      {/* Quick Links */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-accent" />
-            <CardTitle className="text-lg">{copy.quickActions}</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            {quickLinks.map((link) => (
-              <Button key={link.href} variant="outline" size="sm" asChild>
-                <Link to={link.href} className="gap-2">
-                  <link.icon className="h-4 w-4" />
-                  {link.label}
-                </Link>
-              </Button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Main Content Grid */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Lead Pipeline */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-accent" />
-                {copy.pipeline}
-              </CardTitle>
-              <CardDescription>{copy.pipelineDesc}</CardDescription>
-            </div>
-            <Button variant="outline" size="sm" asChild>
-              <Link to="/crm/leads">
-                {copy.viewAll}
-                <ArrowRight className="ml-2 h-4 w-4" />
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-foreground">{copy.recentOrders}</h3>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-7 w-7 rounded-full border-primary/30 text-primary"
+              asChild
+            >
+              <Link to="/crm/bookings/new">
+                <Plus className="h-4 w-4" />
               </Link>
             </Button>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="grid grid-cols-5 gap-3">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="h-48 animate-pulse rounded-lg bg-muted" />
-                ))}
-              </div>
-            ) : leads.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <UserPlus className="h-12 w-12 text-muted-foreground/50" />
-                <p className="mt-4 text-sm text-muted-foreground">{copy.noLeads}</p>
-                <Button className="mt-4" variant="outline" size="sm" asChild>
-                  <Link to="/crm/leads">
-                    <Plus className="mr-2 h-4 w-4" />
-                    {isEs ? "Agregar Lead" : "Add Lead"}
-                  </Link>
-                </Button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-5 gap-3">
-                {pipelineStages.map((stage) => {
-                  const config = stageConfig[stage];
-                  const stageLeads = leadsByStage[stage] || [];
+          </div>
+
+          {isLoading ? (
+            <div className="flex items-center gap-2 py-8 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm">{isEs ? "Cargando..." : "Loading..."}</span>
+            </div>
+          ) : recentBookings.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4">
+              {copy.createFirst}
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {recentBookings.slice(0, 6).map((b) => (
+                <Link
+                  key={b.id}
+                  to={`/crm/bookings/${b.id}`}
+                  className="block rounded-lg border bg-card p-3 hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-foreground truncate">
+                      {b.service_name}
+                    </span>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "text-[10px] uppercase",
+                        b.status === "confirmed" || b.status === "completed"
+                          ? "border-emerald-300 text-emerald-700 bg-emerald-50"
+                          : b.status === "cancelled"
+                          ? "border-destructive/30 text-destructive bg-destructive/5"
+                          : "border-amber-300 text-amber-700 bg-amber-50"
+                      )}
+                    >
+                      {b.status}
+                    </Badge>
+                  </div>
+                  {b.scheduled_at && (
+                    <div className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground">
+                      <Clock className="h-3 w-3" />
+                      {new Intl.DateTimeFormat(locale, {
+                        dateStyle: "short",
+                        timeStyle: "short",
+                      }).format(new Date(b.scheduled_at))}
+                    </div>
+                  )}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Right Panel - Calendar */}
+        <div className="flex-1 min-w-0">
+          {/* Calendar Header */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setFocusDate(new Date())}
+              >
+                {copy.today}
+              </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => shiftDate(-1)}>
+                <ChevronsLeft className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => shiftDate(-1)}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => shiftDate(1)}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => shiftDate(1)}>
+                <ChevronsRight className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <span className="text-sm font-medium text-foreground capitalize">
+              {dateLabel}
+            </span>
+
+            <div className="flex items-center rounded-lg border overflow-hidden">
+              {(["day", "week", "month"] as CalendarView[]).map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setCalView(v)}
+                  className={cn(
+                    "px-3 py-1.5 text-xs font-medium transition-colors",
+                    calView === v
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  )}
+                >
+                  {v === "day" ? copy.day : v === "week" ? copy.week : copy.month}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Day View - Hourly slots */}
+          {calView === "day" && (
+            <Card className="border overflow-hidden">
+              <CardContent className="p-0">
+                <div className="divide-y">
+                  {HOURS.map((hour) => {
+                    const hourBookings = bookingsByHour.get(hour) || [];
+                    return (
+                      <div key={hour} className="flex min-h-[48px]">
+                        <div className="w-16 shrink-0 py-2 pr-3 text-right text-xs text-muted-foreground border-r">
+                          {`${hour}:00`}
+                        </div>
+                        <div className="flex-1 py-1 px-2">
+                          {hourBookings.map((b) => (
+                            <Link
+                              key={b.id}
+                              to={`/crm/bookings/${b.id}`}
+                              className="block rounded bg-primary/10 border border-primary/20 px-2 py-1 mb-1 text-xs text-primary hover:bg-primary/20 transition-colors"
+                            >
+                              <span className="font-medium">{b.service_name}</span>
+                              {b.customer_id && customerMap.get(b.customer_id) && (
+                                <span className="text-muted-foreground ml-1">
+                                  — {customerMap.get(b.customer_id)}
+                                </span>
+                              )}
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Week View */}
+          {calView === "week" && (
+            <Card className="border overflow-hidden">
+              <CardContent className="p-0">
+                {(() => {
+                  const dayOfWeek = (focusDate.getDay() + 6) % 7;
+                  const weekStart = addDays(startOfDay(focusDate), -dayOfWeek);
+                  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
                   return (
-                    <div key={stage} className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className={`text-xs font-semibold ${config.color}`}>
-                          {isEs ? config.labelEs : config.labelEn}
-                        </span>
-                        <Badge variant="secondary" className="text-xs">
-                          {stageLeads.length}
-                        </Badge>
-                      </div>
-                      <div className="min-h-[160px] space-y-2 rounded-lg border border-dashed border-border/50 bg-muted/30 p-2">
-                        {stageLeads.slice(0, 3).map((lead) => (
-                          <div
-                            key={lead.id}
-                            className="rounded-md border bg-card p-2 text-xs shadow-sm transition-shadow hover:shadow-md"
-                          >
-                            <p className="font-medium truncate">{lead.name}</p>
-                            {lead.source && (
-                              <p className="text-muted-foreground truncate">{lead.source}</p>
-                            )}
+                    <div className="grid grid-cols-7 divide-x">
+                      {days.map((day) => {
+                        const dayStr = day.toISOString().slice(0, 10);
+                        const dayBookings = calendarBookings.filter(
+                          (b) => b.scheduled_at && b.scheduled_at.slice(0, 10) === dayStr
+                        );
+                        const isToday =
+                          day.toDateString() === new Date().toDateString();
+                        return (
+                          <div key={dayStr} className="min-h-[200px] p-2">
+                            <div
+                              className={cn(
+                                "text-xs font-medium mb-2 text-center",
+                                isToday
+                                  ? "text-primary font-bold"
+                                  : "text-muted-foreground"
+                              )}
+                            >
+                              {new Intl.DateTimeFormat(locale, {
+                                weekday: "short",
+                                day: "numeric",
+                              }).format(day)}
+                            </div>
+                            <div className="space-y-1">
+                              {dayBookings.slice(0, 4).map((b) => (
+                                <Link
+                                  key={b.id}
+                                  to={`/crm/bookings/${b.id}`}
+                                  className="block rounded bg-primary/10 px-1.5 py-1 text-[10px] text-primary hover:bg-primary/20"
+                                >
+                                  {b.service_name}
+                                </Link>
+                              ))}
+                              {dayBookings.length > 4 && (
+                                <span className="text-[10px] text-muted-foreground">
+                                  +{dayBookings.length - 4}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                        ))}
-                        {stageLeads.length > 3 && (
-                          <p className="text-center text-xs text-muted-foreground">
-                            +{stageLeads.length - 3} {isEs ? "más" : "more"}
-                          </p>
-                        )}
-                      </div>
+                        );
+                      })}
                     </div>
                   );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                })()}
+              </CardContent>
+            </Card>
+          )}
 
-        {/* Recent Activity */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-accent" />
-              {copy.recentActivity}
-            </CardTitle>
-            <CardDescription>{copy.recentActivityDesc}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="space-y-3">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="h-14 animate-pulse rounded-lg bg-muted" />
-                ))}
-              </div>
-            ) : recentActivity.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <Clock className="h-10 w-10 text-muted-foreground/50" />
-                <p className="mt-3 text-sm text-muted-foreground">{copy.noActivity}</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {recentActivity.map((activity) => (
-                  <div
-                    key={activity.id}
-                    className="flex items-start gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50"
-                  >
-                    <div className={`rounded-full p-2 ${
-                      activity.type === "booking" 
-                        ? "bg-emerald-100 text-emerald-600"
-                        : activity.type === "customer"
-                        ? "bg-blue-100 text-blue-600"
-                        : activity.type === "lead"
-                        ? "bg-purple-100 text-purple-600"
-                        : "bg-amber-100 text-amber-600"
-                    }`}>
-                      {activity.type === "booking" ? (
-                        <Calendar className="h-4 w-4" />
-                      ) : activity.type === "customer" ? (
-                        <User className="h-4 w-4" />
-                      ) : activity.type === "lead" ? (
-                        <UserPlus className="h-4 w-4" />
-                      ) : (
-                        <MessageSquare className="h-4 w-4" />
-                      )}
+          {/* Month View */}
+          {calView === "month" && (
+            <Card className="border overflow-hidden">
+              <CardContent className="p-0">
+                {(() => {
+                  const monthStart = new Date(
+                    focusDate.getFullYear(),
+                    focusDate.getMonth(),
+                    1
+                  );
+                  const startDay = (monthStart.getDay() + 6) % 7;
+                  const gridStart = addDays(monthStart, -startDay);
+                  const cells = Array.from({ length: 42 }, (_, i) =>
+                    addDays(gridStart, i)
+                  );
+                  return (
+                    <div className="grid grid-cols-7">
+                      {["L", "M", "X", "J", "V", "S", "D"].map((d) => (
+                        <div
+                          key={d}
+                          className="py-2 text-center text-xs font-medium text-muted-foreground border-b"
+                        >
+                          {d}
+                        </div>
+                      ))}
+                      {cells.map((day) => {
+                        const dayStr = day.toISOString().slice(0, 10);
+                        const dayBookings = calendarBookings.filter(
+                          (b) =>
+                            b.scheduled_at &&
+                            b.scheduled_at.slice(0, 10) === dayStr
+                        );
+                        const isCurrentMonth =
+                          day.getMonth() === focusDate.getMonth();
+                        const isToday =
+                          day.toDateString() === new Date().toDateString();
+                        return (
+                          <div
+                            key={dayStr}
+                            className={cn(
+                              "min-h-[80px] border-b border-r p-1",
+                              !isCurrentMonth && "opacity-40"
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                "text-xs mb-1",
+                                isToday
+                                  ? "font-bold text-primary"
+                                  : "text-muted-foreground"
+                              )}
+                            >
+                              {day.getDate()}
+                            </div>
+                            {dayBookings.slice(0, 2).map((b) => (
+                              <div
+                                key={b.id}
+                                className="rounded bg-primary/10 px-1 py-0.5 text-[9px] text-primary truncate mb-0.5"
+                              >
+                                {b.service_name}
+                              </div>
+                            ))}
+                            {dayBookings.length > 2 && (
+                              <div className="text-[9px] text-muted-foreground">
+                                +{dayBookings.length - 2}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{activity.title}</p>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>{activity.subtitle}</span>
-                        {activity.status && (
-                          <Badge variant="secondary" className="text-xs">
-                            {activity.status}
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">
-                      {formatTime(activity.time)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  );
+                })()}
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </div>
     </div>
   );
