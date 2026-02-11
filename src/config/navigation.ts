@@ -137,6 +137,14 @@ export const appSections: AppSection[] = [
     icon: BarChart3,
     group: "crm",
   },
+  {
+    name: { en: "ChatbotIA", es: "ChatbotIA" },
+    href: "/crm/chatbot-ia",
+    summary: { en: "AI chatbot for customer service.", es: "Chatbot IA para atención al cliente." },
+    badge: { en: "AI", es: "IA" },
+    icon: Bot,
+    group: "crm",
+  },
 
   // ── Messaging ──
   {

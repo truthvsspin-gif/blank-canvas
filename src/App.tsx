@@ -28,6 +28,7 @@ import Negocio from "./pages/crm/Negocio";
 import Equipo from "./pages/crm/Equipo";
 import Pagos from "./pages/crm/Pagos";
 import Metricas from "./pages/crm/Metricas";
+import ChatbotIA from "./pages/crm/ChatbotIA";
 import Chatbot from "./pages/Chatbot";
 import DevChatbot from "./pages/DevChatbot";
 import Profile from "./pages/Profile";
@@ -97,6 +98,7 @@ function App() {
               <Route path="/crm/equipo" element={<Equipo />} />
               <Route path="/crm/pagos" element={<Pagos />} />
               <Route path="/crm/metricas" element={<Metricas />} />
+              <Route path="/crm/chatbot-ia" element={<ChatbotIA />} />
             </Route>
             
             <Route path="*" element={<NotFound />} />
