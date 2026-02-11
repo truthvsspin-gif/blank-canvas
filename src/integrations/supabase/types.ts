@@ -16,76 +16,42 @@ export type Database = {
     Tables: {
       bookings: {
         Row: {
-          assigned_to: string | null
           business_id: string
-          confirmation_notes: string | null
           created_at: string
           customer_id: string | null
           id: string
-          lead_id: string | null
           price: number | null
-          rejected_reason: string | null
           scheduled_at: string | null
           service_name: string
           source: string | null
           status: string
-          updated_at: string
-          validated_at: string | null
-          validated_by: string | null
-          validation_status: string
           vehicle_id: string | null
-          work_order_no: string | null
         }
         Insert: {
-          assigned_to?: string | null
           business_id: string
-          confirmation_notes?: string | null
           created_at?: string
           customer_id?: string | null
           id?: string
-          lead_id?: string | null
           price?: number | null
-          rejected_reason?: string | null
           scheduled_at?: string | null
           service_name: string
           source?: string | null
           status?: string
-          updated_at?: string
-          validated_at?: string | null
-          validated_by?: string | null
-          validation_status?: string
           vehicle_id?: string | null
-          work_order_no?: string | null
         }
         Update: {
-          assigned_to?: string | null
           business_id?: string
-          confirmation_notes?: string | null
           created_at?: string
           customer_id?: string | null
           id?: string
-          lead_id?: string | null
           price?: number | null
-          rejected_reason?: string | null
           scheduled_at?: string | null
           service_name?: string
           source?: string | null
           status?: string
-          updated_at?: string
-          validated_at?: string | null
-          validated_by?: string | null
-          validation_status?: string
           vehicle_id?: string | null
-          work_order_no?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "bookings_assigned_to_fkey"
-            columns: ["assigned_to"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "bookings_business_id_fkey"
             columns: ["business_id"]
@@ -98,20 +64,6 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bookings_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "leads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bookings_validated_by_fkey"
-            columns: ["validated_by"]
-            isOneToOne: false
-            referencedRelation: "users"
             referencedColumns: ["id"]
           },
           {
@@ -345,54 +297,6 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      crm_audit_logs: {
-        Row: {
-          action: string
-          actor_user_id: string | null
-          business_id: string
-          created_at: string
-          details: Json
-          entity_id: string
-          entity_type: string
-          id: string
-        }
-        Insert: {
-          action: string
-          actor_user_id?: string | null
-          business_id: string
-          created_at?: string
-          details?: Json
-          entity_id: string
-          entity_type: string
-          id?: string
-        }
-        Update: {
-          action?: string
-          actor_user_id?: string | null
-          business_id?: string
-          created_at?: string
-          details?: Json
-          entity_id?: string
-          entity_type?: string
-          id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "crm_audit_logs_actor_user_id_fkey"
-            columns: ["actor_user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "crm_audit_logs_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
             referencedColumns: ["id"]
           },
         ]
@@ -1219,39 +1123,33 @@ export type Database = {
           brand: string | null
           business_id: string
           color: string | null
-          condition_notes: string | null
           created_at: string
           customer_id: string
           id: string
           license_plate: string | null
           model: string | null
-          photo_urls: string[]
           size: string | null
         }
         Insert: {
           brand?: string | null
           business_id: string
           color?: string | null
-          condition_notes?: string | null
           created_at?: string
           customer_id: string
           id?: string
           license_plate?: string | null
           model?: string | null
-          photo_urls?: string[]
           size?: string | null
         }
         Update: {
           brand?: string | null
           business_id?: string
           color?: string | null
-          condition_notes?: string | null
           created_at?: string
           customer_id?: string
           id?: string
           license_plate?: string | null
           model?: string | null
-          photo_urls?: string[]
           size?: string | null
         }
         Relationships: [
@@ -1267,93 +1165,6 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      work_orders: {
-        Row: {
-          assigned_to: string | null
-          booking_id: string
-          business_id: string
-          completed_at: string | null
-          created_at: string
-          customer_id: string | null
-          id: string
-          notes: string | null
-          scheduled_at: string | null
-          service_name: string
-          started_at: string | null
-          status: string
-          updated_at: string
-          vehicle_id: string | null
-        }
-        Insert: {
-          assigned_to?: string | null
-          booking_id: string
-          business_id: string
-          completed_at?: string | null
-          created_at?: string
-          customer_id?: string | null
-          id?: string
-          notes?: string | null
-          scheduled_at?: string | null
-          service_name: string
-          started_at?: string | null
-          status?: string
-          updated_at?: string
-          vehicle_id?: string | null
-        }
-        Update: {
-          assigned_to?: string | null
-          booking_id?: string
-          business_id?: string
-          completed_at?: string | null
-          created_at?: string
-          customer_id?: string | null
-          id?: string
-          notes?: string | null
-          scheduled_at?: string | null
-          service_name?: string
-          started_at?: string | null
-          status?: string
-          updated_at?: string
-          vehicle_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "work_orders_assigned_to_fkey"
-            columns: ["assigned_to"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "work_orders_booking_id_fkey"
-            columns: ["booking_id"]
-            isOneToOne: true
-            referencedRelation: "bookings"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "work_orders_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "work_orders_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "work_orders_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
         ]
