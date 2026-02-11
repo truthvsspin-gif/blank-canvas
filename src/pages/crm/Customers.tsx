@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { CrmGettingStarted } from "@/components/crm/crm-getting-started"
 import { Link } from "react-router-dom"
 import { ArrowRight, Loader2, Plus, Search, Users, Phone, Mail as MailIcon, Car, Tag, ChevronLeft, ChevronRight } from "lucide-react"
 
@@ -112,6 +113,17 @@ export default function CustomersPage() {
 
   return (
     <div className="space-y-6">
+      <CrmGettingStarted
+        titleEs="¿Cómo usar Clientes?"
+        titleEn="How to use Customers?"
+        storageKey="crm-tips-customers"
+        steps={[
+          { emoji: "1️⃣", textEs: "Haz click en 'Nuevo cliente' para agregar tu primer cliente.", textEn: "Click 'New customer' to add your first customer." },
+          { emoji: "2️⃣", textEs: "Añade su nombre, teléfono y email para tener sus datos completos.", textEn: "Add their name, phone and email to have complete data." },
+          { emoji: "3️⃣", textEs: "Haz click en 'Ver perfil' para ver detalles, vehículos y reservas del cliente.", textEn: "Click 'View profile' to see details, vehicles and bookings." },
+          { emoji: "💡", textEs: "Los leads del chatbot también se convierten en clientes automáticamente.", textEn: "Chatbot leads also automatically become customers." },
+        ]}
+      />
       <PageHeader
         title={copy.title}
         description={copy.description}

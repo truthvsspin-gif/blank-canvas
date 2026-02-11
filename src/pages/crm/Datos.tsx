@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { CrmGettingStarted } from "@/components/crm/crm-getting-started";
 import { useCurrentBusiness } from "@/hooks/use-current-business";
 import { useLanguage } from "@/components/providers/language-provider";
 import { supabase } from "@/integrations/supabase/client";
@@ -321,6 +322,20 @@ export default function Datos() {
 
   return (
     <div className="space-y-6">
+      <CrmGettingStarted
+        titleEs="¿Cómo usar Datos?"
+        titleEn="How to use Data?"
+        storageKey="crm-tips-datos"
+        steps={[
+          { emoji: "1️⃣", textEs: "Crea un cliente primero en la pestaña 'Clientes'.", textEn: "Create a customer first in the 'Customers' tab." },
+          { emoji: "2️⃣", textEs: "Agrega un vehículo vinculado a ese cliente.", textEn: "Add a vehicle linked to that customer." },
+          { emoji: "3️⃣", textEs: "Crea una orden con el botón '+ Orden' para registrar un trabajo.", textEn: "Create an order with the '+ Order' button to register a job." },
+          { emoji: "💡", textEs: "Las solicitudes se crean automáticamente desde el chatbot o reservas.", textEn: "Requests are created automatically from the chatbot or bookings." },
+        ]}
+        ctaLabelEs="+ Cliente"
+        ctaLabelEn="+ Customer"
+        onCtaClick={() => setDrawerOpen("customer")}
+      />
       {/* Tabs + Stats link */}
       <div className="flex items-center justify-between border-b">
         <div className="flex gap-1">

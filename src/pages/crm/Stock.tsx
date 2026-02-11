@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect, type ReactNode } from "react";
+import { CrmGettingStarted } from "@/components/crm/crm-getting-started";
 import { useCurrentBusiness } from "@/hooks/use-current-business";
 import { useLanguage } from "@/components/providers/language-provider";
 import { supabase } from "@/integrations/supabase/client";
@@ -243,6 +244,20 @@ export default function Stock() {
 
   return (
     <div className="space-y-6">
+      <CrmGettingStarted
+        titleEs="¿Cómo usar Almacén?"
+        titleEn="How to use Stock?"
+        storageKey="crm-tips-stock"
+        steps={[
+          { emoji: "1️⃣", textEs: "Agrega productos al inventario con el botón '+ Stock'.", textEn: "Add products to inventory with the '+ Stock' button." },
+          { emoji: "2️⃣", textEs: "Registra compras y proveedores para llevar control de gastos.", textEn: "Register purchases and suppliers to track expenses." },
+          { emoji: "3️⃣", textEs: "Usa 'Gastos fijos' para alquiler, seguros y otros costos recurrentes.", textEn: "Use 'Fixed Costs' for rent, insurance and other recurring costs." },
+          { emoji: "💡", textEs: "Las ventas y consumo se generan automáticamente desde órdenes completadas.", textEn: "Sales and consumption are generated automatically from completed orders." },
+        ]}
+        ctaLabelEs="+ Stock"
+        ctaLabelEn="+ Stock"
+        onCtaClick={() => setDrawer("stock")}
+      />
       <div className="flex items-center justify-between">
         <div className="flex gap-1 border-b">
           {tabs.map((tab) => (

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
+import { CrmGettingStarted } from "@/components/crm/crm-getting-started"
 import { Link } from "react-router-dom"
 import {
   CalendarDays,
@@ -342,6 +343,17 @@ export default function BookingsPage() {
 
   return (
     <div className="space-y-6">
+      <CrmGettingStarted
+        titleEs="¿Cómo usar Reservas?"
+        titleEn="How to use Bookings?"
+        storageKey="crm-tips-bookings"
+        steps={[
+          { emoji: "1️⃣", textEs: "Haz click en 'Nueva reserva' para agendar una cita.", textEn: "Click 'New booking' to schedule an appointment." },
+          { emoji: "2️⃣", textEs: "Selecciona cliente, vehículo, servicio y fecha.", textEn: "Select customer, vehicle, service and date." },
+          { emoji: "3️⃣", textEs: "Cambia entre vista de Lista, Mes, Semana o Día para gestionar tu agenda.", textEn: "Switch between List, Month, Week or Day view to manage your schedule." },
+          { emoji: "💡", textEs: "El chatbot también crea reservas automáticamente cuando un cliente agenda.", textEn: "The chatbot also creates bookings automatically when a customer schedules." },
+        ]}
+      />
       <PageHeader
         title={copy.title}
         description={copy.description}

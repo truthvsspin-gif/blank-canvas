@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
+import { CrmGettingStarted } from "@/components/crm/crm-getting-started";
 import { UsersRound, Phone, Mail, X, User, Palette, Clock3 } from "lucide-react";
 import { useLanguage } from "@/components/providers/language-provider";
 import { useCurrentBusiness } from "@/hooks/use-current-business";
@@ -141,6 +142,20 @@ export default function Equipo() {
 
   return (
     <div className="space-y-6 relative">
+      <CrmGettingStarted
+        titleEs="¿Cómo usar Equipo?"
+        titleEn="How to use Team?"
+        storageKey="crm-tips-equipo"
+        steps={[
+          { emoji: "1️⃣", textEs: "Haz click en '+ Trabajador' para agregar miembros de tu equipo.", textEn: "Click '+ Worker' to add team members." },
+          { emoji: "2️⃣", textEs: "Asigna un color, comisión y rol a cada trabajador.", textEn: "Assign a color, commission and role to each worker." },
+          { emoji: "3️⃣", textEs: "En 'Fichajes' puedes ver la actividad diaria de cada trabajador.", textEn: "In 'Clock-ins' you can see daily activity for each worker." },
+          { emoji: "💡", textEs: "Los trabajadores con email pueden tener acceso independiente al sistema.", textEn: "Workers with email can have independent system access." },
+        ]}
+        ctaLabelEs="+ Trabajador"
+        ctaLabelEn="+ Worker"
+        onCtaClick={() => setDrawerOpen(true)}
+      />
       <div className="flex items-center gap-3">
         <UsersRound className="h-7 w-7 text-foreground" />
         <h1 className="text-2xl font-bold text-foreground">{isEs ? "Equipo" : "Team"}</h1>

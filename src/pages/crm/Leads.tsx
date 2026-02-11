@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { CrmGettingStarted } from "@/components/crm/crm-getting-started";
 import { Link } from "react-router-dom";
 import {
   Calendar,
@@ -336,6 +337,20 @@ export default function CrmLeadsPage() {
 
   return (
     <div className="space-y-8 animate-fade-in">
+      <CrmGettingStarted
+        titleEs="¿Cómo usar Leads?"
+        titleEn="How to use Leads?"
+        storageKey="crm-tips-leads"
+        steps={[
+          { emoji: "1️⃣", textEs: "Los leads se crean automáticamente desde el chatbot de WhatsApp/Instagram.", textEn: "Leads are created automatically from the WhatsApp/Instagram chatbot." },
+          { emoji: "2️⃣", textEs: "También puedes crear leads manualmente con el botón 'Nuevo Lead'.", textEn: "You can also create leads manually with the 'New Lead' button." },
+          { emoji: "3️⃣", textEs: "Cambia la etapa del lead (Nuevo → Contactado → Calificado → Ganado).", textEn: "Change the lead stage (New → Contacted → Qualified → Won)." },
+          { emoji: "💡", textEs: "Usa 'Crear reserva' en un lead para convertirlo en cliente con cita.", textEn: "Use 'Create booking' on a lead to convert it into a customer with appointment." },
+        ]}
+        ctaLabelEs="+ Nuevo Lead"
+        ctaLabelEn="+ New Lead"
+        onCtaClick={() => setNewLeadOpen(true)}
+      />
       <PageHeader
         title={copy.title}
         description={copy.description}
