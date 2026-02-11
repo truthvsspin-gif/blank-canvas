@@ -21,6 +21,13 @@ import Inbox from "./pages/crm/Inbox";
 import Services from "./pages/crm/Services";
 import WorkOrders from "./pages/crm/WorkOrders";
 import Timeline from "./pages/crm/Timeline";
+import Datos from "./pages/crm/Datos";
+import Docs from "./pages/crm/Docs";
+import Stock from "./pages/crm/Stock";
+import Negocio from "./pages/crm/Negocio";
+import Equipo from "./pages/crm/Equipo";
+import Pagos from "./pages/crm/Pagos";
+import Metricas from "./pages/crm/Metricas";
 import Chatbot from "./pages/Chatbot";
 import DevChatbot from "./pages/DevChatbot";
 import Profile from "./pages/Profile";
@@ -83,6 +90,13 @@ function App() {
               <Route path="/crm/timeline" element={<Timeline />} />
               <Route path="/crm/inbox" element={<Inbox />} />
               <Route path="/crm/services" element={<Services />} />
+              <Route path="/crm/datos" element={<Datos />} />
+              <Route path="/crm/docs" element={<Docs />} />
+              <Route path="/crm/stock" element={<Stock />} />
+              <Route path="/crm/negocio" element={<Negocio />} />
+              <Route path="/crm/equipo" element={<Equipo />} />
+              <Route path="/crm/pagos" element={<Pagos />} />
+              <Route path="/crm/metricas" element={<Metricas />} />
             </Route>
             
             <Route path="*" element={<NotFound />} />
