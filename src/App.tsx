@@ -27,6 +27,7 @@ import Profile from "./pages/Profile";
 import Admin from "./pages/Admin";
 import Integrations from "./pages/Integrations";
 import AppLayout from "./layouts/AppLayout";
+import CrmLayout from "./layouts/CrmLayout";
 import AuthLayout from "./layouts/AuthLayout";
 
 function App() {
@@ -54,6 +55,21 @@ function App() {
             >
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/sales-analytics" element={<SalesAnalytics />} />
+              <Route path="/chatbot" element={<Chatbot />} />
+              <Route path="/dev-chatbot" element={<DevChatbot />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/integrations" element={<Integrations />} />
+              <Route path="/admin" element={<Admin />} />
+            </Route>
+            
+            {/* CRM sub-app routes */}
+            <Route
+              element={
+                <ProtectedRoute>
+                  <CrmLayout />
+                </ProtectedRoute>
+              }
+            >
               <Route path="/crm" element={<CRM />} />
               <Route path="/crm/customers" element={<Customers />} />
               <Route path="/crm/customers/new" element={<CustomerNew />} />
@@ -67,11 +83,6 @@ function App() {
               <Route path="/crm/timeline" element={<Timeline />} />
               <Route path="/crm/inbox" element={<Inbox />} />
               <Route path="/crm/services" element={<Services />} />
-              <Route path="/chatbot" element={<Chatbot />} />
-              <Route path="/dev-chatbot" element={<DevChatbot />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/integrations" element={<Integrations />} />
-              <Route path="/admin" element={<Admin />} />
             </Route>
             
             <Route path="*" element={<NotFound />} />

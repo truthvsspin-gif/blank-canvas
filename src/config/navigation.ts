@@ -203,6 +203,10 @@ export const appSections: AppSection[] = [
   },
 ]
 
+// CRM sections for the dedicated CRM sidebar
+export const crmSections = appSections.filter(s => s.group === "crm")
+
+// Main sidebar groups — CRM group shows only the hub link, not sub-pages
 export const navGroups: NavGroup[] = [
   {
     id: "main",
@@ -212,7 +216,7 @@ export const navGroups: NavGroup[] = [
   {
     id: "crm",
     label: { en: "CRM", es: "CRM" },
-    items: appSections.filter(s => s.group === "crm"),
+    items: appSections.filter(s => s.group === "crm" && s.href === "/crm"),
   },
   {
     id: "messaging",
