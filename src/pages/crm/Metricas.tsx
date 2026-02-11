@@ -3,10 +3,12 @@ import { useCurrentBusiness } from "@/hooks/use-current-business";
 import { useLanguage } from "@/components/providers/language-provider";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, ChevronRight, TrendingDown } from "lucide-react";
+import { ChevronLeft, ChevronRight, TrendingDown, TrendingUp, Lock, UsersRound } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { Button } from "@/components/ui/button";
 
 type PeriodType = "month" | "week";
+type ViewType = "orders" | "financial" | "workers";
 
 const MONTHS_ES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 const MONTHS_EN = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -16,7 +18,7 @@ export default function Metricas() {
   const { lang } = useLanguage();
   const isEs = lang === "es";
 
-  const [view, setView] = useState("orders");
+  const [view, setView] = useState<ViewType>("orders");
   const [period, setPeriod] = useState<PeriodType>("month");
   const [year, setYear] = useState(new Date().getFullYear());
   const [month, setMonth] = useState(new Date().getMonth());
@@ -70,7 +72,6 @@ export default function Metricas() {
     { label: isEs ? "Presencial" : "Walk-in", color: "bg-emerald-400", count: 0 },
   ];
 
-  // Top services from work orders
   const topServicesMap = useMemo(() => {
     const map: Record<string, number> = {};
     workOrders.forEach((wo) => { map[wo.service_name] = (map[wo.service_name] || 0) + 1; });
@@ -85,11 +86,12 @@ export default function Metricas() {
           <h1 className="text-2xl font-bold text-foreground">{isEs ? "Métricas" : "Metrics"}</h1>
           <select
             value={view}
-            onChange={(e) => setView(e.target.value)}
-            className="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+            onChange={(e) => setView(e.target.value as ViewType)}
+            className="rounded-lg border bg-background px-3 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/30"
           >
             <option value="orders">{isEs ? "Órdenes" : "Orders"}</option>
-            <option value="customers">{isEs ? "Clientes" : "Customers"}</option>
+            <option value="financial">{isEs ? "Finanzas" : "Financial"}</option>
+            <option value="workers">{isEs ? "Trabajadores" : "Workers"}</option>
           </select>
         </div>
         <div className="flex items-center gap-2">
@@ -103,7 +105,7 @@ export default function Metricas() {
           <select
             value={period}
             onChange={(e) => setPeriod(e.target.value as PeriodType)}
-            className="ml-2 rounded-lg border bg-background px-3 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+            className="ml-2 rounded-lg border bg-background px-3 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/30"
           >
             <option value="month">{isEs ? "Mes" : "Month"}</option>
             <option value="week">{isEs ? "Semana" : "Week"}</option>
@@ -111,91 +113,150 @@ export default function Metricas() {
         </div>
       </div>
 
-      {/* Main grid: left 3/5 + right 2/5 */}
-      <div className="grid md:grid-cols-5 gap-6">
-        {/* LEFT COLUMN */}
-        <div className="md:col-span-3 space-y-6">
-          {/* Stat cards row */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <StatCard label={isEs ? "Confirmadas" : "Confirmed"} value={confirmed} delta={isEs ? "Igual" : "Same"} />
-            <StatCard label={isEs ? "Canceladas" : "Cancelled"} value={cancelled} delta={isEs ? "Igual" : "Same"} />
-            <StatCard label={isEs ? "Ausencias" : "No-shows"} value={absent} delta={isEs ? "Igual" : "Same"} />
-            <StatCard label={isEs ? "Solicitudes" : "Requests"} value={requests} delta={isEs ? "Igual" : "Same"} />
-          </div>
-
-          {/* Orders Chart */}
-          <div className="rounded-xl border bg-card p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-muted-foreground">{isEs ? "Resumen órdenes" : "Order Summary"}</h3>
-              <span className="text-sm text-muted-foreground">
-                TOTAL: <span className="text-2xl font-bold text-foreground ml-1">{workOrders.length}</span>
-              </span>
+      {/* VIEW: Orders */}
+      {view === "orders" && (
+        <div className="grid md:grid-cols-5 gap-6">
+          <div className="md:col-span-3 space-y-6">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <StatCard label={isEs ? "Confirmadas" : "Confirmed"} value={confirmed} delta={isEs ? "Igual" : "Same"} />
+              <StatCard label={isEs ? "Canceladas" : "Cancelled"} value={cancelled} delta={isEs ? "Igual" : "Same"} />
+              <StatCard label={isEs ? "Ausencias" : "No-shows"} value={absent} delta={isEs ? "Igual" : "Same"} />
+              <StatCard label={isEs ? "Solicitudes" : "Requests"} value={requests} delta={isEs ? "Igual" : "Same"} />
             </div>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                <XAxis dataKey="day" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} />
-                <Tooltip />
-                <Bar dataKey="count" fill="hsl(160, 60%, 50%)" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
 
-        {/* RIGHT COLUMN */}
-        <div className="md:col-span-2 space-y-6">
-          {/* New Customers */}
-          <div className="rounded-xl border bg-card p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-foreground">{isEs ? "Clientes Nuevos" : "New Customers"}</h3>
-              <span className="text-sm text-muted-foreground">
-                TOTAL: <span className="text-2xl font-bold text-foreground ml-1">{customers.length}</span>
-              </span>
-            </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-              {sources.map((src) => (
-                <div key={src.label} className="flex items-center gap-2">
-                  <div className={cn("h-2.5 w-2.5 rounded-full shrink-0", src.color)} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{src.label}</p>
-                    <p className="text-xs text-muted-foreground">{src.count} {isEs ? "clientes" : "clients"}</p>
-                  </div>
-                  <TrendingDown className="h-4 w-4 text-red-400 shrink-0" />
-                </div>
-              ))}
+            <div className="rounded-xl border bg-card p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-muted-foreground">{isEs ? "Resumen órdenes" : "Order Summary"}</h3>
+                <span className="text-sm text-muted-foreground">
+                  TOTAL: <span className="text-2xl font-bold text-foreground ml-1">{workOrders.length}</span>
+                </span>
+              </div>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis dataKey="day" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <Tooltip />
+                  <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           </div>
 
-          {/* Recurring */}
-          <div className="rounded-xl border bg-card p-5">
-            <p className="text-sm text-muted-foreground">{isEs ? "Clientes recurrentes" : "Recurring customers"}</p>
-            <div className="flex items-end justify-between mt-2">
-              <span className="text-3xl font-bold text-foreground">{recurring}</span>
-              <span className="text-xs text-muted-foreground">{isEs ? "Igual" : "Same"}</span>
-            </div>
-          </div>
-
-          {/* Top Services */}
-          <div className="rounded-xl border bg-card p-5">
-            <h3 className="font-semibold text-foreground mb-3">{isEs ? "Top Servicios realizados" : "Top Services"}</h3>
-            {topServicesMap.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                {isEs ? "Todavía no has realizado ningún servicio en este periodo" : "No services performed in this period yet"}
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {topServicesMap.map(([name, count]) => (
-                  <div key={name} className="flex justify-between text-sm">
-                    <span className="font-medium">{name}</span>
-                    <span className="text-muted-foreground">{count}x</span>
+          <div className="md:col-span-2 space-y-6">
+            <div className="rounded-xl border bg-card p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-foreground">{isEs ? "Clientes Nuevos" : "New Customers"}</h3>
+                <span className="text-sm text-muted-foreground">
+                  TOTAL: <span className="text-2xl font-bold text-foreground ml-1">{customers.length}</span>
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                {sources.map((src) => (
+                  <div key={src.label} className="flex items-center gap-2">
+                    <div className={cn("h-2.5 w-2.5 rounded-full shrink-0", src.color)} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{src.label}</p>
+                      <p className="text-xs text-muted-foreground">{src.count} {isEs ? "clientes" : "clients"}</p>
+                    </div>
+                    <TrendingDown className="h-4 w-4 text-destructive shrink-0" />
                   </div>
                 ))}
               </div>
-            )}
+            </div>
+
+            <div className="rounded-xl border bg-card p-5">
+              <p className="text-sm text-muted-foreground">{isEs ? "Clientes recurrentes" : "Recurring customers"}</p>
+              <div className="flex items-end justify-between mt-2">
+                <span className="text-3xl font-bold text-foreground">{recurring}</span>
+                <span className="text-xs text-muted-foreground">{isEs ? "Igual" : "Same"}</span>
+              </div>
+            </div>
+
+            <div className="rounded-xl border bg-card p-5">
+              <h3 className="font-semibold text-foreground mb-3">{isEs ? "Top Servicios realizados" : "Top Services"}</h3>
+              {topServicesMap.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {isEs ? "Todavía no has realizado ningún servicio en este periodo" : "No services performed in this period yet"}
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {topServicesMap.map(([name, count]) => (
+                    <div key={name} className="flex justify-between text-sm">
+                      <span className="font-medium">{name}</span>
+                      <span className="text-muted-foreground">{count}x</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* VIEW: Finanzas */}
+      {view === "financial" && (
+        <div className="flex flex-col items-center justify-center py-10">
+          <div className="flex items-center gap-3 mb-6">
+            <TrendingUp className="h-7 w-7 text-foreground" />
+            <h2 className="text-2xl font-bold text-foreground">{isEs ? "Finanzas" : "Financial"}</h2>
+            <span className="text-[10px] font-bold uppercase bg-primary text-primary-foreground px-2 py-0.5 rounded">PRO</span>
+          </div>
+          <div className="rounded-xl border bg-card p-8 md:p-10 max-w-lg text-center space-y-4">
+            <h3 className="text-2xl font-bold text-foreground">
+              {isEs
+                ? "Todas tus métricas financieras en un solo lugar"
+                : "All your financial metrics in one place"}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              {isEs
+                ? "Visualiza los ingresos, gastos y beneficios de tu negocio, junto con los datos de Documentos, Stock y Ventas."
+                : "View your business income, expenses and profits, along with data from Documents, Stock and Sales."}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {isEs
+                ? "Todo conectado automáticamente para que entiendas tu rentabilidad real."
+                : "All connected automatically so you understand your real profitability."}
+            </p>
+            <Button size="lg" className="w-full mt-4 gap-2">
+              <Lock className="h-4 w-4" />
+              {isEs ? "Sube a PRO y desbloquea métricas" : "Upgrade to PRO and unlock metrics"}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW: Trabajadores */}
+      {view === "workers" && (
+        <div className="flex flex-col items-center justify-center py-10">
+          <div className="flex items-center gap-3 mb-6">
+            <TrendingUp className="h-7 w-7 text-foreground" />
+            <h2 className="text-2xl font-bold text-foreground">{isEs ? "Trabajadores" : "Workers"}</h2>
+            <span className="text-[10px] font-bold uppercase bg-orange-100 text-orange-600 px-2 py-0.5 rounded">EXTRA</span>
+          </div>
+          <div className="rounded-xl border bg-card p-8 md:p-10 max-w-lg text-center space-y-4">
+            <h3 className="text-2xl font-bold text-foreground">
+              {isEs
+                ? "Mide el rendimiento de tu equipo en tiempo real"
+                : "Measure your team's performance in real time"}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              {isEs
+                ? "Descubre cuántas órdenes gestiona cada trabajador, su productividad, los servicios que más realizan y el valor total que genera para tu negocio."
+                : "Discover how many orders each worker handles, their productivity, top services, and total value generated for your business."}
+            </p>
+            <p className="text-xs text-muted-foreground italic">
+              {isEs
+                ? "*Disponible solo con el módulo de trabajadores."
+                : "*Available only with the workers module."}
+            </p>
+            <Button size="lg" className="w-full mt-4 gap-2 bg-purple-600 hover:bg-purple-700 text-white">
+              <Lock className="h-4 w-4" />
+              {isEs ? "Módulo Trabajadores" : "Workers Module"}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
