@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
+import { CrmGettingStarted } from "@/components/crm/crm-getting-started"
 import { 
   MessageSquare, 
   Search, 
@@ -240,6 +241,17 @@ export default function CrmInboxPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <CrmGettingStarted
+        titleEs="¿Cómo usar la Bandeja de Entrada?"
+        titleEn="How to use the Inbox?"
+        storageKey="crm-tips-inbox"
+        steps={[
+          { emoji: "1️⃣", textEs: "Conecta WhatsApp o Instagram desde 'Integraciones' para recibir mensajes.", textEn: "Connect WhatsApp or Instagram from 'Integrations' to receive messages." },
+          { emoji: "2️⃣", textEs: "Las conversaciones aparecen automáticamente aquí cuando un cliente escribe.", textEn: "Conversations appear here automatically when a customer writes." },
+          { emoji: "3️⃣", textEs: "Responde directamente desde aquí o usa las sugerencias de IA.", textEn: "Reply directly from here or use AI suggestions." },
+          { emoji: "💡", textEs: "El chatbot IA responde automáticamente si lo tienes activado.", textEn: "The AI chatbot responds automatically if you have it enabled." },
+        ]}
+      />
       <PageHeader
         title={copy.title}
         description={copy.subtitle}

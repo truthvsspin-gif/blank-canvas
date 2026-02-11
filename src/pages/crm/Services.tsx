@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { CrmGettingStarted } from "@/components/crm/crm-getting-started";
 import { BarChart3, Plus, Search, Settings, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -246,6 +247,20 @@ export default function ServicesPage() {
 
   return (
     <div className="space-y-6">
+      <CrmGettingStarted
+        titleEs="¿Cómo usar Servicios?"
+        titleEn="How to use Services?"
+        storageKey="crm-tips-services"
+        steps={[
+          { emoji: "1️⃣", textEs: "Haz click en '+ Servicio' para crear tu primer servicio (ej: Lavado Premium).", textEn: "Click '+ Service' to create your first service (e.g. Premium Wash)." },
+          { emoji: "2️⃣", textEs: "Define nombre, precio y duración estimada.", textEn: "Set a name, price, and estimated duration." },
+          { emoji: "3️⃣", textEs: "Los servicios aparecerán al crear órdenes y en el chatbot.", textEn: "Services will appear when creating orders and in the chatbot." },
+          { emoji: "💡", textEs: "Usa 'Variantes' para tamaños, 'Recargos' para extras y 'Descuentos' para promos.", textEn: "Use 'Variants' for sizes, 'Surcharges' for extras, and 'Discounts' for promos." },
+        ]}
+        ctaLabelEs="+ Servicio"
+        ctaLabelEn="+ Service"
+        onCtaClick={() => setShowModal(true)}
+      />
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">{isEs ? "Servicios" : "Services"}</h1>
         <div className="flex items-center gap-3">
