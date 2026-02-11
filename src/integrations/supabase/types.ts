@@ -1375,6 +1375,56 @@ export type Database = {
           },
         ]
       }
+      team_members: {
+        Row: {
+          business_id: string
+          color: string | null
+          commission_pct: number | null
+          created_at: string
+          email: string | null
+          has_access: boolean
+          id: string
+          name: string
+          phone: string | null
+          role_title: string | null
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          color?: string | null
+          commission_pct?: number | null
+          created_at?: string
+          email?: string | null
+          has_access?: boolean
+          id?: string
+          name: string
+          phone?: string | null
+          role_title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          business_id?: string
+          color?: string | null
+          commission_pct?: number | null
+          created_at?: string
+          email?: string | null
+          has_access?: boolean
+          id?: string
+          name?: string
+          phone?: string | null
+          role_title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_members_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       usage: {
         Row: {
           business_id: string
