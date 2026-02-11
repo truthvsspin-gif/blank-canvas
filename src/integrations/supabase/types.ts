@@ -489,6 +489,73 @@ export type Database = {
           },
         ]
       }
+      documents: {
+        Row: {
+          business_id: string
+          created_at: string
+          customer_id: string | null
+          doc_number: string | null
+          doc_type: string
+          id: string
+          notes: string | null
+          order_id: string | null
+          status: string
+          taxes: number | null
+          total: number | null
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          customer_id?: string | null
+          doc_number?: string | null
+          doc_type?: string
+          id?: string
+          notes?: string | null
+          order_id?: string | null
+          status?: string
+          taxes?: number | null
+          total?: number | null
+          updated_at?: string
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          customer_id?: string | null
+          doc_number?: string | null
+          doc_type?: string
+          id?: string
+          notes?: string | null
+          order_id?: string | null
+          status?: string
+          taxes?: number | null
+          total?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       flyer_send_log: {
         Row: {
           business_id: string
@@ -1097,6 +1164,59 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "services_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stock_items: {
+        Row: {
+          available_qty: number
+          business_id: string
+          created_at: string
+          description: string | null
+          expiry_date: string | null
+          id: string
+          min_qty: number
+          name: string
+          reference: string | null
+          supplier: string | null
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          available_qty?: number
+          business_id: string
+          created_at?: string
+          description?: string | null
+          expiry_date?: string | null
+          id?: string
+          min_qty?: number
+          name: string
+          reference?: string | null
+          supplier?: string | null
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          available_qty?: number
+          business_id?: string
+          created_at?: string
+          description?: string | null
+          expiry_date?: string | null
+          id?: string
+          min_qty?: number
+          name?: string
+          reference?: string | null
+          supplier?: string | null
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_items_business_id_fkey"
             columns: ["business_id"]
             isOneToOne: false
             referencedRelation: "businesses"
