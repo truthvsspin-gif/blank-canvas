@@ -1,98 +1,229 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useCurrentBusiness } from "@/hooks/use-current-business";
 import { useLanguage } from "@/components/providers/language-provider";
 import { supabase } from "@/integrations/supabase/client";
+import { Search, Filter, Plus, X, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Plus, Search, BarChart3, Settings } from "lucide-react";
 
-type DocTab = "invoices" | "estimates" | "delivery_notes" | "receipts";
+type DocTab = "invoices" | "estimates" | "delivery_notes" | "receptions";
 
-const docTabs: { key: DocTab; dbType: string; label: { en: string; es: string } }[] = [
-  { key: "invoices", dbType: "invoice", label: { en: "Invoices", es: "Facturas" } },
-  { key: "estimates", dbType: "estimate", label: { en: "Estimates", es: "Presupuestos" } },
-  { key: "delivery_notes", dbType: "delivery_note", label: { en: "Delivery Notes", es: "Albaranes" } },
-  { key: "receipts", dbType: "receipt", label: { en: "Receipts", es: "Recepciones" } },
+const docTabs: { key: DocTab; label: { en: string; es: string }; docType: string }[] = [
+  { key: "invoices", label: { en: "Invoices", es: "Facturas" }, docType: "invoice" },
+  { key: "estimates", label: { en: "Estimates", es: "Presupuestos" }, docType: "estimate" },
+  { key: "delivery_notes", label: { en: "Delivery Notes", es: "Albaranes" }, docType: "delivery_note" },
+  { key: "receptions", label: { en: "Receptions", es: "Recepciones" }, docType: "reception" },
 ];
 
-type Doc = {
-  id: string;
-  doc_type: string;
-  doc_number: string | null;
-  order_id: string | null;
-  customer_id: string | null;
-  created_at: string;
-  taxes: number;
-  total: number;
-  status: string;
-  customers?: { full_name: string } | null;
+const STATUS_COLORS: Record<string, string> = {
+  draft: "bg-muted text-muted-foreground",
+  sent: "bg-blue-100 text-blue-700",
+  paid: "bg-emerald-100 text-emerald-700",
+  cancelled: "bg-red-100 text-red-700",
 };
+
+type DrawerDocType = "invoice" | "estimate" | null;
 
 export default function Docs() {
   const { businessId } = useCurrentBusiness();
   const { lang } = useLanguage();
   const isEs = lang === "es";
   const [activeTab, setActiveTab] = useState<DocTab>("invoices");
-  const [docs, setDocs] = useState<Doc[]>([]);
-  const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const [docs, setDocs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState<DrawerDocType>(null);
+  const [saving, setSaving] = useState(false);
 
-  const currentDbType = docTabs.find((t) => t.key === activeTab)!.dbType;
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
 
-  useEffect(() => {
+  const [form, setForm] = useState({
+    customer_id: "",
+    order_id: "",
+    doc_number: "",
+    total: "",
+    taxes: "",
+    notes: "",
+  });
+
+  const currentDocType = docTabs.find((t) => t.key === activeTab)!.docType;
+
+  const fetchDocs = useCallback(async () => {
     if (!businessId) return;
     setLoading(true);
-    supabase
+    const { data } = await supabase
       .from("documents")
       .select("*, customers(full_name)")
       .eq("business_id", businessId)
-      .eq("doc_type", currentDbType)
-      .order("created_at", { ascending: false })
-      .then(({ data }) => {
-        setDocs((data as Doc[]) || []);
-        setLoading(false);
-      });
-  }, [businessId, currentDbType]);
+      .eq("doc_type", currentDocType)
+      .order("created_at", { ascending: false });
+    setDocs(data || []);
+    setLoading(false);
+  }, [businessId, currentDocType]);
+
+  useEffect(() => { fetchDocs(); }, [fetchDocs]);
+
+  useEffect(() => {
+    if (!drawerOpen || !businessId) return;
+    Promise.all([
+      supabase.from("customers").select("id, full_name").eq("business_id", businessId).order("full_name"),
+      supabase.from("work_orders").select("id, service_name").eq("business_id", businessId).order("created_at", { ascending: false }).limit(50),
+    ]).then(([c, o]) => {
+      setCustomers(c.data || []);
+      setOrders(o.data || []);
+    });
+  }, [drawerOpen, businessId]);
+
+  const handleCreate = async () => {
+    if (!businessId || !drawerOpen) return;
+    setSaving(true);
+    await supabase.from("documents").insert({
+      business_id: businessId,
+      doc_type: drawerOpen,
+      customer_id: form.customer_id || null,
+      order_id: form.order_id || null,
+      doc_number: form.doc_number || null,
+      total: form.total ? parseFloat(form.total) : 0,
+      taxes: form.taxes ? parseFloat(form.taxes) : 0,
+      notes: form.notes || null,
+      status: "draft",
+    });
+    setSaving(false);
+    setDrawerOpen(null);
+    setForm({ customer_id: "", order_id: "", doc_number: "", total: "", taxes: "", notes: "" });
+    fetchDocs();
+  };
 
   const filtered = docs.filter((d) => {
     if (!search) return true;
-    const s = search.toLowerCase();
-    return (
-      d.doc_number?.toLowerCase().includes(s) ||
-      d.customers?.full_name?.toLowerCase().includes(s) ||
-      d.status.toLowerCase().includes(s)
-    );
+    return JSON.stringify(d).toLowerCase().includes(search.toLowerCase());
   });
 
-  const statusBadge = (status: string) => {
-    const map: Record<string, string> = {
-      draft: "bg-muted text-muted-foreground",
-      sent: "bg-blue-100 text-blue-700",
-      paid: "bg-emerald-100 text-emerald-700",
-      cancelled: "bg-red-100 text-red-700",
-    };
-    return map[status] || "bg-muted text-muted-foreground";
+  const tabConfig: Record<DocTab, {
+    columns: { key: string; label: { en: string; es: string } }[];
+    createLabel: { en: string; es: string } | null;
+    emptyLabel: { en: string; es: string };
+    showSortFilter: boolean;
+    emoji: string;
+  }> = {
+    invoices: {
+      columns: [
+        { key: "num", label: { en: "INVOICE #", es: "Nº FACTURA" } },
+        { key: "order", label: { en: "ORDER", es: "ORDEN" } },
+        { key: "customer", label: { en: "CUSTOMER", es: "CLIENTE" } },
+        { key: "date", label: { en: "DATE", es: "FECHA" } },
+        { key: "taxes", label: { en: "TAXES", es: "IMPUESTOS" } },
+        { key: "total", label: { en: "TOTAL", es: "TOTAL" } },
+        { key: "status", label: { en: "STATUS", es: "ESTADO" } },
+      ],
+      createLabel: { en: "Invoice", es: "Factura" },
+      emptyLabel: { en: "No invoices created yet", es: "Aún no hay ningún Factura creado" },
+      showSortFilter: true,
+      emoji: "📄",
+    },
+    estimates: {
+      columns: [
+        { key: "num", label: { en: "ESTIMATE #", es: "Nº PRESUPUESTO" } },
+        { key: "order", label: { en: "ORDER", es: "ORDEN" } },
+        { key: "customer", label: { en: "CUSTOMER", es: "CLIENTE" } },
+        { key: "date", label: { en: "CREATED", es: "CREADO" } },
+        { key: "taxes", label: { en: "TAXES", es: "IMPUESTOS" } },
+        { key: "total", label: { en: "TOTAL", es: "TOTAL" } },
+        { key: "status", label: { en: "STATUS", es: "ESTADO" } },
+      ],
+      createLabel: { en: "Estimate", es: "Presupuesto" },
+      emptyLabel: { en: "No estimates created yet", es: "Aún no hay ningún Presupuesto creado" },
+      showSortFilter: false,
+      emoji: "📋",
+    },
+    delivery_notes: {
+      columns: [
+        { key: "num", label: { en: "NOTE #", es: "Nº ALBARÁN" } },
+        { key: "customer", label: { en: "CUSTOMER", es: "CLIENTE" } },
+        { key: "date", label: { en: "DATE", es: "FECHA" } },
+        { key: "taxes", label: { en: "TAXES", es: "IMPUESTOS" } },
+        { key: "total", label: { en: "TOTAL", es: "TOTAL" } },
+        { key: "notes", label: { en: "NOTES", es: "NOTAS" } },
+      ],
+      createLabel: null,
+      emptyLabel: { en: "No delivery notes created yet", es: "Aún no hay ningún Albaranes creado" },
+      showSortFilter: true,
+      emoji: "📦",
+    },
+    receptions: {
+      columns: [
+        { key: "id", label: { en: "ID", es: "ID" } },
+        { key: "order", label: { en: "ORDER", es: "ORDEN" } },
+        { key: "customer", label: { en: "CUSTOMER", es: "CLIENTE" } },
+        { key: "vehicle", label: { en: "VEHICLE", es: "VEHÍCULO" } },
+        { key: "signature", label: { en: "SIGNATURE", es: "FIRMA" } },
+      ],
+      createLabel: null,
+      emptyLabel: { en: "No receptions created yet", es: "Aún no hay ningún Recepción creado" },
+      showSortFilter: false,
+      emoji: "🚗",
+    },
   };
 
-  const createLabel = {
-    invoices: isEs ? "+ Factura" : "+ Invoice",
-    estimates: isEs ? "+ Presupuesto" : "+ Estimate",
-    delivery_notes: isEs ? "+ Albarán" : "+ Delivery Note",
-    receipts: isEs ? "+ Recepción" : "+ Receipt",
+  const cfg = tabConfig[activeTab];
+
+  const renderRow = (item: any) => {
+    if (activeTab === "invoices" || activeTab === "estimates") {
+      return (
+        <>
+          <td className="px-4 py-3 font-medium">{item.doc_number || "—"}</td>
+          <td className="px-4 py-3 text-muted-foreground">{item.order_id ? item.order_id.slice(0, 8) : "—"}</td>
+          <td className="px-4 py-3">{item.customers?.full_name || "—"}</td>
+          <td className="px-4 py-3 text-muted-foreground">{new Date(item.created_at).toLocaleDateString()}</td>
+          <td className="px-4 py-3 text-muted-foreground">{item.taxes != null ? `€${item.taxes}` : "—"}</td>
+          <td className="px-4 py-3 font-medium">{item.total != null ? `€${item.total}` : "—"}</td>
+          <td className="px-4 py-3">
+            <Badge variant="outline" className={cn("text-xs capitalize", STATUS_COLORS[item.status] || "")}>{item.status}</Badge>
+          </td>
+          <td className="px-4 py-3" />
+        </>
+      );
+    }
+    if (activeTab === "delivery_notes") {
+      return (
+        <>
+          <td className="px-4 py-3 font-medium">{item.doc_number || "—"}</td>
+          <td className="px-4 py-3">{item.customers?.full_name || "—"}</td>
+          <td className="px-4 py-3 text-muted-foreground">{new Date(item.created_at).toLocaleDateString()}</td>
+          <td className="px-4 py-3 text-muted-foreground">{item.taxes != null ? `€${item.taxes}` : "—"}</td>
+          <td className="px-4 py-3 font-medium">{item.total != null ? `€${item.total}` : "—"}</td>
+          <td className="px-4 py-3 text-muted-foreground">{item.notes || "—"}</td>
+        </>
+      );
+    }
+    return (
+      <>
+        <td className="px-4 py-3 font-medium text-muted-foreground">{item.id.slice(0, 8)}</td>
+        <td className="px-4 py-3">{item.order_id ? item.order_id.slice(0, 8) : "—"}</td>
+        <td className="px-4 py-3">{item.customers?.full_name || "—"}</td>
+        <td className="px-4 py-3 text-muted-foreground">—</td>
+        <td className="px-4 py-3 text-muted-foreground">—</td>
+      </>
+    );
   };
+
+  const drawerLabel = drawerOpen === "invoice"
+    ? (isEs ? "Crear Factura" : "Create Invoice")
+    : (isEs ? "Crear Presupuesto" : "Create Estimate");
 
   return (
     <div className="space-y-6">
-      {/* Tabs + Actions */}
-      <div className="flex items-center justify-between">
-        <div className="flex gap-1 border-b">
+      {/* Tabs */}
+      <div className="flex items-center justify-between border-b">
+        <div className="flex gap-1">
           {docTabs.map((tab) => (
             <button
               key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
+              onClick={() => { setActiveTab(tab.key); setSearch(""); }}
               className={cn(
-                "px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap",
+                "px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px",
                 activeTab === tab.key
                   ? "border-emerald-600 text-emerald-700"
                   : "border-transparent text-muted-foreground hover:text-foreground"
@@ -102,30 +233,41 @@ export default function Docs() {
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-3">
-          <button className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-            <BarChart3 className="h-4 w-4" />
-            {isEs ? "Ver Estadísticas" : "View Stats"}
+        <div className="flex items-center gap-3 pb-2">
+          <button className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
+            📊 {isEs ? "Ver Estadísticas" : "View Stats"}
           </button>
-          <button className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-            <Settings className="h-4 w-4" />
+          <button className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
+            <Settings className="h-3.5 w-3.5" />
             {isEs ? "Ajustes" : "Settings"}
           </button>
         </div>
       </div>
 
-      {/* Search bar */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-md">
+      {/* Search */}
+      <div className="flex items-center gap-3 justify-between">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
             type="text"
-            placeholder={isEs ? "Escribe para buscar..." : "Search..."}
+            placeholder={isEs ? "Escribe para buscar." : "Type to search."}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-lg border bg-background pl-3 pr-10 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+            className="w-full rounded-lg border bg-background pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
           />
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         </div>
+        {cfg.showSortFilter && (
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="gap-1.5">
+              <Filter className="h-3.5 w-3.5" />
+              {isEs ? "Orden" : "Sort"}
+            </Button>
+            <Button variant="outline" size="sm" className="gap-1.5">
+              <Filter className="h-3.5 w-3.5" />
+              {isEs ? "Filtros" : "Filters"}
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Table */}
@@ -134,73 +276,57 @@ export default function Docs() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
-                <th className="px-4 py-3 text-left font-semibold text-muted-foreground text-xs uppercase tracking-wide">
-                  {isEs ? "Nº PRESUPUESTO" : "DOC #"}
-                </th>
-                <th className="px-4 py-3 text-left font-semibold text-muted-foreground text-xs uppercase tracking-wide">
-                  {isEs ? "ORDEN" : "ORDER"}
-                </th>
-                <th className="px-4 py-3 text-left font-semibold text-muted-foreground text-xs uppercase tracking-wide">
-                  {isEs ? "CLIENTE" : "CLIENT"}
-                </th>
-                <th className="px-4 py-3 text-left font-semibold text-muted-foreground text-xs uppercase tracking-wide">
-                  {isEs ? "CREADO" : "CREATED"}
-                </th>
-                <th className="px-4 py-3 text-left font-semibold text-muted-foreground text-xs uppercase tracking-wide">
-                  {isEs ? "IMPUESTOS" : "TAXES"}
-                </th>
-                <th className="px-4 py-3 text-left font-semibold text-muted-foreground text-xs uppercase tracking-wide">
-                  TOTAL
-                </th>
-                <th className="px-4 py-3 text-left font-semibold text-muted-foreground text-xs uppercase tracking-wide">
-                  {isEs ? "ESTADO" : "STATUS"}
-                </th>
-                <th className="px-4 py-3 text-right">
-                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1">
-                    {createLabel[activeTab]}
-                  </Button>
-                </th>
+                {cfg.columns.map((col) => (
+                  <th key={col.key} className="px-4 py-3 text-left font-semibold text-muted-foreground whitespace-nowrap">
+                    {col.label[lang]}
+                  </th>
+                ))}
+                {cfg.createLabel && (
+                  <th className="px-4 py-3 text-right">
+                    <Button
+                      size="sm"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-full px-4 gap-1"
+                      onClick={() => setDrawerOpen(currentDocType as DrawerDocType)}
+                    >
+                      <Plus className="h-4 w-4" />
+                      {cfg.createLabel[lang]}
+                    </Button>
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-20 text-center text-muted-foreground">
+                  <td colSpan={cfg.columns.length + 1} className="px-4 py-16 text-center text-muted-foreground">
                     {isEs ? "Cargando..." : "Loading..."}
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8}>
-                    {/* Skeleton placeholder rows like reference */}
-                    {Array.from({ length: 6 }).map((_, i) => (
-                      <div key={i} className="flex items-center gap-4 px-4 py-3 border-b last:border-0">
-                        {Array.from({ length: 7 }).map((_, j) => (
-                          <div
-                            key={j}
-                            className="h-4 rounded bg-muted animate-pulse"
-                            style={{ width: `${60 + Math.random() * 80}px` }}
-                          />
-                        ))}
-                      </div>
-                    ))}
+                  <td colSpan={cfg.columns.length + 1} className="px-4 py-16 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="text-5xl">{cfg.emoji}</div>
+                      <p className="text-muted-foreground font-medium">{cfg.emptyLabel[lang]}</p>
+                      {cfg.createLabel && (
+                        <p className="text-sm text-muted-foreground">
+                          {isEs ? "Haz click en " : "Click "}
+                          <button
+                            onClick={() => setDrawerOpen(currentDocType as DrawerDocType)}
+                            className="text-emerald-600 font-semibold hover:underline"
+                          >
+                            + {cfg.createLabel[lang]}
+                          </button>
+                          {isEs ? " para crear uno nuevo" : " to create a new one"}
+                        </p>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (
-                filtered.map((doc) => (
-                  <tr key={doc.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 font-medium">{doc.doc_number || "—"}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{doc.order_id ? doc.order_id.slice(0, 8) : "—"}</td>
-                    <td className="px-4 py-3">{doc.customers?.full_name || "—"}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{new Date(doc.created_at).toLocaleDateString()}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{doc.taxes ? `€${doc.taxes.toFixed(2)}` : "—"}</td>
-                    <td className="px-4 py-3 font-medium">{doc.total ? `€${doc.total.toFixed(2)}` : "—"}</td>
-                    <td className="px-4 py-3">
-                      <Badge className={cn("text-xs capitalize", statusBadge(doc.status))}>
-                        {doc.status}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3" />
+                filtered.map((item: any) => (
+                  <tr key={item.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors cursor-pointer">
+                    {renderRow(item)}
                   </tr>
                 ))
               )}
@@ -208,6 +334,64 @@ export default function Docs() {
           </table>
         </div>
       </div>
+
+      {/* Create Drawer */}
+      {drawerOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setDrawerOpen(null)} />
+          <div className="relative w-full max-w-md bg-background border-l shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+            <div className="flex items-center justify-between border-b px-6 py-4">
+              <h2 className="text-lg font-bold">{drawerLabel}</h2>
+              <Button variant="ghost" size="icon" onClick={() => setDrawerOpen(null)}>
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">{isEs ? "Número de documento" : "Document number"}</label>
+                <input type="text" value={form.doc_number} onChange={(e) => setForm({ ...form, doc_number: e.target.value })} className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">{isEs ? "Cliente" : "Customer"}</label>
+                <select value={form.customer_id} onChange={(e) => setForm({ ...form, customer_id: e.target.value })} className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30">
+                  <option value="">{isEs ? "Seleccionar..." : "Select..."}</option>
+                  {customers.map((c) => <option key={c.id} value={c.id}>{c.full_name}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">{isEs ? "Orden asociada" : "Associated order"}</label>
+                <select value={form.order_id} onChange={(e) => setForm({ ...form, order_id: e.target.value })} className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30">
+                  <option value="">{isEs ? "Ninguna" : "None"}</option>
+                  {orders.map((o) => <option key={o.id} value={o.id}>{o.service_name} ({o.id.slice(0, 8)})</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Total (€)</label>
+                  <input type="number" step="0.01" value={form.total} onChange={(e) => setForm({ ...form, total: e.target.value })} className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">{isEs ? "Impuestos (€)" : "Taxes (€)"}</label>
+                  <input type="number" step="0.01" value={form.taxes} onChange={(e) => setForm({ ...form, taxes: e.target.value })} className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">{isEs ? "Notas" : "Notes"}</label>
+                <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 resize-none" />
+              </div>
+            </div>
+            <div className="border-t px-6 py-4">
+              <Button
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                disabled={saving}
+                onClick={handleCreate}
+              >
+                {saving ? (isEs ? "Creando..." : "Creating...") : (isEs ? "Crear" : "Create")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
