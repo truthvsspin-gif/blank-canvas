@@ -45,16 +45,6 @@ type LeadOption = {
   phone: string | null
   qualification_reason: string | null
 }
-  id: string
-  name: string | null
-  source: string | null
-  stage: string | null
-  customer_id: string | null
-  conversation_id: string | null
-  email: string | null
-  phone: string | null
-  qualification_reason: string | null
-}
 
 type ConversationSnapshot = {
   vehicle_info: Record<string, unknown> | null
@@ -622,6 +612,18 @@ export default function NewBookingPage() {
             </Link>
           </Button>
         }
+      />
+
+      <CrmGettingStarted
+        titleEs="¿Cómo crear una Reserva?"
+        titleEn="How to create a Booking?"
+        storageKey="crm-tips-booking-new"
+        steps={[
+          { emoji: "👤", textEs: "Selecciona un cliente en el campo 'Cliente'.", textEn: "Select a customer in the 'Customer' field." },
+          { emoji: "🚗", textEs: "Elige un vehículo (se cargará automáticamente si existe).", textEn: "Choose a vehicle (it will auto-load if it exists)." },
+          { emoji: "🔧", textEs: "Selecciona servicio y precio en la sección 'Servicio y Precio'.", textEn: "Select service and price in the 'Service & Pricing' section." },
+          { emoji: "📅", textEs: "Establece fecha, hora y estado para completar la reserva.", textEn: "Set date, time, and status to complete the booking." },
+        ]}
       />
 
       <Card className="shadow-lg shadow-black/5 border-0 bg-card overflow-hidden">
