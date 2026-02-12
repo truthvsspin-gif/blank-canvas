@@ -3,7 +3,7 @@ import { CrmGettingStarted } from "@/components/crm/crm-getting-started";
 import { useCurrentBusiness } from "@/hooks/use-current-business";
 import { useLanguage } from "@/components/providers/language-provider";
 import { supabase } from "@/integrations/supabase/client";
-import { Search, Filter, Plus, X } from "lucide-react";
+import { Search, Filter, Plus, X, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -28,6 +28,15 @@ const STATUS_COLORS: Record<string, string> = {
 
 type DrawerType = "order" | "vehicle" | "customer" | null;
 
+type DatosStats = {
+  customersTotal: number;
+  vehiclesTotal: number;
+  workOrdersTotal: number;
+  openWorkOrders: number;
+  requestsTotal: number;
+  pendingRequests: number;
+};
+
 export default function Datos() {
   const { businessId } = useCurrentBusiness();
   const { lang } = useLanguage();
@@ -38,6 +47,16 @@ export default function Datos() {
   const [loading, setLoading] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState<DrawerType>(null);
   const [saving, setSaving] = useState(false);
+  const [statsOpen, setStatsOpen] = useState(false);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [stats, setStats] = useState<DatosStats>({
+    customersTotal: 0,
+    vehiclesTotal: 0,
+    workOrdersTotal: 0,
+    openWorkOrders: 0,
+    requestsTotal: 0,
+    pendingRequests: 0,
+  });
 
   // Form options
   const [customers, setCustomers] = useState<any[]>([]);
@@ -95,6 +114,32 @@ export default function Datos() {
   }, [businessId, activeTab]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    if (!businessId || !statsOpen) return;
+    const loadStats = async () => {
+      setStatsLoading(true);
+      const [customersRes, vehiclesRes, ordersRes, openOrdersRes, requestsRes, pendingRequestsRes] = await Promise.all([
+        supabase.from("customers").select("id", { count: "exact", head: true }).eq("business_id", businessId),
+        supabase.from("vehicles").select("id", { count: "exact", head: true }).eq("business_id", businessId),
+        supabase.from("work_orders").select("id", { count: "exact", head: true }).eq("business_id", businessId),
+        supabase.from("work_orders").select("id", { count: "exact", head: true }).eq("business_id", businessId).in("status", ["open", "in_progress"]),
+        supabase.from("bookings").select("id", { count: "exact", head: true }).eq("business_id", businessId),
+        supabase.from("bookings").select("id", { count: "exact", head: true }).eq("business_id", businessId).in("status", ["requested", "pending"]),
+      ]);
+
+      setStats({
+        customersTotal: customersRes.count || 0,
+        vehiclesTotal: vehiclesRes.count || 0,
+        workOrdersTotal: ordersRes.count || 0,
+        openWorkOrders: openOrdersRes.count || 0,
+        requestsTotal: requestsRes.count || 0,
+        pendingRequests: pendingRequestsRes.count || 0,
+      });
+      setStatsLoading(false);
+    };
+    loadStats();
+  }, [businessId, statsOpen]);
 
   // Load form options when any drawer opens
   useEffect(() => {
@@ -354,8 +399,13 @@ export default function Datos() {
             </button>
           ))}
         </div>
-        <button className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 pb-2">
-          📊 {isEs ? "Ver Estadísticas" : "View Stats"}
+        <button
+          className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 pb-2"
+          onClick={() => setStatsOpen(true)}
+          type="button"
+        >
+          <BarChart3 className="h-4 w-4" />
+          {isEs ? "Ver Estadísticas" : "View Stats"}
         </button>
       </div>
 
@@ -451,6 +501,35 @@ export default function Datos() {
           </table>
         </div>
       </div>
+
+      {statsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setStatsOpen(false)} />
+          <div className="relative w-full max-w-3xl rounded-xl border bg-background shadow-2xl">
+            <div className="flex items-center justify-between border-b px-6 py-4">
+              <h2 className="text-lg font-bold">{isEs ? "Estadísticas de datos" : "Data stats"}</h2>
+              <Button variant="ghost" size="icon" onClick={() => setStatsOpen(false)}>
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            <div className="p-6">
+              {statsLoading ? (
+                <p className="text-sm text-muted-foreground">{isEs ? "Cargando..." : "Loading..."}</p>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <StatsCard label={isEs ? "Clientes totales" : "Total customers"} value={stats.customersTotal} />
+                  <StatsCard label={isEs ? "Vehículos totales" : "Total vehicles"} value={stats.vehiclesTotal} />
+                  <StatsCard label={isEs ? "Órdenes totales" : "Total work orders"} value={stats.workOrdersTotal} />
+                  <StatsCard label={isEs ? "Órdenes abiertas" : "Open work orders"} value={stats.openWorkOrders} />
+                  <StatsCard label={isEs ? "Solicitudes totales" : "Total requests"} value={stats.requestsTotal} />
+                  <StatsCard label={isEs ? "Solicitudes pendientes" : "Pending requests"} value={stats.pendingRequests} />
+                  <StatsCard label={isEs ? "Registros en esta pestaña" : "Rows in this tab"} value={filtered.length} />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ---- DRAWERS ---- */}
       {drawerOpen && (
@@ -582,6 +661,15 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div className="space-y-1.5">
       <label className="text-sm font-medium">{label}</label>
       {children}
+    </div>
+  );
+}
+
+function StatsCard({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-lg border bg-card p-4">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 text-2xl font-bold text-foreground">{value}</p>
     </div>
   );
 }

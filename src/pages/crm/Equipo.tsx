@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { CrmGettingStarted } from "@/components/crm/crm-getting-started";
-import { UsersRound, Phone, Mail, X, User, Palette, Clock3 } from "lucide-react";
+import { UsersRound, Phone, Mail, X, User, Palette, Clock3, BarChart3 } from "lucide-react";
 import { useLanguage } from "@/components/providers/language-provider";
 import { useCurrentBusiness } from "@/hooks/use-current-business";
 import { supabase } from "@/integrations/supabase/client";
@@ -52,6 +52,7 @@ export default function Equipo() {
   const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activityDate, setActivityDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [statsOpen, setStatsOpen] = useState(false);
 
   const [form, setForm] = useState({
     name: "",
@@ -140,6 +141,27 @@ export default function Equipo() {
     return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
+  const teamStats = useMemo(() => {
+    const withAccess = members.filter((member) => member.has_access).length;
+    const commissions = members
+      .map((member) => Number(member.commission_pct))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    const avgCommission = commissions.length > 0
+      ? commissions.reduce((acc, value) => acc + value, 0) / commissions.length
+      : 0;
+    const activeOrders = clockRows.reduce((acc, row) => acc + row.activeOrders, 0);
+    const completedOrders = clockRows.reduce((acc, row) => acc + row.completedOrders, 0);
+    const checkedIn = clockRows.filter((row) => !!row.firstStart).length;
+    return {
+      totalMembers: members.length,
+      withAccess,
+      checkedIn,
+      activeOrders,
+      completedOrders,
+      avgCommission,
+    };
+  }, [clockRows, members]);
+
   return (
     <div className="space-y-6 relative">
       <CrmGettingStarted
@@ -181,9 +203,14 @@ export default function Equipo() {
         ))}
         <div className="flex-1" />
         {tab === "equipo" ? (
-          <span className="text-sm text-muted-foreground pb-2 cursor-pointer hover:text-foreground">
+          <button
+            className="text-sm text-muted-foreground pb-2 cursor-pointer hover:text-foreground inline-flex items-center gap-1.5"
+            onClick={() => setStatsOpen(true)}
+            type="button"
+          >
+            <BarChart3 className="h-4 w-4" />
             {isEs ? "Ver estadisticas" : "View Stats"}
-          </span>
+          </button>
         ) : (
           <div className="pb-2">
             <input
@@ -265,6 +292,31 @@ export default function Equipo() {
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {statsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setStatsOpen(false)} />
+          <div className="relative w-full max-w-3xl rounded-xl border bg-background shadow-2xl">
+            <div className="flex items-center justify-between border-b px-6 py-4">
+              <h2 className="text-lg font-bold">{isEs ? "Estadísticas del equipo" : "Team stats"}</h2>
+              <Button variant="ghost" size="icon" onClick={() => setStatsOpen(false)}>
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            <div className="p-6">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <StatsCard label={isEs ? "Miembros totales" : "Total members"} value={teamStats.totalMembers} />
+                <StatsCard label={isEs ? "Con acceso al sistema" : "With system access"} value={teamStats.withAccess} />
+                <StatsCard label={isEs ? "Con inicio hoy" : "Checked in today"} value={teamStats.checkedIn} />
+                <StatsCard label={isEs ? "Órdenes en curso" : "Orders in progress"} value={teamStats.activeOrders} />
+                <StatsCard label={isEs ? "Órdenes completadas" : "Orders completed"} value={teamStats.completedOrders} />
+                <StatsCard label={isEs ? "Comisión promedio" : "Avg commission"} value={`${teamStats.avgCommission.toFixed(1)}%`} />
+                <StatsCard label={isEs ? "Fecha actividad" : "Activity date"} value={activityDate} />
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -384,6 +436,15 @@ export default function Equipo() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function StatsCard({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-lg border bg-card p-4">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 text-2xl font-bold text-foreground">{value}</p>
     </div>
   );
 }

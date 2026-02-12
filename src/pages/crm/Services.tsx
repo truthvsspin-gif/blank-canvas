@@ -35,12 +35,26 @@ type ServiceDiscount = {
   services: string;
 };
 
+type ServicesSettings = {
+  defaultDurationMinutes: number;
+  defaultTaxPct: number;
+  autoActivateNewServices: boolean;
+  showServicesInChatbot: boolean;
+};
+
 const serviceTabs: { key: ServiceTab; label: { en: string; es: string } }[] = [
   { key: "services", label: { en: "Services", es: "Servicios" } },
   { key: "variants", label: { en: "Variants", es: "Variantes" } },
   { key: "surcharges", label: { en: "Surcharges", es: "Recargos" } },
   { key: "discounts", label: { en: "Discounts", es: "Descuentos" } },
 ];
+
+const defaultServicesSettings: ServicesSettings = {
+  defaultDurationMinutes: 60,
+  defaultTaxPct: 21,
+  autoActivateNewServices: true,
+  showServicesInChatbot: true,
+};
 
 function uid() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -56,10 +70,13 @@ export default function ServicesPage() {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
+  const [statsOpen, setStatsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const [variants, setVariants] = useState<ServiceVariant[]>([]);
   const [surcharges, setSurcharges] = useState<ServiceSurcharge[]>([]);
   const [discounts, setDiscounts] = useState<ServiceDiscount[]>([]);
+  const [pageSettings, setPageSettings] = useState<ServicesSettings>(defaultServicesSettings);
 
   const [serviceForm, setServiceForm] = useState({
     name: "",
@@ -88,6 +105,7 @@ export default function ServicesPage() {
   });
 
   const storageKey = businessId ? `crm-services-meta:${businessId}` : null;
+  const settingsStorageKey = businessId ? `crm-services-settings:${businessId}` : null;
 
   const fetchServices = async () => {
     if (!businessId) return;
@@ -129,6 +147,41 @@ export default function ServicesPage() {
       setDiscounts([]);
     }
   }, [storageKey]);
+
+  useEffect(() => {
+    if (!settingsStorageKey) {
+      setPageSettings(defaultServicesSettings);
+      return;
+    }
+    const raw = localStorage.getItem(settingsStorageKey);
+    if (!raw) {
+      setPageSettings(defaultServicesSettings);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as Partial<ServicesSettings>;
+      setPageSettings({
+        defaultDurationMinutes:
+          typeof parsed.defaultDurationMinutes === "number"
+            ? parsed.defaultDurationMinutes
+            : defaultServicesSettings.defaultDurationMinutes,
+        defaultTaxPct:
+          typeof parsed.defaultTaxPct === "number"
+            ? parsed.defaultTaxPct
+            : defaultServicesSettings.defaultTaxPct,
+        autoActivateNewServices:
+          typeof parsed.autoActivateNewServices === "boolean"
+            ? parsed.autoActivateNewServices
+            : defaultServicesSettings.autoActivateNewServices,
+        showServicesInChatbot:
+          typeof parsed.showServicesInChatbot === "boolean"
+            ? parsed.showServicesInChatbot
+            : defaultServicesSettings.showServicesInChatbot,
+      });
+    } catch {
+      setPageSettings(defaultServicesSettings);
+    }
+  }, [settingsStorageKey]);
 
   const persistMeta = (next: {
     variants?: ServiceVariant[];
@@ -218,6 +271,31 @@ export default function ServicesPage() {
   const filteredVariants = variants.filter((v) => !search || `${v.name} ${v.description}`.toLowerCase().includes(search.toLowerCase()));
   const filteredSurcharges = surcharges.filter((s) => !search || `${s.name} ${s.services}`.toLowerCase().includes(search.toLowerCase()));
   const filteredDiscounts = discounts.filter((d) => !search || `${d.code} ${d.services}`.toLowerCase().includes(search.toLowerCase()));
+  const serviceStats = useMemo(() => {
+    const activeCount = services.filter((service) => service.is_active).length;
+    const prices = services
+      .map((service) => Number(service.base_price))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    const durations = services
+      .map((service) => Number(service.duration_minutes))
+      .filter((value) => Number.isFinite(value) && value > 0);
+
+    const averagePrice = prices.length > 0 ? prices.reduce((acc, value) => acc + value, 0) / prices.length : 0;
+    const averageDuration = durations.length > 0 ? durations.reduce((acc, value) => acc + value, 0) / durations.length : 0;
+    const activeDiscounts = discounts.filter((discount) => discount.status === "active").length;
+    const surchargeTotal = surcharges.reduce((acc, surcharge) => acc + Number(surcharge.price || 0), 0);
+
+    return {
+      totalServices: services.length,
+      activeServices: activeCount,
+      inactiveServices: Math.max(services.length - activeCount, 0),
+      variantsCount: variants.length,
+      activeDiscounts,
+      averagePrice,
+      averageDuration,
+      surchargeTotal,
+    };
+  }, [discounts, services, surcharges, variants.length]);
 
   const createLabel =
     activeTab === "services"
@@ -245,6 +323,13 @@ export default function ServicesPage() {
           ? filteredSurcharges.length > 0
           : filteredDiscounts.length > 0;
 
+  const saveSettings = () => {
+    if (settingsStorageKey) {
+      localStorage.setItem(settingsStorageKey, JSON.stringify(pageSettings));
+    }
+    setSettingsOpen(false);
+  };
+
   return (
     <div className="space-y-6">
       <CrmGettingStarted
@@ -264,11 +349,19 @@ export default function ServicesPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">{isEs ? "Servicios" : "Services"}</h1>
         <div className="flex items-center gap-3">
-          <button className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+          <button
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+            onClick={() => setStatsOpen(true)}
+            type="button"
+          >
             <BarChart3 className="h-4 w-4" />
             {isEs ? "Ver estadisticas" : "View stats"}
           </button>
-          <button className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+          <button
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+            onClick={() => setSettingsOpen(true)}
+            type="button"
+          >
             <Settings className="h-4 w-4" />
             {isEs ? "Ajustes" : "Settings"}
           </button>
@@ -578,6 +671,91 @@ export default function ServicesPage() {
         </div>
       )}
 
+      {statsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setStatsOpen(false)} />
+          <div className="relative w-full max-w-3xl rounded-xl border bg-background shadow-2xl">
+            <div className="flex items-center justify-between border-b px-6 py-4">
+              <h2 className="text-lg font-bold">{isEs ? "Estadisticas de servicios" : "Services stats"}</h2>
+              <Button variant="ghost" size="icon" onClick={() => setStatsOpen(false)}>
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            <div className="grid gap-4 p-6 sm:grid-cols-2 lg:grid-cols-4">
+              <StatsCard label={isEs ? "Servicios totales" : "Total services"} value={serviceStats.totalServices} />
+              <StatsCard label={isEs ? "Servicios activos" : "Active services"} value={serviceStats.activeServices} />
+              <StatsCard label={isEs ? "Servicios inactivos" : "Inactive services"} value={serviceStats.inactiveServices} />
+              <StatsCard label={isEs ? "Variantes" : "Variants"} value={serviceStats.variantsCount} />
+              <StatsCard label={isEs ? "Descuentos activos" : "Active discounts"} value={serviceStats.activeDiscounts} />
+              <StatsCard label={isEs ? "Promedio precio" : "Avg price"} value={`€${serviceStats.averagePrice.toFixed(2)}`} />
+              <StatsCard label={isEs ? "Promedio duracion" : "Avg duration"} value={`${Math.round(serviceStats.averageDuration)} min`} />
+              <StatsCard label={isEs ? "Recargos acumulados" : "Surcharges total"} value={`€${serviceStats.surchargeTotal.toFixed(2)}`} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {settingsOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setSettingsOpen(false)} />
+          <div className="relative h-full w-full max-w-md overflow-y-auto border-l bg-background shadow-2xl">
+            <div className="sticky top-0 flex items-center justify-between border-b bg-background px-6 py-4">
+              <h2 className="text-lg font-bold">{isEs ? "Ajustes de servicios" : "Services settings"}</h2>
+              <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(false)}>
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            <div className="space-y-4 p-6">
+              <Field label={isEs ? "Duracion por defecto (min)" : "Default duration (min)"}>
+                <input
+                  type="number"
+                  className="input-field"
+                  value={pageSettings.defaultDurationMinutes}
+                  onChange={(event) =>
+                    setPageSettings((prev) => ({
+                      ...prev,
+                      defaultDurationMinutes: Number(event.target.value || 0),
+                    }))
+                  }
+                />
+              </Field>
+              <Field label={isEs ? "Impuesto por defecto (%)" : "Default tax (%)"}>
+                <input
+                  type="number"
+                  className="input-field"
+                  value={pageSettings.defaultTaxPct}
+                  onChange={(event) =>
+                    setPageSettings((prev) => ({
+                      ...prev,
+                      defaultTaxPct: Number(event.target.value || 0),
+                    }))
+                  }
+                />
+              </Field>
+              <ToggleRow
+                label={isEs ? "Activar servicios nuevos automaticamente" : "Auto-activate new services"}
+                checked={pageSettings.autoActivateNewServices}
+                onChange={(checked) =>
+                  setPageSettings((prev) => ({ ...prev, autoActivateNewServices: checked }))
+                }
+              />
+              <ToggleRow
+                label={isEs ? "Mostrar servicios en chatbot" : "Show services in chatbot"}
+                checked={pageSettings.showServicesInChatbot}
+                onChange={(checked) =>
+                  setPageSettings((prev) => ({ ...prev, showServicesInChatbot: checked }))
+                }
+              />
+            </div>
+            <div className="sticky bottom-0 border-t bg-background p-6">
+              <Button className="w-full bg-emerald-600 hover:bg-emerald-500 text-white" onClick={saveSettings}>
+                {isEs ? "Guardar cambios" : "Save changes"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
@@ -588,6 +766,40 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       <label className="text-sm font-medium">{label}</label>
       {children}
     </div>
+  );
+}
+
+function StatsCard({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-lg border bg-card p-4">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 text-2xl font-bold text-foreground">{value}</p>
+    </div>
+  );
+}
+
+function ToggleRow({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center justify-between rounded-lg border p-3">
+      <span className="text-sm font-medium">{label}</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${checked ? "bg-emerald-600" : "bg-muted"}`}
+      >
+        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${checked ? "translate-x-6" : "translate-x-1"}`} />
+      </button>
+    </label>
   );
 }
 

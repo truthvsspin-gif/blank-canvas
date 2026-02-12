@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useCurrentBusiness } from "@/hooks/use-current-business";
 import { useLanguage } from "@/components/providers/language-provider";
 import { supabase } from "@/integrations/supabase/client";
-import { Search, Filter, Plus, X, Settings } from "lucide-react";
+import { Search, Filter, Plus, X, Settings, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -25,6 +25,22 @@ const STATUS_COLORS: Record<string, string> = {
 
 type DrawerDocType = "invoice" | "estimate" | null;
 
+type DocsPageSettings = {
+  autoNumbering: boolean;
+  defaultTaxPct: number;
+  invoicePrefix: string;
+  estimatePrefix: string;
+  footerNote: string;
+};
+
+const defaultDocsPageSettings: DocsPageSettings = {
+  autoNumbering: true,
+  defaultTaxPct: 21,
+  invoicePrefix: "INV",
+  estimatePrefix: "EST",
+  footerNote: "",
+};
+
 export default function Docs() {
   const { businessId } = useCurrentBusiness();
   const { lang } = useLanguage();
@@ -35,9 +51,12 @@ export default function Docs() {
   const [loading, setLoading] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState<DrawerDocType>(null);
   const [saving, setSaving] = useState(false);
+  const [statsOpen, setStatsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const [customers, setCustomers] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
+  const [pageSettings, setPageSettings] = useState<DocsPageSettings>(defaultDocsPageSettings);
 
   const [form, setForm] = useState({
     customer_id: "",
@@ -49,6 +68,7 @@ export default function Docs() {
   });
 
   const currentDocType = docTabs.find((t) => t.key === activeTab)!.docType;
+  const settingsStorageKey = businessId ? `crm-docs-settings:${businessId}` : null;
 
   const fetchDocs = useCallback(async () => {
     if (!businessId) return;
@@ -76,6 +96,45 @@ export default function Docs() {
     });
   }, [drawerOpen, businessId]);
 
+  useEffect(() => {
+    if (!settingsStorageKey) {
+      setPageSettings(defaultDocsPageSettings);
+      return;
+    }
+    const raw = localStorage.getItem(settingsStorageKey);
+    if (!raw) {
+      setPageSettings(defaultDocsPageSettings);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as Partial<DocsPageSettings>;
+      setPageSettings({
+        autoNumbering:
+          typeof parsed.autoNumbering === "boolean"
+            ? parsed.autoNumbering
+            : defaultDocsPageSettings.autoNumbering,
+        defaultTaxPct:
+          typeof parsed.defaultTaxPct === "number"
+            ? parsed.defaultTaxPct
+            : defaultDocsPageSettings.defaultTaxPct,
+        invoicePrefix:
+          typeof parsed.invoicePrefix === "string"
+            ? parsed.invoicePrefix
+            : defaultDocsPageSettings.invoicePrefix,
+        estimatePrefix:
+          typeof parsed.estimatePrefix === "string"
+            ? parsed.estimatePrefix
+            : defaultDocsPageSettings.estimatePrefix,
+        footerNote:
+          typeof parsed.footerNote === "string"
+            ? parsed.footerNote
+            : defaultDocsPageSettings.footerNote,
+      });
+    } catch {
+      setPageSettings(defaultDocsPageSettings);
+    }
+  }, [settingsStorageKey]);
+
   const handleCreate = async () => {
     if (!businessId || !drawerOpen) return;
     setSaving(true);
@@ -100,6 +159,15 @@ export default function Docs() {
     if (!search) return true;
     return JSON.stringify(d).toLowerCase().includes(search.toLowerCase());
   });
+  const docsStats = {
+    total: docs.length,
+    draft: docs.filter((doc) => doc.status === "draft").length,
+    sent: docs.filter((doc) => doc.status === "sent").length,
+    paid: docs.filter((doc) => doc.status === "paid").length,
+    cancelled: docs.filter((doc) => doc.status === "cancelled").length,
+    amount: docs.reduce((acc, doc) => acc + Number(doc.total || 0), 0),
+    taxes: docs.reduce((acc, doc) => acc + Number(doc.taxes || 0), 0),
+  };
 
   const tabConfig: Record<DocTab, {
     columns: { key: string; label: { en: string; es: string } }[];
@@ -213,6 +281,13 @@ export default function Docs() {
     ? (isEs ? "Crear Factura" : "Create Invoice")
     : (isEs ? "Crear Presupuesto" : "Create Estimate");
 
+  const savePageSettings = () => {
+    if (settingsStorageKey) {
+      localStorage.setItem(settingsStorageKey, JSON.stringify(pageSettings));
+    }
+    setSettingsOpen(false);
+  };
+
   return (
     <div className="space-y-6">
       {/* Tabs */}
@@ -234,10 +309,19 @@ export default function Docs() {
           ))}
         </div>
         <div className="flex items-center gap-3 pb-2">
-          <button className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
-            📊 {isEs ? "Ver Estadísticas" : "View Stats"}
+          <button
+            className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
+            onClick={() => setStatsOpen(true)}
+            type="button"
+          >
+            <BarChart3 className="h-3.5 w-3.5" />
+            {isEs ? "Ver Estadísticas" : "View Stats"}
           </button>
-          <button className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
+          <button
+            className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
+            onClick={() => setSettingsOpen(true)}
+            type="button"
+          >
             <Settings className="h-3.5 w-3.5" />
             {isEs ? "Ajustes" : "Settings"}
           </button>
@@ -335,6 +419,92 @@ export default function Docs() {
         </div>
       </div>
 
+      {statsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setStatsOpen(false)} />
+          <div className="relative w-full max-w-3xl rounded-xl border bg-background shadow-2xl">
+            <div className="flex items-center justify-between border-b px-6 py-4">
+              <h2 className="text-lg font-bold">{isEs ? "Estadísticas de documentos" : "Documents stats"}</h2>
+              <Button variant="ghost" size="icon" onClick={() => setStatsOpen(false)}>
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            <div className="grid gap-4 p-6 sm:grid-cols-2 lg:grid-cols-4">
+              <StatsCard label={isEs ? "Total documentos" : "Total documents"} value={docsStats.total} />
+              <StatsCard label={isEs ? "Borradores" : "Draft"} value={docsStats.draft} />
+              <StatsCard label={isEs ? "Enviados" : "Sent"} value={docsStats.sent} />
+              <StatsCard label={isEs ? "Pagados" : "Paid"} value={docsStats.paid} />
+              <StatsCard label={isEs ? "Cancelados" : "Cancelled"} value={docsStats.cancelled} />
+              <StatsCard label={isEs ? "Importe total" : "Total amount"} value={`€${docsStats.amount.toFixed(2)}`} />
+              <StatsCard label={isEs ? "Impuestos" : "Taxes"} value={`€${docsStats.taxes.toFixed(2)}`} />
+              <StatsCard label={isEs ? "Tipo actual" : "Current tab"} value={docTabs.find((tab) => tab.key === activeTab)?.label[lang] || "-"} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {settingsOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setSettingsOpen(false)} />
+          <div className="relative h-full w-full max-w-md overflow-y-auto border-l bg-background shadow-2xl">
+            <div className="sticky top-0 flex items-center justify-between border-b bg-background px-6 py-4">
+              <h2 className="text-lg font-bold">{isEs ? "Ajustes de documentos" : "Documents settings"}</h2>
+              <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(false)}>
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            <div className="space-y-4 p-6">
+              <ToggleRow
+                label={isEs ? "Numeración automática" : "Automatic numbering"}
+                checked={pageSettings.autoNumbering}
+                onChange={(checked) => setPageSettings((prev) => ({ ...prev, autoNumbering: checked }))}
+              />
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">{isEs ? "Impuesto por defecto (%)" : "Default tax (%)"}</label>
+                <input
+                  type="number"
+                  className="input-field"
+                  value={pageSettings.defaultTaxPct}
+                  onChange={(event) =>
+                    setPageSettings((prev) => ({ ...prev, defaultTaxPct: Number(event.target.value || 0) }))
+                  }
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">{isEs ? "Prefijo facturas" : "Invoice prefix"}</label>
+                <input
+                  className="input-field"
+                  value={pageSettings.invoicePrefix}
+                  onChange={(event) => setPageSettings((prev) => ({ ...prev, invoicePrefix: event.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">{isEs ? "Prefijo presupuestos" : "Estimate prefix"}</label>
+                <input
+                  className="input-field"
+                  value={pageSettings.estimatePrefix}
+                  onChange={(event) => setPageSettings((prev) => ({ ...prev, estimatePrefix: event.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">{isEs ? "Nota pie de documento" : "Document footer note"}</label>
+                <textarea
+                  rows={3}
+                  className="input-field resize-none"
+                  value={pageSettings.footerNote}
+                  onChange={(event) => setPageSettings((prev) => ({ ...prev, footerNote: event.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="sticky bottom-0 border-t bg-background p-6">
+              <Button className="w-full bg-emerald-600 hover:bg-emerald-500 text-white" onClick={savePageSettings}>
+                {isEs ? "Guardar cambios" : "Save changes"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Create Drawer */}
       {drawerOpen && (
         <div className="fixed inset-0 z-50 flex justify-end">
@@ -393,5 +563,39 @@ export default function Docs() {
         </div>
       )}
     </div>
+  );
+}
+
+function StatsCard({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-lg border bg-card p-4">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 text-2xl font-bold text-foreground">{value}</p>
+    </div>
+  );
+}
+
+function ToggleRow({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center justify-between rounded-lg border p-3">
+      <span className="text-sm font-medium">{label}</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${checked ? "bg-emerald-600" : "bg-muted"}`}
+      >
+        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${checked ? "translate-x-6" : "translate-x-1"}`} />
+      </button>
+    </label>
   );
 }
