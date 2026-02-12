@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
+import { cn } from "@/lib/utils"
 import { CrmGettingStarted } from "@/components/crm/crm-getting-started"
 import { 
   MessageSquare, 
@@ -270,9 +271,12 @@ export default function CrmInboxPage() {
         }
       />
 
-      <div className="grid gap-4 lg:grid-cols-[380px_1fr] h-[calc(100vh-220px)] min-h-[600px]">
+      <div className="grid gap-4 lg:grid-cols-[380px_1fr] h-[calc(100vh-220px)] min-h-[400px] lg:min-h-[600px]">
         {/* Thread List */}
-        <Card className="border-border bg-card/50 backdrop-blur-sm overflow-hidden flex flex-col">
+        <Card className={cn(
+          "border-border bg-card/50 backdrop-blur-sm overflow-hidden flex flex-col",
+          activeThreadId ? "hidden lg:flex" : "flex"
+        )}>
           {/* Search & Filter */}
           <div className="p-4 border-b border-border space-y-3">
             <div className="relative">
@@ -385,12 +389,21 @@ export default function CrmInboxPage() {
         </Card>
 
         {/* Message View */}
-        <Card className="border-border bg-card/50 backdrop-blur-sm overflow-hidden flex flex-col">
+        <Card className={cn(
+          "border-border bg-card/50 backdrop-blur-sm overflow-hidden flex flex-col",
+          activeThreadId ? "flex" : "hidden lg:flex"
+        )}>
           {activeThread ? (
             <>
               {/* Header */}
               <div className="flex items-center justify-between p-4 border-b border-border bg-card">
                 <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setActiveThreadId(null)}
+                    className="lg:hidden p-1 -ml-1 text-muted-foreground hover:text-foreground"
+                  >
+                    <ArrowLeft className="size-5" />
+                  </button>
                   <div className={`size-10 rounded-full flex items-center justify-center ${getChannelColor(activeThread.channel)}`}>
                     {getChannelIcon(activeThread.channel)}
                   </div>
