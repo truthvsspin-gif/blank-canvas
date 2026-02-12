@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { CrmGettingStarted } from "@/components/crm/crm-getting-started";
 import { format } from "date-fns";
 import {
   Calendar,
@@ -217,6 +218,17 @@ export default function FollowUpsPage() {
 
   return (
     <div className="space-y-8 animate-fade-in">
+      <CrmGettingStarted
+        titleEs="¿Cómo usar Seguimientos?"
+        titleEn="How to use Follow-ups?"
+        storageKey="crm-tips-followups"
+        steps={[
+          { emoji: "1️⃣", textEs: "Los seguimientos se programan automáticamente cuando el chatbot detecta interés.", textEn: "Follow-ups are scheduled automatically when the chatbot detects interest." },
+          { emoji: "2️⃣", textEs: "Revisa los pendientes y verifica que los mensajes se envíen correctamente.", textEn: "Review pending items and verify messages are sent correctly." },
+          { emoji: "3️⃣", textEs: "Filtra por estado (Pendiente, Enviado, Cancelado) para gestionar tu cola.", textEn: "Filter by status (Pending, Sent, Cancelled) to manage your queue." },
+          { emoji: "💡", textEs: "Los seguimientos fallidos muestran el error para que puedas corregirlo.", textEn: "Failed follow-ups show the error so you can fix it." },
+        ]}
+      />
       <PageHeader
         title={copy.title}
         description={copy.description}

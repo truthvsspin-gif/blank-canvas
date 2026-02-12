@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { CrmGettingStarted } from "@/components/crm/crm-getting-started";
 import { Bot, Check, Loader2, MessageCircle, Power, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -179,6 +180,17 @@ export default function ChatbotIA() {
 
   return (
     <div className="space-y-6">
+      <CrmGettingStarted
+        titleEs="¿Cómo usar el Chatbot IA?"
+        titleEn="How to use the AI Chatbot?"
+        storageKey="crm-tips-chatbot-ia"
+        steps={[
+          { emoji: "1️⃣", textEs: "Conecta WhatsApp o Instagram desde 'Integraciones' primero.", textEn: "Connect WhatsApp or Instagram from 'Integrations' first." },
+          { emoji: "2️⃣", textEs: "Activa el chatbot con el botón verde para empezar a responder automáticamente.", textEn: "Enable the chatbot with the green button to start auto-replying." },
+          { emoji: "3️⃣", textEs: "El chatbot califica leads, agenda citas y responde preguntas frecuentes.", textEn: "The chatbot qualifies leads, schedules appointments and answers FAQs." },
+          { emoji: "💡", textEs: "Añade servicios y FAQs en 'Tu negocio' para que el chatbot tenga más contexto.", textEn: "Add services and FAQs in 'Your Business' to give the chatbot more context." },
+        ]}
+      />
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
           <div className="flex items-center gap-3">

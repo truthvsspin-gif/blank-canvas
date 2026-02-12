@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
+import { CrmGettingStarted } from "@/components/crm/crm-getting-started"
 import { Search } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/page-header"
@@ -53,6 +54,17 @@ export default function TimelinePage() {
 
   return (
     <div className="space-y-6">
+      <CrmGettingStarted
+        titleEs="¿Cómo usar la Línea de Tiempo?"
+        titleEn="How to use the Timeline?"
+        storageKey="crm-tips-timeline"
+        steps={[
+          { emoji: "1️⃣", textEs: "Aquí se registran automáticamente todas las acciones del CRM.", textEn: "All CRM actions are automatically logged here." },
+          { emoji: "2️⃣", textEs: "Busca por tipo de entidad, acción o detalles para encontrar eventos.", textEn: "Search by entity type, action or details to find events." },
+          { emoji: "3️⃣", textEs: "Usa la línea de tiempo para auditar cambios en reservas, vehículos y órdenes.", textEn: "Use the timeline to audit changes in bookings, vehicles and orders." },
+          { emoji: "💡", textEs: "Los registros se crean automáticamente — no necesitas hacer nada extra.", textEn: "Records are created automatically — no extra action needed." },
+        ]}
+      />
       <PageHeader title="CRM Timeline" description="Searchable audit timeline across bookings, vehicles, and work orders." />
       <Card>
         <CardHeader className="space-y-3">

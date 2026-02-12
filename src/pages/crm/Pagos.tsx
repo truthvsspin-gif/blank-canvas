@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { CrmGettingStarted } from "@/components/crm/crm-getting-started";
 import { CreditCard, Loader2, Save } from "lucide-react";
 
 import { useLanguage } from "@/components/providers/language-provider";
@@ -224,6 +225,17 @@ export default function Pagos() {
 
   return (
     <div className="space-y-6">
+      <CrmGettingStarted
+        titleEs="¿Cómo usar Pagos?"
+        titleEn="How to use Payments?"
+        storageKey="crm-tips-pagos"
+        steps={[
+          { emoji: "1️⃣", textEs: "Activa 'Cobro online' para permitir pagos con tarjeta, transferencia o efectivo.", textEn: "Enable 'Online payments' to allow card, transfer or cash payments." },
+          { emoji: "2️⃣", textEs: "Configura si quieres solicitar una señal (depósito) al reservar.", textEn: "Set whether you want to require a deposit when booking." },
+          { emoji: "3️⃣", textEs: "Revisa las estadísticas de facturas cobradas y pendientes.", textEn: "Review statistics for paid and pending invoices." },
+          { emoji: "💡", textEs: "Haz click en 'Guardar configuración' después de cada cambio.", textEn: "Click 'Save settings' after each change." },
+        ]}
+      />
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
