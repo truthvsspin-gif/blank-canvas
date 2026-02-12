@@ -32,8 +32,19 @@ import {
 } from "@/lib/crm-bookings"
 import { ensureWorkOrderForBooking } from "@/lib/work-orders"
 import { logCrmAudit } from "@/lib/crm-audit"
+import { CrmGettingStarted } from "@/components/crm/crm-getting-started"
 
 type LeadOption = {
+  id: string
+  name: string | null
+  source: string | null
+  stage: string | null
+  customer_id: string | null
+  conversation_id: string | null
+  email: string | null
+  phone: string | null
+  qualification_reason: string | null
+}
   id: string
   name: string | null
   source: string | null

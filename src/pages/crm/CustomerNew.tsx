@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { supabase } from "@/lib/supabaseClient"
 import { useCurrentBusiness } from "@/hooks/use-current-business"
 import { useLanguage } from "@/components/providers/language-provider"
+import { CrmGettingStarted } from "@/components/crm/crm-getting-started"
 
 export default function NewCustomerPage() {
   const navigate = useNavigate()
@@ -158,6 +159,34 @@ export default function NewCustomerPage() {
             </Link>
           </Button>
         }
+      />
+
+      <CrmGettingStarted
+        titleEs="¿Cómo agregar un Cliente?"
+        titleEn="How to add a Customer?"
+        storageKey="crm-tips-customer-new"
+        steps={[
+          {
+            emoji: "📝",
+            textEs: "Completa el nombre completo en 'Información de Contacto'.",
+            textEn: "Fill in the full name under 'Contact Information'.",
+          },
+          {
+            emoji: "📱",
+            textEs: "Agrega teléfono y email (opcionales pero recomendados).",
+            textEn: "Add phone and email (optional but recommended).",
+          },
+          {
+            emoji: "🚗",
+            textEs: "Registra el vehículo principal con marca, modelo y placa.",
+            textEn: "Register the main vehicle with brand, model, and plate.",
+          },
+          {
+            emoji: "🏷️",
+            textEs: "Usa etiquetas (VIP, recurrente) para organizarlos mejor.",
+            textEn: "Use tags (VIP, recurring) to organize them better.",
+          },
+        ]}
       />
 
       <Card className="shadow-lg shadow-black/5 border-0 bg-card overflow-hidden">
