@@ -123,7 +123,7 @@ export default function CrmLayout() {
           </div>
         </div>
       </header>
-      <div className="mx-auto flex w-full max-w-6xl flex-1 gap-6 px-6 py-10">
+      <div className="mx-auto flex w-full max-w-6xl flex-1 gap-4 px-3 py-6 sm:gap-6 sm:px-6 sm:py-10">
         <aside className={cn(
           "sticky top-20 hidden h-[calc(100vh-120px)] flex-none overflow-hidden rounded-2xl border border-emerald-200/50 bg-card/50 backdrop-blur-sm shadow-xl shadow-emerald-900/5 md:block transition-all duration-300",
           sidebarCollapsed ? "w-20" : "w-64"
@@ -135,7 +135,7 @@ export default function CrmLayout() {
             />
           </div>
         </aside>
-        <main className="flex-1 space-y-8">
+        <main className="flex-1 space-y-6 sm:space-y-8 min-w-0">
           <BusinessGate>
             <Outlet />
           </BusinessGate>

@@ -306,8 +306,8 @@ export default function Docs() {
         onCtaClick={() => setDrawerOpen("invoice")}
       />
       {/* Tabs */}
-      <div className="flex items-center justify-between border-b">
-        <div className="flex gap-1">
+      <div className="flex flex-col gap-2 border-b sm:flex-row sm:items-center sm:justify-between overflow-x-auto">
+        <div className="flex gap-1 min-w-0">
           {docTabs.map((tab) => (
             <button
               key={tab.key}

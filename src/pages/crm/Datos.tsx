@@ -382,8 +382,8 @@ export default function Datos() {
         onCtaClick={() => setDrawerOpen("customer")}
       />
       {/* Tabs + Stats link */}
-      <div className="flex items-center justify-between border-b">
-        <div className="flex gap-1">
+      <div className="flex items-center justify-between border-b overflow-x-auto">
+        <div className="flex gap-1 min-w-0">
           {tabs.map((tab) => (
             <button
               key={tab.key}
