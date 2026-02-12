@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
+import { CrmGettingStarted } from "@/components/crm/crm-getting-started";
 import { useCurrentBusiness } from "@/hooks/use-current-business";
 import { useLanguage } from "@/components/providers/language-provider";
 import { supabase } from "@/integrations/supabase/client";
@@ -165,6 +166,17 @@ export default function Metricas() {
 
   return (
     <div className="space-y-6">
+      <CrmGettingStarted
+        titleEs="¿Cómo usar Métricas?"
+        titleEn="How to use Metrics?"
+        storageKey="crm-tips-metricas"
+        steps={[
+          { emoji: "1️⃣", textEs: "Selecciona la vista: Órdenes, Finanzas o Trabajadores.", textEn: "Select the view: Orders, Financial or Workers." },
+          { emoji: "2️⃣", textEs: "Usa las flechas para navegar entre meses y comparar períodos.", textEn: "Use the arrows to navigate between months and compare periods." },
+          { emoji: "3️⃣", textEs: "Las métricas se calculan automáticamente desde tus datos reales.", textEn: "Metrics are calculated automatically from your real data." },
+          { emoji: "💡", textEs: "Crea órdenes, facturas y completa trabajos para ver tus métricas crecer.", textEn: "Create orders, invoices and complete jobs to see your metrics grow." },
+        ]}
+      />
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-foreground">{isEs ? "Metricas" : "Metrics"}</h1>

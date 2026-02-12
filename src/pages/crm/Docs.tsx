@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { CrmGettingStarted } from "@/components/crm/crm-getting-started";
 import { useCurrentBusiness } from "@/hooks/use-current-business";
 import { useLanguage } from "@/components/providers/language-provider";
 import { supabase } from "@/integrations/supabase/client";
@@ -290,6 +291,20 @@ export default function Docs() {
 
   return (
     <div className="space-y-6">
+      <CrmGettingStarted
+        titleEs="¿Cómo usar Documentos?"
+        titleEn="How to use Documents?"
+        storageKey="crm-tips-docs"
+        steps={[
+          { emoji: "1️⃣", textEs: "Crea facturas con el botón '+ Factura' para registrar cobros.", textEn: "Create invoices with the '+ Invoice' button to register payments." },
+          { emoji: "2️⃣", textEs: "Usa 'Presupuestos' para enviar propuestas antes de confirmar un trabajo.", textEn: "Use 'Estimates' to send proposals before confirming a job." },
+          { emoji: "3️⃣", textEs: "Los albaranes y recepciones complementan tu flujo de documentos.", textEn: "Delivery notes and receptions complement your document flow." },
+          { emoji: "💡", textEs: "Vincula facturas a órdenes y clientes para un seguimiento completo.", textEn: "Link invoices to orders and customers for complete tracking." },
+        ]}
+        ctaLabelEs="+ Factura"
+        ctaLabelEn="+ Invoice"
+        onCtaClick={() => setDrawerOpen("invoice")}
+      />
       {/* Tabs */}
       <div className="flex items-center justify-between border-b">
         <div className="flex gap-1">

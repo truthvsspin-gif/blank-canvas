@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { CrmGettingStarted } from "@/components/crm/crm-getting-started";
 import { Link } from "react-router-dom";
 import { ClipboardList, Loader2, Search, User } from "lucide-react";
 
@@ -231,6 +232,17 @@ export default function WorkOrdersPage() {
 
   return (
     <div className="space-y-6">
+      <CrmGettingStarted
+        titleEs="¿Cómo usar Órdenes de Trabajo?"
+        titleEn="How to use Work Orders?"
+        storageKey="crm-tips-work-orders"
+        steps={[
+          { emoji: "1️⃣", textEs: "Las órdenes se crean automáticamente al confirmar una reserva.", textEn: "Work orders are created automatically when a booking is confirmed." },
+          { emoji: "2️⃣", textEs: "Arrastra las órdenes entre columnas: Pendiente → En curso → Completada.", textEn: "Move orders between columns: Pending → In Progress → Completed." },
+          { emoji: "3️⃣", textEs: "Usa los filtros de tiempo (Hoy, Semana, Mes) para enfocarte en lo urgente.", textEn: "Use time filters (Today, Week, Month) to focus on what's urgent." },
+          { emoji: "💡", textEs: "Haz click en '+ Orden de trabajo' o crea una reserva para generar una nueva.", textEn: "Click '+ Work Order' or create a booking to generate a new one." },
+        ]}
+      />
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-foreground">{copy.title}</h1>

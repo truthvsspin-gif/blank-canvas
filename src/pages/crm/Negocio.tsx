@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { CrmGettingStarted } from "@/components/crm/crm-getting-started";
 import { BarChart3, ImagePlus, Loader2, Plus, Save, Settings, Trash2, X } from "lucide-react";
 
 import { useCurrentBusiness } from "@/hooks/use-current-business";
@@ -382,6 +383,17 @@ export default function Negocio() {
 
   return (
     <div className="space-y-6">
+      <CrmGettingStarted
+        titleEs="¿Cómo configurar tu Negocio?"
+        titleEn="How to set up your Business?"
+        storageKey="crm-tips-negocio"
+        steps={[
+          { emoji: "1️⃣", textEs: "Completa el nombre, email y teléfono de tu negocio.", textEn: "Fill in your business name, email and phone." },
+          { emoji: "2️⃣", textEs: "Configura los horarios de apertura en la pestaña 'Horarios'.", textEn: "Set your opening hours in the 'Hours' tab." },
+          { emoji: "3️⃣", textEs: "Sube imágenes y añade FAQs para que el chatbot las use.", textEn: "Upload images and add FAQs for the chatbot to use." },
+          { emoji: "💡", textEs: "La barra de progreso muestra cuánto has completado tu perfil.", textEn: "The progress bar shows how much of your profile you've completed." },
+        ]}
+      />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">{isEs ? "Tu negocio" : "Your Business"}</h1>
