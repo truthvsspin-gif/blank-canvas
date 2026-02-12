@@ -275,7 +275,7 @@ export default function Pagos() {
                   depositPct: Number(event.target.value),
                 }))
               }
-              className="w-full max-w-xs rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="input-field max-w-xs"
             />
           </div>
           <div className="grid gap-3 sm:grid-cols-3">

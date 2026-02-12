@@ -573,21 +573,6 @@ export default function Datos() {
         </div>
       )}
 
-      {/* Inline style for input fields */}
-      <style>{`
-        .input-field {
-          width: 100%;
-          border-radius: 0.5rem;
-          border: 1px solid hsl(var(--border));
-          background: hsl(var(--background));
-          padding: 0.5rem 0.75rem;
-          font-size: 0.875rem;
-        }
-        .input-field:focus {
-          outline: none;
-          box-shadow: 0 0 0 2px hsl(142.1 76.2% 36.3% / 0.3);
-        }
-      `}</style>
     </div>
   );
 }

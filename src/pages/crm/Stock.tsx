@@ -29,6 +29,7 @@ export default function Stock() {
   const isEs = lang === "es";
   const [activeTab, setActiveTab] = useState<StockTab>("inventory");
   const [drawer, setDrawer] = useState<DrawerType>(null);
+  const [statsOpen, setStatsOpen] = useState(false);
 
   const [items, setItems] = useState<any[]>([]);
   const [purchases, setPurchases] = useState<any[]>([]);
@@ -137,6 +138,34 @@ export default function Stock() {
       })),
     [workOrders, isEs]
   );
+
+  const stockSummary = useMemo(() => {
+    const totalItems = items.length;
+    const lowStock = items.filter((row) => Number(row.available_qty || 0) <= Number(row.min_qty || 0)).length;
+    const purchasesTotal = purchases.reduce((acc, row) => acc + Number(row.total || 0), 0);
+    const fixedTotal = fixedCosts.reduce((acc, row) => acc + Number(row.total || 0), 0);
+    const salesTotal = salesRows.reduce((acc, row) => acc + Number(row.total || 0), 0);
+    const taxTotal = salesRows.reduce((acc, row) => acc + Number(row.tax || 0), 0);
+    const margin = salesTotal - purchasesTotal - fixedTotal;
+    const supplierRows = suppliers.map((row) => ({
+      id: row.id as string,
+      name: row.name as string,
+      spend: supplierSpend.get(row.id) || 0,
+    }));
+    const topSuppliers = supplierRows.sort((a, b) => b.spend - a.spend).slice(0, 5);
+    return {
+      totalItems,
+      lowStock,
+      purchasesTotal,
+      fixedTotal,
+      salesTotal,
+      taxTotal,
+      margin,
+      supplierCount: suppliers.length,
+      consumptionCount: consumptionRows.length,
+      topSuppliers,
+    };
+  }, [items, purchases, fixedCosts, salesRows, suppliers, supplierSpend, consumptionRows]);
 
   const createStock = async () => {
     if (!businessId || !stockForm.name.trim()) return;
@@ -273,7 +302,11 @@ export default function Stock() {
             </button>
           ))}
         </div>
-        <button className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+        <button
+          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          onClick={() => setStatsOpen(true)}
+          type="button"
+        >
           <BarChart3 className="h-4 w-4" />
           {isEs ? "Ver estadisticas" : "View stats"}
         </button>
@@ -411,6 +444,52 @@ export default function Stock() {
         </div>
       </div>
 
+      {statsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setStatsOpen(false)} />
+          <div className="relative w-full max-w-4xl rounded-xl border bg-background shadow-2xl">
+            <div className="flex items-center justify-between border-b px-6 py-4">
+              <h2 className="text-lg font-bold">
+                {isEs ? "Estadisticas de Almacen" : "Stock Statistics"}
+              </h2>
+              <Button variant="ghost" size="icon" onClick={() => setStatsOpen(false)}>
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            <div className="space-y-6 px-6 py-5">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <Stat label={isEs ? "Items inventario" : "Inventory items"} value={String(stockSummary.totalItems)} />
+                <Stat label={isEs ? "Stock bajo" : "Low stock"} value={String(stockSummary.lowStock)} tone={stockSummary.lowStock > 0 ? "warn" : "ok"} />
+                <Stat label={isEs ? "Total compras" : "Total purchases"} value={euro(stockSummary.purchasesTotal)} />
+                <Stat label={isEs ? "Costes fijos" : "Fixed costs"} value={euro(stockSummary.fixedTotal)} />
+                <Stat label={isEs ? "Ventas" : "Sales"} value={euro(stockSummary.salesTotal)} />
+                <Stat label={isEs ? "Impuestos ventas" : "Sales tax"} value={euro(stockSummary.taxTotal)} />
+                <Stat label={isEs ? "Margen estimado" : "Estimated margin"} value={euro(stockSummary.margin)} tone={stockSummary.margin >= 0 ? "ok" : "warn"} />
+                <Stat label={isEs ? "Registros consumo" : "Consumption records"} value={String(stockSummary.consumptionCount)} />
+              </div>
+
+              <div className="rounded-lg border">
+                <div className="border-b px-4 py-3 text-sm font-semibold">
+                  {isEs ? "Top proveedores por gasto" : "Top suppliers by spend"}
+                </div>
+                <div className="max-h-56 overflow-auto">
+                  {stockSummary.topSuppliers.length === 0 ? (
+                    <p className="px-4 py-6 text-sm text-muted-foreground">{isEs ? "Sin datos de proveedores." : "No supplier data."}</p>
+                  ) : (
+                    stockSummary.topSuppliers.map((row) => (
+                      <div key={row.id} className="flex items-center justify-between border-b px-4 py-2.5 text-sm last:border-b-0">
+                        <span>{row.name}</span>
+                        <span className="font-medium">{euro(row.spend)}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {drawer && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div className="absolute inset-0 bg-black/30" onClick={() => setDrawer(null)} />
@@ -440,7 +519,7 @@ export default function Stock() {
                   <div>
                     <label className="text-sm font-medium">{isEs ? "Proveedor" : "Supplier"}</label>
                     <select
-                      className="input mt-1.5"
+                      className="input-field mt-1.5"
                       value={purchaseForm.supplier_id}
                       onChange={(event) => setPurchaseForm((p) => ({ ...p, supplier_id: event.target.value }))}
                     >
@@ -467,7 +546,7 @@ export default function Stock() {
                   <Input type="date" label={isEs ? "Fin" : "End"} value={fixedForm.end_date} onChange={(v) => setFixedForm((p) => ({ ...p, end_date: v }))} />
                   <div>
                     <label className="text-sm font-medium">{isEs ? "Recurrencia" : "Recurrence"}</label>
-                    <select className="input mt-1.5" value={fixedForm.recurrence} onChange={(event) => setFixedForm((p) => ({ ...p, recurrence: event.target.value }))}>
+                    <select className="input-field mt-1.5" value={fixedForm.recurrence} onChange={(event) => setFixedForm((p) => ({ ...p, recurrence: event.target.value }))}>
                       <option value="monthly">{isEs ? "Mensual" : "Monthly"}</option>
                       <option value="quarterly">{isEs ? "Trimestral" : "Quarterly"}</option>
                       <option value="yearly">{isEs ? "Anual" : "Yearly"}</option>
@@ -501,20 +580,6 @@ export default function Stock() {
         </div>
       )}
 
-      <style>{`
-        .input {
-          width: 100%;
-          border-radius: 0.5rem;
-          border: 1px solid hsl(var(--border));
-          background: hsl(var(--background));
-          padding: 0.5rem 0.75rem;
-          font-size: 0.875rem;
-        }
-        .input:focus {
-          outline: none;
-          box-shadow: 0 0 0 2px hsl(142.1 76.2% 36.3% / 0.3);
-        }
-      `}</style>
     </div>
   );
 }
@@ -576,6 +641,25 @@ function Table({
   );
 }
 
+function Stat({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string;
+  tone?: "neutral" | "ok" | "warn";
+}) {
+  const toneClass =
+    tone === "ok" ? "text-emerald-600" : tone === "warn" ? "text-amber-600" : "text-foreground";
+  return (
+    <div className="rounded-lg border bg-card p-4">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className={cn("mt-1 text-xl font-semibold", toneClass)}>{value}</p>
+    </div>
+  );
+}
+
 function Input({
   label,
   required,
@@ -594,7 +678,7 @@ function Input({
       <label className="text-sm font-medium">
         {label} {required && <span className="text-red-500">*</span>}
       </label>
-      <input className="input mt-1.5" type={type} value={value} onChange={(event) => onChange(event.target.value)} />
+      <input className="input-field mt-1.5" type={type} value={value} onChange={(event) => onChange(event.target.value)} />
     </div>
   );
 }

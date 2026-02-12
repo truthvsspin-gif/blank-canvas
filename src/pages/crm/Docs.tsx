@@ -349,18 +349,18 @@ export default function Docs() {
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">{isEs ? "Número de documento" : "Document number"}</label>
-                <input type="text" value={form.doc_number} onChange={(e) => setForm({ ...form, doc_number: e.target.value })} className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30" />
+                <input type="text" value={form.doc_number} onChange={(e) => setForm({ ...form, doc_number: e.target.value })} className="input-field" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">{isEs ? "Cliente" : "Customer"}</label>
-                <select value={form.customer_id} onChange={(e) => setForm({ ...form, customer_id: e.target.value })} className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30">
+                <select value={form.customer_id} onChange={(e) => setForm({ ...form, customer_id: e.target.value })} className="input-field">
                   <option value="">{isEs ? "Seleccionar..." : "Select..."}</option>
                   {customers.map((c) => <option key={c.id} value={c.id}>{c.full_name}</option>)}
                 </select>
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">{isEs ? "Orden asociada" : "Associated order"}</label>
-                <select value={form.order_id} onChange={(e) => setForm({ ...form, order_id: e.target.value })} className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30">
+                <select value={form.order_id} onChange={(e) => setForm({ ...form, order_id: e.target.value })} className="input-field">
                   <option value="">{isEs ? "Ninguna" : "None"}</option>
                   {orders.map((o) => <option key={o.id} value={o.id}>{o.service_name} ({o.id.slice(0, 8)})</option>)}
                 </select>
@@ -368,16 +368,16 @@ export default function Docs() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium">Total (€)</label>
-                  <input type="number" step="0.01" value={form.total} onChange={(e) => setForm({ ...form, total: e.target.value })} className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30" />
+                  <input type="number" step="0.01" value={form.total} onChange={(e) => setForm({ ...form, total: e.target.value })} className="input-field" />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium">{isEs ? "Impuestos (€)" : "Taxes (€)"}</label>
-                  <input type="number" step="0.01" value={form.taxes} onChange={(e) => setForm({ ...form, taxes: e.target.value })} className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30" />
+                  <input type="number" step="0.01" value={form.taxes} onChange={(e) => setForm({ ...form, taxes: e.target.value })} className="input-field" />
                 </div>
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">{isEs ? "Notas" : "Notes"}</label>
-                <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 resize-none" />
+                <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} className="input-field resize-none" />
               </div>
             </div>
             <div className="border-t px-6 py-4">

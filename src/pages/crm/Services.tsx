@@ -468,7 +468,7 @@ export default function ServicesPage() {
                 <>
                   <Field label={isEs ? "Nombre" : "Name"}>
                     <input
-                      className="input"
+                      className="input-field"
                       value={serviceForm.name}
                       onChange={(event) => setServiceForm((prev) => ({ ...prev, name: event.target.value }))}
                     />
@@ -476,7 +476,7 @@ export default function ServicesPage() {
                   <Field label={isEs ? "Descripcion" : "Description"}>
                     <textarea
                       rows={3}
-                      className="input resize-none"
+                      className="input-field resize-none"
                       value={serviceForm.description}
                       onChange={(event) => setServiceForm((prev) => ({ ...prev, description: event.target.value }))}
                     />
@@ -485,7 +485,7 @@ export default function ServicesPage() {
                     <Field label={isEs ? "Precio base" : "Base price"}>
                       <input
                         type="number"
-                        className="input"
+                        className="input-field"
                         value={serviceForm.base_price}
                         onChange={(event) => setServiceForm((prev) => ({ ...prev, base_price: event.target.value }))}
                       />
@@ -493,7 +493,7 @@ export default function ServicesPage() {
                     <Field label={isEs ? "Duracion (min)" : "Duration (min)"}>
                       <input
                         type="number"
-                        className="input"
+                        className="input-field"
                         value={serviceForm.duration_minutes}
                         onChange={(event) => setServiceForm((prev) => ({ ...prev, duration_minutes: event.target.value }))}
                       />
@@ -513,10 +513,10 @@ export default function ServicesPage() {
               {activeTab === "variants" && (
                 <>
                   <Field label={isEs ? "Nombre" : "Name"}>
-                    <input className="input" value={variantForm.name} onChange={(event) => setVariantForm((prev) => ({ ...prev, name: event.target.value }))} />
+                    <input className="input-field" value={variantForm.name} onChange={(event) => setVariantForm((prev) => ({ ...prev, name: event.target.value }))} />
                   </Field>
                   <Field label={isEs ? "Descripcion" : "Description"}>
-                    <textarea rows={3} className="input resize-none" value={variantForm.description} onChange={(event) => setVariantForm((prev) => ({ ...prev, description: event.target.value }))} />
+                    <textarea rows={3} className="input-field resize-none" value={variantForm.description} onChange={(event) => setVariantForm((prev) => ({ ...prev, description: event.target.value }))} />
                   </Field>
                   <label className="flex items-center gap-2 text-sm">
                     <input type="checkbox" checked={variantForm.showInGuide} onChange={(event) => setVariantForm((prev) => ({ ...prev, showInGuide: event.target.checked }))} />
@@ -532,13 +532,13 @@ export default function ServicesPage() {
               {activeTab === "surcharges" && (
                 <>
                   <Field label={isEs ? "Nombre" : "Name"}>
-                    <input className="input" value={surchargeForm.name} onChange={(event) => setSurchargeForm((prev) => ({ ...prev, name: event.target.value }))} />
+                    <input className="input-field" value={surchargeForm.name} onChange={(event) => setSurchargeForm((prev) => ({ ...prev, name: event.target.value }))} />
                   </Field>
                   <Field label={isEs ? "Precio" : "Price"}>
-                    <input type="number" className="input" value={surchargeForm.price} onChange={(event) => setSurchargeForm((prev) => ({ ...prev, price: event.target.value }))} />
+                    <input type="number" className="input-field" value={surchargeForm.price} onChange={(event) => setSurchargeForm((prev) => ({ ...prev, price: event.target.value }))} />
                   </Field>
                   <Field label={isEs ? "Servicios" : "Services"}>
-                    <input className="input" value={surchargeForm.services} onChange={(event) => setSurchargeForm((prev) => ({ ...prev, services: event.target.value }))} />
+                    <input className="input-field" value={surchargeForm.services} onChange={(event) => setSurchargeForm((prev) => ({ ...prev, services: event.target.value }))} />
                   </Field>
                 </>
               )}
@@ -546,22 +546,22 @@ export default function ServicesPage() {
               {activeTab === "discounts" && (
                 <>
                   <Field label={isEs ? "Codigo" : "Code"}>
-                    <input className="input" value={discountForm.code} onChange={(event) => setDiscountForm((prev) => ({ ...prev, code: event.target.value }))} />
+                    <input className="input-field" value={discountForm.code} onChange={(event) => setDiscountForm((prev) => ({ ...prev, code: event.target.value }))} />
                   </Field>
                   <Field label={isEs ? "Descuento (%)" : "Discount (%)"}>
-                    <input type="number" className="input" value={discountForm.discountPct} onChange={(event) => setDiscountForm((prev) => ({ ...prev, discountPct: event.target.value }))} />
+                    <input type="number" className="input-field" value={discountForm.discountPct} onChange={(event) => setDiscountForm((prev) => ({ ...prev, discountPct: event.target.value }))} />
                   </Field>
                   <Field label={isEs ? "Validez" : "Validity"}>
-                    <input className="input" value={discountForm.validity} onChange={(event) => setDiscountForm((prev) => ({ ...prev, validity: event.target.value }))} />
+                    <input className="input-field" value={discountForm.validity} onChange={(event) => setDiscountForm((prev) => ({ ...prev, validity: event.target.value }))} />
                   </Field>
                   <Field label={isEs ? "Estado" : "Status"}>
-                    <select className="input" value={discountForm.status} onChange={(event) => setDiscountForm((prev) => ({ ...prev, status: event.target.value as "active" | "inactive" }))}>
+                    <select className="input-field" value={discountForm.status} onChange={(event) => setDiscountForm((prev) => ({ ...prev, status: event.target.value as "active" | "inactive" }))}>
                       <option value="active">{isEs ? "Activo" : "Active"}</option>
                       <option value="inactive">{isEs ? "Inactivo" : "Inactive"}</option>
                     </select>
                   </Field>
                   <Field label={isEs ? "Servicios" : "Services"}>
-                    <input className="input" value={discountForm.services} onChange={(event) => setDiscountForm((prev) => ({ ...prev, services: event.target.value }))} />
+                    <input className="input-field" value={discountForm.services} onChange={(event) => setDiscountForm((prev) => ({ ...prev, services: event.target.value }))} />
                   </Field>
                 </>
               )}
@@ -578,20 +578,6 @@ export default function ServicesPage() {
         </div>
       )}
 
-      <style>{`
-        .input {
-          width: 100%;
-          border-radius: 0.5rem;
-          border: 1px solid hsl(var(--border));
-          background: hsl(var(--background));
-          padding: 0.5rem 0.75rem;
-          font-size: 0.875rem;
-        }
-        .input:focus {
-          outline: none;
-          box-shadow: 0 0 0 2px hsl(142.1 76.2% 36.3% / 0.3);
-        }
-      `}</style>
     </div>
   );
 }
@@ -604,3 +590,4 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
     </div>
   );
 }
+

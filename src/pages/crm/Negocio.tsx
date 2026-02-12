@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { BarChart3, Loader2, Plus, Save, Settings, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { BarChart3, ImagePlus, Loader2, Plus, Save, Settings, Trash2, X } from "lucide-react";
 
 import { useCurrentBusiness } from "@/hooks/use-current-business";
 import { useLanguage } from "@/components/providers/language-provider";
@@ -46,6 +46,16 @@ type NegocioSettings = {
     logoUrl: string;
     coverUrl: string;
   };
+};
+
+type BusinessStats = {
+  customersTotal: number;
+  bookingsThisMonth: number;
+  confirmedThisMonth: number;
+  workOrdersCompletedThisMonth: number;
+  imagesCount: number;
+  faqsCount: number;
+  openDays: number;
 };
 
 const defaultHours: BusinessHours = {
@@ -107,6 +117,11 @@ export default function Negocio() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [statsOpen, setStatsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -116,6 +131,16 @@ export default function Negocio() {
   });
   const [settings, setSettings] = useState<NegocioSettings>(defaultSettings);
   const [newImageUrl, setNewImageUrl] = useState("");
+  const [stats, setStats] = useState<BusinessStats>({
+    customersTotal: 0,
+    bookingsThisMonth: 0,
+    confirmedThisMonth: 0,
+    workOrdersCompletedThisMonth: 0,
+    imagesCount: 0,
+    faqsCount: 0,
+    openDays: 0,
+  });
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -185,6 +210,52 @@ export default function Negocio() {
     load();
   }, [businessId]);
 
+  useEffect(() => {
+    if (!businessId || !statsOpen) return;
+    const loadStats = async () => {
+      setStatsLoading(true);
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
+
+      const [customersRes, bookingsRes, confirmedRes, completedOrdersRes] = await Promise.all([
+        supabase.from("customers").select("id", { count: "exact", head: true }).eq("business_id", businessId),
+        supabase
+          .from("bookings")
+          .select("id", { count: "exact", head: true })
+          .eq("business_id", businessId)
+          .gte("created_at", monthStart)
+          .lte("created_at", monthEnd),
+        supabase
+          .from("bookings")
+          .select("id", { count: "exact", head: true })
+          .eq("business_id", businessId)
+          .in("status", ["confirmed", "in_progress", "completed"])
+          .gte("created_at", monthStart)
+          .lte("created_at", monthEnd),
+        supabase
+          .from("work_orders")
+          .select("id", { count: "exact", head: true })
+          .eq("business_id", businessId)
+          .eq("status", "completed")
+          .gte("created_at", monthStart)
+          .lte("created_at", monthEnd),
+      ]);
+
+      setStats({
+        customersTotal: customersRes.count || 0,
+        bookingsThisMonth: bookingsRes.count || 0,
+        confirmedThisMonth: confirmedRes.count || 0,
+        workOrdersCompletedThisMonth: completedOrdersRes.count || 0,
+        imagesCount: settings.images.length,
+        faqsCount: settings.faqs.length,
+        openDays: Object.values(settings.hours).filter((day) => day.enabled).length,
+      });
+      setStatsLoading(false);
+    };
+    loadStats();
+  }, [businessId, settings.faqs.length, settings.hours, settings.images.length, statsOpen]);
+
   const completion = useMemo(() => {
     let score = 0;
     if (form.name.trim()) score += 1;
@@ -239,6 +310,59 @@ export default function Negocio() {
     setNewImageUrl("");
   };
 
+  const toDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const loadImage = (src: string) =>
+    new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = reject;
+      image.src = src;
+    });
+
+  const compressImage = async (file: File) => {
+    const src = await toDataUrl(file);
+    const image = await loadImage(src);
+    const maxSize = 1280;
+    const ratio = Math.min(maxSize / image.width, maxSize / image.height, 1);
+    const width = Math.max(1, Math.round(image.width * ratio));
+    const height = Math.max(1, Math.round(image.height * ratio));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas not available");
+    ctx.drawImage(image, 0, 0, width, height);
+    return canvas.toDataURL("image/jpeg", 0.82);
+  };
+
+  const handleImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setUploadError(isEs ? "Solo se permiten archivos de imagen." : "Only image files are allowed.");
+      event.target.value = "";
+      return;
+    }
+    setUploadError(null);
+    setUploadingImage(true);
+    try {
+      const encoded = await compressImage(file);
+      setSettings((prev) => ({ ...prev, images: [...prev.images, encoded] }));
+    } catch {
+      setUploadError(isEs ? "No se pudo procesar la imagen." : "Could not process the image.");
+    } finally {
+      setUploadingImage(false);
+      event.target.value = "";
+    }
+  };
+
   const dayLabel = (key: string) => {
     const labels: Record<string, { en: string; es: string }> = {
       monday: { en: "Monday", es: "Lunes" },
@@ -269,11 +393,19 @@ export default function Negocio() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+          <button
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+            onClick={() => setStatsOpen(true)}
+            type="button"
+          >
             <BarChart3 className="h-4 w-4" />
             {isEs ? "Ver Estadisticas" : "View Stats"}
           </button>
-          <button className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+          <button
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+            onClick={() => setSettingsOpen(true)}
+            type="button"
+          >
             <Settings className="h-4 w-4" />
             {isEs ? "Ajustes" : "Settings"}
           </button>
@@ -305,11 +437,11 @@ export default function Negocio() {
           {activeTab === "business" && (
             <div className="grid gap-5 lg:grid-cols-2">
               <Field label={isEs ? "Nombre del negocio" : "Business name"}>
-                <input className="input" value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} />
+                <input className="input-field" value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} />
               </Field>
               <Field label={isEs ? "Idioma principal" : "Main language"}>
                 <select
-                  className="input"
+                  className="input-field"
                   value={form.language_preference}
                   onChange={(event) => setForm((prev) => ({ ...prev, language_preference: event.target.value }))}
                 >
@@ -321,17 +453,17 @@ export default function Negocio() {
               <Field label={isEs ? "Descripcion" : "Description"}>
                 <textarea
                   rows={3}
-                  className="input resize-none"
+                  className="input-field resize-none"
                   value={form.business_description}
                   onChange={(event) => setForm((prev) => ({ ...prev, business_description: event.target.value }))}
                 />
               </Field>
               <Field label={isEs ? "Slug de reservas" : "Booking slug"}>
-                <input className="input" value={form.domain} onChange={(event) => setForm((prev) => ({ ...prev, domain: event.target.value }))} />
+                <input className="input-field" value={form.domain} onChange={(event) => setForm((prev) => ({ ...prev, domain: event.target.value }))} />
               </Field>
               <Field label="Email">
                 <input
-                  className="input"
+                  className="input-field"
                   value={settings.contact.email}
                   onChange={(event) =>
                     setSettings((prev) => ({ ...prev, contact: { ...prev.contact, email: event.target.value } }))
@@ -340,7 +472,7 @@ export default function Negocio() {
               </Field>
               <Field label={isEs ? "Telefono" : "Phone"}>
                 <input
-                  className="input"
+                  className="input-field"
                   value={settings.contact.phone}
                   onChange={(event) =>
                     setSettings((prev) => ({ ...prev, contact: { ...prev.contact, phone: event.target.value } }))
@@ -349,7 +481,7 @@ export default function Negocio() {
               </Field>
               <Field label={isEs ? "Moneda" : "Currency"}>
                 <select
-                  className="input"
+                  className="input-field"
                   value={settings.contact.currency}
                   onChange={(event) =>
                     setSettings((prev) => ({ ...prev, contact: { ...prev.contact, currency: event.target.value } }))
@@ -362,7 +494,7 @@ export default function Negocio() {
               </Field>
               <Field label={isEs ? "Zona horaria" : "Timezone"}>
                 <input
-                  className="input"
+                  className="input-field"
                   value={settings.contact.timezone}
                   onChange={(event) =>
                     setSettings((prev) => ({ ...prev, contact: { ...prev.contact, timezone: event.target.value } }))
@@ -371,7 +503,7 @@ export default function Negocio() {
               </Field>
               <Field label={isEs ? "Direccion" : "Address"}>
                 <input
-                  className="input"
+                  className="input-field"
                   value={settings.contact.address}
                   onChange={(event) =>
                     setSettings((prev) => ({ ...prev, contact: { ...prev.contact, address: event.target.value } }))
@@ -383,7 +515,7 @@ export default function Negocio() {
                 {(["tiktok", "instagram", "facebook", "youtube", "web"] as const).map((key) => (
                   <input
                     key={key}
-                    className="input"
+                    className="input-field"
                     placeholder={key}
                     value={settings.socials[key]}
                     onChange={(event) =>
@@ -417,7 +549,7 @@ export default function Negocio() {
                   </label>
                   <input
                     type="time"
-                    className="input"
+                    className="input-field"
                     value={settings.hours[day].open}
                     disabled={!settings.hours[day].enabled}
                     onChange={(event) =>
@@ -432,7 +564,7 @@ export default function Negocio() {
                   />
                   <input
                     type="time"
-                    className="input"
+                    className="input-field"
                     value={settings.hours[day].close}
                     disabled={!settings.hours[day].enabled}
                     onChange={(event) =>
@@ -478,9 +610,9 @@ export default function Negocio() {
 
           {activeTab === "images" && (
             <div className="space-y-3">
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <input
-                  className="input flex-1"
+                  className="input-field flex-1 min-w-[220px]"
                   placeholder="https://..."
                   value={newImageUrl}
                   onChange={(event) => setNewImageUrl(event.target.value)}
@@ -489,14 +621,30 @@ export default function Negocio() {
                   <Plus className="mr-1 h-4 w-4" />
                   {isEs ? "Agregar" : "Add"}
                 </Button>
+                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                <Button
+                  onClick={() => fileInputRef.current?.click()}
+                  size="sm"
+                  variant="outline"
+                  disabled={uploadingImage}
+                  className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                >
+                  {uploadingImage ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <ImagePlus className="mr-1 h-4 w-4" />}
+                  {isEs ? "Subir imagen" : "Upload image"}
+                </Button>
               </div>
+              {uploadError && <p className="text-sm text-destructive">{uploadError}</p>}
               {settings.images.length === 0 ? (
                 <p className="text-sm text-muted-foreground">{isEs ? "Sin imagenes." : "No images yet."}</p>
               ) : (
-                <div className="space-y-2">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {settings.images.map((url, idx) => (
-                    <div key={`${url}-${idx}`} className="flex items-center justify-between rounded-lg border p-2 text-sm">
-                      <span className="truncate">{url}</span>
+                    <div key={`${url}-${idx}`} className="rounded-lg border p-2 text-sm">
+                      <div className="mb-2 aspect-video w-full overflow-hidden rounded bg-muted">
+                        <img src={url} alt={`business-${idx + 1}`} className="h-full w-full object-cover" />
+                      </div>
+                      <div className="mb-2 truncate text-xs text-muted-foreground">{url.startsWith("data:image") ? (isEs ? "Imagen subida" : "Uploaded image") : url}</div>
+                      <div className="flex justify-end">
                       <Button
                         variant="ghost"
                         size="icon"
@@ -509,6 +657,7 @@ export default function Negocio() {
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -522,7 +671,7 @@ export default function Negocio() {
               {settings.faqs.map((faq, idx) => (
                 <div key={idx} className="space-y-2 rounded-lg border p-3">
                   <input
-                    className="input"
+                    className="input-field"
                     placeholder={isEs ? "Pregunta" : "Question"}
                     value={faq.q}
                     onChange={(event) =>
@@ -534,7 +683,7 @@ export default function Negocio() {
                   />
                   <textarea
                     rows={3}
-                    className="input resize-none"
+                    className="input-field resize-none"
                     placeholder={isEs ? "Respuesta" : "Answer"}
                     value={faq.a}
                     onChange={(event) =>
@@ -587,7 +736,7 @@ export default function Negocio() {
                     className="h-10 w-12 rounded border p-1"
                   />
                   <input
-                    className="input"
+                    className="input-field"
                     value={settings.theme.accentColor}
                     onChange={(event) =>
                       setSettings((prev) => ({ ...prev, theme: { ...prev.theme, accentColor: event.target.value } }))
@@ -597,7 +746,7 @@ export default function Negocio() {
               </Field>
               <Field label={isEs ? "Logo URL" : "Logo URL"}>
                 <input
-                  className="input"
+                  className="input-field"
                   value={settings.theme.logoUrl}
                   onChange={(event) =>
                     setSettings((prev) => ({ ...prev, theme: { ...prev.theme, logoUrl: event.target.value } }))
@@ -606,7 +755,7 @@ export default function Negocio() {
               </Field>
               <Field label={isEs ? "Portada URL" : "Cover URL"}>
                 <input
-                  className="input"
+                  className="input-field"
                   value={settings.theme.coverUrl}
                   onChange={(event) =>
                     setSettings((prev) => ({ ...prev, theme: { ...prev.theme, coverUrl: event.target.value } }))
@@ -625,20 +774,126 @@ export default function Negocio() {
         {isEs ? "Guardar" : "Save"}
       </Button>
 
-      <style>{`
-        .input {
-          width: 100%;
-          border-radius: 0.5rem;
-          border: 1px solid hsl(var(--border));
-          background: hsl(var(--background));
-          padding: 0.5rem 0.75rem;
-          font-size: 0.875rem;
-        }
-        .input:focus {
-          outline: none;
-          box-shadow: 0 0 0 2px hsl(142.1 76.2% 36.3% / 0.3);
-        }
-      `}</style>
+      {statsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setStatsOpen(false)} />
+          <div className="relative w-full max-w-3xl rounded-xl border bg-background shadow-2xl">
+            <div className="flex items-center justify-between border-b px-6 py-4">
+              <h2 className="text-lg font-bold">{isEs ? "Estadisticas del negocio" : "Business stats"}</h2>
+              <Button variant="ghost" size="icon" onClick={() => setStatsOpen(false)}>
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            <div className="p-6">
+              {statsLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {isEs ? "Cargando..." : "Loading..."}
+                </div>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <StatsCard label={isEs ? "Clientes totales" : "Total customers"} value={stats.customersTotal} />
+                  <StatsCard label={isEs ? "Reservas este mes" : "Bookings this month"} value={stats.bookingsThisMonth} />
+                  <StatsCard label={isEs ? "Confirmadas este mes" : "Confirmed this month"} value={stats.confirmedThisMonth} />
+                  <StatsCard label={isEs ? "Ordenes completadas" : "Completed work orders"} value={stats.workOrdersCompletedThisMonth} />
+                  <StatsCard label={isEs ? "Imagenes" : "Images"} value={stats.imagesCount} />
+                  <StatsCard label={isEs ? "FAQs" : "FAQs"} value={stats.faqsCount} />
+                  <StatsCard label={isEs ? "Dias abiertos/semana" : "Open days/week"} value={stats.openDays} />
+                  <StatsCard label={isEs ? "Completitud perfil" : "Profile completion"} value={`${completion}%`} />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {settingsOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setSettingsOpen(false)} />
+          <div className="relative h-full w-full max-w-md overflow-y-auto border-l bg-background shadow-2xl">
+            <div className="sticky top-0 flex items-center justify-between border-b bg-background px-6 py-4">
+              <h2 className="text-lg font-bold">{isEs ? "Ajustes del negocio" : "Business settings"}</h2>
+              <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(false)}>
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            <div className="space-y-5 p-6">
+              <div className="space-y-2">
+                <p className="text-sm font-medium">{isEs ? "Ir a seccion" : "Go to section"}</p>
+                <div className="flex flex-wrap gap-2">
+                  {tabs.map((tab) => (
+                    <Button
+                      key={tab.key}
+                      size="sm"
+                      variant={activeTab === tab.key ? "default" : "outline"}
+                      onClick={() => {
+                        setActiveTab(tab.key);
+                        setSettingsOpen(false);
+                      }}
+                    >
+                      {tab.label[lang]}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <Field label={isEs ? "Idioma principal" : "Main language"}>
+                <select
+                  className="input-field"
+                  value={form.language_preference}
+                  onChange={(event) => setForm((prev) => ({ ...prev, language_preference: event.target.value }))}
+                >
+                  <option value="">{isEs ? "Seleccionar..." : "Select..."}</option>
+                  <option value="es">Espanol</option>
+                  <option value="en">English</option>
+                </select>
+              </Field>
+              <Field label={isEs ? "Moneda" : "Currency"}>
+                <select
+                  className="input-field"
+                  value={settings.contact.currency}
+                  onChange={(event) =>
+                    setSettings((prev) => ({ ...prev, contact: { ...prev.contact, currency: event.target.value } }))
+                  }
+                >
+                  <option value="EUR">EUR</option>
+                  <option value="USD">USD</option>
+                  <option value="GBP">GBP</option>
+                </select>
+              </Field>
+              <Field label={isEs ? "Zona horaria" : "Timezone"}>
+                <input
+                  className="input-field"
+                  value={settings.contact.timezone}
+                  onChange={(event) =>
+                    setSettings((prev) => ({ ...prev, contact: { ...prev.contact, timezone: event.target.value } }))
+                  }
+                />
+              </Field>
+              <ToggleRow
+                label={isEs ? "Recordatorios automaticos" : "Automated reminders"}
+                checked={settings.extras.automatedReminders}
+                onChange={(checked) =>
+                  setSettings((prev) => ({ ...prev, extras: { ...prev.extras, automatedReminders: checked } }))
+                }
+              />
+            </div>
+            <div className="sticky bottom-0 border-t bg-background p-6">
+              <Button
+                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white"
+                onClick={async () => {
+                  await handleSave();
+                  setSettingsOpen(false);
+                }}
+                disabled={saving || loading}
+              >
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                {isEs ? "Guardar cambios" : "Save changes"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
@@ -648,6 +903,15 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
     <div className="space-y-1.5">
       <label className="text-sm font-medium">{label}</label>
       {children}
+    </div>
+  );
+}
+
+function StatsCard({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-lg border bg-card p-4">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 text-2xl font-bold text-foreground">{value}</p>
     </div>
   );
 }
@@ -676,3 +940,4 @@ function ToggleRow({
     </label>
   );
 }
+

@@ -288,7 +288,7 @@ export default function Equipo() {
                 <input
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                  className="input-field"
                 />
               </div>
 
@@ -300,7 +300,7 @@ export default function Equipo() {
                 <input
                   value={form.phone}
                   onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                  className="input-field"
                 />
               </div>
 
@@ -333,7 +333,7 @@ export default function Equipo() {
                   type="number"
                   value={form.commission_pct}
                   onChange={(e) => setForm({ ...form, commission_pct: e.target.value })}
-                  className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                  className="input-field"
                 />
               </div>
 
@@ -350,7 +350,7 @@ export default function Equipo() {
                   <input
                     value={form.email}
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                    className="input-field"
                   />
                 </div>
 
@@ -362,7 +362,7 @@ export default function Equipo() {
                   <select
                     value={form.role_title}
                     onChange={(e) => setForm({ ...form, role_title: e.target.value })}
-                    className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                    className="input-field"
                   >
                     <option value="">{isEs ? "Selecciona..." : "Select..."}</option>
                     <option value="admin">Admin</option>
