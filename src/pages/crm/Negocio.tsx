@@ -73,7 +73,7 @@ const defaultSettings: NegocioSettings = {
   contact: {
     email: "",
     phone: "",
-    currency: "EUR",
+    currency: "USD",
     timezone: "Europe/Madrid",
     address: "",
   },
@@ -499,9 +499,12 @@ export default function Negocio() {
                     setSettings((prev) => ({ ...prev, contact: { ...prev.contact, currency: event.target.value } }))
                   }
                 >
-                  <option value="EUR">EUR</option>
-                  <option value="USD">USD</option>
-                  <option value="GBP">GBP</option>
+                  <option value="USD">USD – US Dollar</option>
+                   <option value="MXN">MXN – Peso Mexicano</option>
+                   <option value="GTQ">GTQ – Quetzal</option>
+                   <option value="NIO">NIO – Córdoba</option>
+                   <option value="EUR">EUR – Euro</option>
+                   <option value="GBP">GBP – Libra</option>
                 </select>
               </Field>
               <Field label={isEs ? "Zona horaria" : "Timezone"}>
