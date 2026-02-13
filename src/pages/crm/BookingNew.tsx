@@ -95,7 +95,11 @@ export default function NewBookingPage() {
   const [customerSearch, setCustomerSearch] = useState("")
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false)
   const [selectedVehicleId, setSelectedVehicleId] = useState("")
+  const [vehicleSearch, setVehicleSearch] = useState("")
+  const [vehicleDropdownOpen, setVehicleDropdownOpen] = useState(false)
   const [serviceNameDraft, setServiceNameDraft] = useState("")
+  const [serviceSearch, setServiceSearch] = useState("")
+  const [serviceDropdownOpen, setServiceDropdownOpen] = useState(false)
   const [priceDraft, setPriceDraft] = useState("")
   const [selectedLeadId, setSelectedLeadId] = useState("")
   const [statusDraft, setStatusDraft] = useState("requested")
@@ -367,16 +371,21 @@ export default function NewBookingPage() {
           })
           if (match) {
             setSelectedVehicleId(match.id)
+            setVehicleSearch([match.brand, match.model, match.license_plate].filter(Boolean).join(" "))
           } else if (rows.length === 1) {
             setSelectedVehicleId(rows[0].id)
+            setVehicleSearch([rows[0].brand, rows[0].model, rows[0].license_plate].filter(Boolean).join(" "))
           } else {
             setSelectedVehicleId("")
+            setVehicleSearch("")
           }
           setPendingVehicleHint(null)
         } else if (selectedVehicleId && !rows.some((vehicle) => vehicle.id === selectedVehicleId)) {
           setSelectedVehicleId("")
+          setVehicleSearch("")
         } else if (!selectedVehicleId && rows.length === 1) {
           setSelectedVehicleId(rows[0].id)
+          setVehicleSearch([rows[0].brand, rows[0].model, rows[0].license_plate].filter(Boolean).join(" "))
         }
       }
 
@@ -422,6 +431,7 @@ export default function NewBookingPage() {
 
   const handleServiceChange = (serviceName: string, options?: { forcePrice?: boolean }) => {
     setServiceNameDraft(serviceName)
+    setServiceSearch(serviceName)
     const service = services.find((s) => s.name === serviceName) || null
     if (service?.base_price != null) {
       setPriceDraft(String(service.base_price))
@@ -715,37 +725,79 @@ export default function NewBookingPage() {
                   })()}
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-2 relative">
                   <label className="text-sm font-medium text-foreground flex items-center gap-2">
                     <Car className="h-3.5 w-3.5 text-muted-foreground" />
                     {copy.vehicle}
                   </label>
-                  <select
-                    key={selectedCustomerId || "vehicle"}
-                    name="vehicle_id"
-                    value={selectedVehicleId}
-                    onChange={(event) => setSelectedVehicleId(event.target.value)}
-                    className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={!selectedCustomerId || vehiclesLoading || vehicles.length === 0}
-                  >
-                    <option value="">
-                      {!selectedCustomerId
-                        ? copy.selectCustomerFirst
-                        : vehiclesLoading
-                        ? "..."
-                        : vehicles.length === 0
-                        ? copy.vehicleNone
-                        : copy.selectVehicle}
-                    </option>
-                    {vehicles.map((vehicle) => {
-                      const label = [vehicle.brand, vehicle.model, vehicle.license_plate].filter(Boolean).join(" ")
-                      return (
-                        <option key={vehicle.id} value={vehicle.id}>
-                          {label || vehicle.id}
-                        </option>
-                      )
-                    })}
-                  </select>
+                  {!selectedCustomerId ? (
+                    <div className="w-full rounded-xl border border-input bg-muted/50 px-4 py-2.5 text-sm text-muted-foreground cursor-not-allowed">
+                      {copy.selectCustomerFirst}
+                    </div>
+                  ) : vehiclesLoading ? (
+                    <div className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-muted-foreground">...</div>
+                  ) : vehicles.length === 0 ? (
+                    <div className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-muted-foreground">
+                      {copy.vehicleNone}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                        <input
+                          type="text"
+                          placeholder={isEs ? "🔍 Buscar vehículo..." : "🔍 Search vehicle..."}
+                          value={vehicleSearch}
+                          onChange={(e) => {
+                            setVehicleSearch(e.target.value)
+                            setVehicleDropdownOpen(true)
+                            if (!e.target.value) {
+                              setSelectedVehicleId("")
+                            }
+                          }}
+                          onFocus={() => setVehicleDropdownOpen(true)}
+                          onBlur={() => setTimeout(() => setVehicleDropdownOpen(false), 150)}
+                          className="w-full rounded-xl border border-input bg-background pl-9 pr-9 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
+                        />
+                        {selectedVehicleId && (
+                          <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => { setSelectedVehicleId(""); setVehicleSearch(""); }}>
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                      {vehicleDropdownOpen && (() => {
+                        const filtered = vehicles.filter((v) => {
+                          const label = [v.brand, v.model, v.license_plate, v.color].filter(Boolean).join(" ").toLowerCase()
+                          return label.includes(vehicleSearch.toLowerCase())
+                        })
+                        return filtered.length > 0 ? (
+                          <ul className="absolute z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-input bg-background shadow-lg">
+                            {filtered.map((vehicle) => {
+                              const label = [vehicle.brand, vehicle.model, vehicle.license_plate].filter(Boolean).join(" ") || vehicle.id
+                              return (
+                                <li
+                                  key={vehicle.id}
+                                  className={cn(
+                                    "cursor-pointer px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors",
+                                    selectedVehicleId === vehicle.id && "bg-rose-50 text-rose-700 font-medium"
+                                  )}
+                                  onMouseDown={(e) => {
+                                    e.preventDefault()
+                                    setSelectedVehicleId(vehicle.id)
+                                    setVehicleSearch(label)
+                                    setVehicleDropdownOpen(false)
+                                  }}
+                                >
+                                  {label}
+                                </li>
+                              )
+                            })}
+                          </ul>
+                        ) : null
+                      })()}
+                    </>
+                  )}
+                  <input type="hidden" name="vehicle_id" value={selectedVehicleId} />
                   {vehiclesError && <span className="text-xs text-destructive">{vehiclesError}</span>}
                 </div>
               </div>
@@ -757,24 +809,61 @@ export default function NewBookingPage() {
                 {copy.serviceSection}
               </div>
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
+                <div className="space-y-2 relative">
                   <label className="text-sm font-medium text-foreground">{copy.service}</label>
-                  <select
-                    name="service_name"
-                    required
-                    value={serviceNameDraft}
-                    onChange={(event) => handleServiceChange(event.target.value)}
-                    className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
-                  >
-                    <option value="" disabled>
-                      {copy.selectService}
-                    </option>
-                    {services.map((service) => (
-                      <option key={service.id} value={service.name}>
-                        {service.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                    <input
+                      type="text"
+                      placeholder={isEs ? "🔍 Buscar servicio..." : "🔍 Search service..."}
+                      value={serviceSearch}
+                      onChange={(e) => {
+                        setServiceSearch(e.target.value)
+                        setServiceDropdownOpen(true)
+                        if (!e.target.value) {
+                          setServiceNameDraft("")
+                        }
+                      }}
+                      onFocus={() => setServiceDropdownOpen(true)}
+                      onBlur={() => setTimeout(() => setServiceDropdownOpen(false), 150)}
+                      className="w-full rounded-xl border border-input bg-background pl-9 pr-9 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
+                    />
+                    {serviceNameDraft && (
+                      <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => { setServiceNameDraft(""); setServiceSearch(""); setPriceDraft(""); }}>
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  <input type="hidden" name="service_name" value={serviceNameDraft} required />
+                  {serviceDropdownOpen && (() => {
+                    const filtered = services.filter((s) =>
+                      s.name.toLowerCase().includes(serviceSearch.toLowerCase())
+                    )
+                    return filtered.length > 0 ? (
+                      <ul className="absolute z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-input bg-background shadow-lg">
+                        {filtered.map((service) => (
+                          <li
+                            key={service.id}
+                            className={cn(
+                              "cursor-pointer px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors",
+                              serviceNameDraft === service.name && "bg-rose-50 text-rose-700 font-medium"
+                            )}
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              handleServiceChange(service.name)
+                              setServiceSearch(service.name)
+                              setServiceDropdownOpen(false)
+                            }}
+                          >
+                            <span>{service.name}</span>
+                            {service.base_price != null && (
+                              <span className="ml-2 text-xs text-muted-foreground">${service.base_price}</span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null
+                  })()}
                 </div>
 
                 <div className="space-y-2">
