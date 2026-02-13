@@ -133,7 +133,7 @@ export default function AppLayout() {
                   <Menu className="size-5" />
                 </Button>
                 {menuOpen ? (
-                  <div className="absolute right-0 mt-2 w-48 rounded-xl border bg-white p-2 shadow-lg">
+                  <div className="absolute right-0 mt-2 w-48 max-h-[70vh] overflow-y-auto rounded-xl border bg-background p-2 shadow-lg z-50">
                     <div className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm text-slate-800">
                       <span>{copy.badge}</span>
                     </div>
