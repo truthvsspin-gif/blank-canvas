@@ -1,0 +1,31 @@
+
+-- Clear all operational data (child tables first to respect FK constraints)
+DELETE FROM flyer_send_log;
+DELETE FROM inbox_messages;
+DELETE FROM inbox_threads;
+DELETE FROM follow_up_queue;
+DELETE FROM knowledge_chunks;
+DELETE FROM knowledge_sources;
+DELETE FROM notes;
+DELETE FROM crm_audit_logs;
+DELETE FROM documents;
+DELETE FROM work_orders;
+DELETE FROM bookings;
+DELETE FROM stock_purchases;
+DELETE FROM stock_items;
+DELETE FROM stock_fixed_costs;
+DELETE FROM suppliers;
+DELETE FROM vehicles;
+DELETE FROM leads;
+DELETE FROM conversations;
+DELETE FROM messages;
+DELETE FROM media_assets;
+DELETE FROM customer_memory;
+DELETE FROM services;
+DELETE FROM customers;
+DELETE FROM team_members;
+DELETE FROM usage;
+DELETE FROM usage_monthly;
+DELETE FROM business_integrations;
+DELETE FROM memberships;
+DELETE FROM businesses;
