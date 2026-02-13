@@ -850,36 +850,6 @@ export default function NewBookingPage() {
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground flex items-center gap-2">
-                    <Bot className="h-3.5 w-3.5 text-muted-foreground" />
-                    {copy.lead}
-                  </label>
-                  <select
-                    name="lead_id"
-                    value={selectedLeadId}
-                    onChange={(event) => {
-                      void handleLeadChange(event.target.value)
-                    }}
-                    className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
-                  >
-                    <option value="">{leads.length ? copy.selectLead : copy.noLeads}</option>
-                    {leads.map((lead) => (
-                      <option key={lead.id} value={lead.id}>
-                        {(lead.name || lead.id.slice(0, 8)) + (lead.stage ? ` (${lead.stage})` : "")}
-                      </option>
-                    ))}
-                  </select>
-                  {selectedLead && (
-                    <p className="text-xs text-muted-foreground">
-                      {isEs ? "Origen sugerido:" : "Suggested source:"} {selectedLead.source || "chatbot"}
-                    </p>
-                  )}
-                  {leadHydrating && (
-                    <p className="text-xs text-muted-foreground">{copy.leadSyncing}</p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">{copy.source}</label>
                   <select
                     name="source"
@@ -931,6 +901,42 @@ export default function NewBookingPage() {
                 </p>
               )}
             </div>
+
+            {/* Collapsible lead linking section */}
+            <details className="rounded-xl border border-input bg-muted/30 p-4">
+              <summary className="cursor-pointer text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <Bot className="h-4 w-4" />
+                {isEs ? "Vincular lead del chatbot (opcional)" : "Link chatbot lead (optional)"}
+              </summary>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">{copy.lead}</label>
+                  <select
+                    name="lead_id"
+                    value={selectedLeadId}
+                    onChange={(event) => {
+                      void handleLeadChange(event.target.value)
+                    }}
+                    className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
+                  >
+                    <option value="">{leads.length ? copy.selectLead : copy.noLeads}</option>
+                    {leads.map((lead) => (
+                      <option key={lead.id} value={lead.id}>
+                        {(lead.name || lead.id.slice(0, 8)) + (lead.stage ? ` (${lead.stage})` : "")}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedLead && (
+                    <p className="text-xs text-muted-foreground">
+                      {isEs ? "Origen sugerido:" : "Suggested source:"} {selectedLead.source || "chatbot"}
+                    </p>
+                  )}
+                  {leadHydrating && (
+                    <p className="text-xs text-muted-foreground">{copy.leadSyncing}</p>
+                  )}
+                </div>
+              </div>
+            </details>
 
             <div className="flex justify-end pt-4 border-t">
               <Button
