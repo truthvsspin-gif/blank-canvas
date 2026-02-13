@@ -122,27 +122,11 @@ export const appSections: AppSection[] = [
     group: "crm",
   },
   {
-    name: { en: "WhatsApp", es: "WhatsApp" },
-    href: "/crm/inbox",
-    summary: { en: "WhatsApp and Instagram conversations.", es: "Conversaciones de WhatsApp e Instagram." },
-    badge: { en: "Chat", es: "Chat" },
-    icon: MessageCircle,
-    group: "crm",
-  },
-  {
     name: { en: "Metrics", es: "Métricas" },
     href: "/crm/metricas",
     summary: { en: "Shop statistics and performance.", es: "Estadísticas y rendimiento del taller." },
     badge: { en: "KPI", es: "KPI" },
     icon: BarChart3,
-    group: "crm",
-  },
-  {
-    name: { en: "ChatbotIA", es: "ChatbotIA" },
-    href: "/crm/chatbot-ia",
-    summary: { en: "AI chatbot for customer service.", es: "Chatbot IA para atención al cliente." },
-    badge: { en: "AI", es: "IA" },
-    icon: Bot,
     group: "crm",
   },
 
