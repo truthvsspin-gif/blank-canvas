@@ -50,12 +50,9 @@ export default function Equipo() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [activities, setActivities] = useState<WorkOrderActivity[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activityDate, setActivityDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [statsOpen, setStatsOpen] = useState(false);
-  const [saveNotice, setSaveNotice] = useState<string | null>(null);
-  const [saveError, setSaveError] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -103,72 +100,18 @@ export default function Equipo() {
 
   const handleSave = async () => {
     if (!businessId || !form.name.trim()) return;
-    setSaving(true);
-    setSaveNotice(null);
-    setSaveError(null);
-
-    const normalizedEmail = form.email.trim().toLowerCase();
-    const requestedAccess = normalizedEmail.length > 0;
-    let hasAccess = false;
-
-    if (requestedAccess) {
-      const membershipRole =
-        form.role_title === "admin"
-          ? "admin"
-          : form.role_title === "manager"
-            ? "manager"
-            : "member";
-
-      const { data: inviteData, error: inviteError } = await supabase.functions.invoke("invite-team-member", {
-        body: {
-          businessId,
-          email: normalizedEmail,
-          fullName: form.name.trim(),
-          role: membershipRole,
-          redirectTo: `${window.location.origin}/login`,
-        },
-      });
-
-      if (inviteError || !inviteData?.success) {
-        setSaveError(
-          isEs
-            ? `Trabajador creado sin acceso de login. Error invitacion: ${inviteData?.error || inviteError?.message || "desconocido"}`
-            : `Worker created without login access. Invite error: ${inviteData?.error || inviteError?.message || "unknown"}`
-        );
-      } else {
-        hasAccess = true;
-        setSaveNotice(
-          inviteData.invited
-            ? (isEs ? "Invitacion enviada por email. El manager puede crear su password y entrar." : "Invite email sent. Manager can set password and log in.")
-            : (isEs ? "El usuario ya existia. Se vinculo al negocio y ya puede iniciar sesion." : "User already existed. Linked to this workspace and can log in now.")
-        );
-      }
-    }
-
-    const { error: insertError } = await supabase.from("team_members").insert({
+    await supabase.from("team_members").insert({
       business_id: businessId,
       name: form.name.trim(),
       phone: form.phone || null,
       color: form.color,
       commission_pct: form.commission_pct ? Number(form.commission_pct) : 0,
-      email: normalizedEmail || null,
+      email: form.email || null,
       role_title: form.role_title || null,
-      has_access: hasAccess,
+      has_access: !!form.email,
     });
-
-    if (insertError) {
-      setSaveError(insertError.message);
-      setSaving(false);
-      return;
-    }
-
-    if (!requestedAccess) {
-      setSaveNotice(isEs ? "Trabajador creado." : "Worker created.");
-    }
-
     setForm({ name: "", phone: "", color: "#3b82f6", commission_pct: "", email: "", role_title: "" });
     setDrawerOpen(false);
-    setSaving(false);
     fetchMembers();
   };
 
@@ -239,16 +182,6 @@ export default function Equipo() {
         <UsersRound className="h-7 w-7 text-foreground" />
         <h1 className="text-2xl font-bold text-foreground">{isEs ? "Equipo" : "Team"}</h1>
       </div>
-      {saveNotice && (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-          {saveNotice}
-        </div>
-      )}
-      {saveError && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {saveError}
-        </div>
-      )}
 
       <div className="flex items-center gap-6 border-b">
         {tabs.map((t) => (
@@ -496,8 +429,8 @@ export default function Equipo() {
               <Button variant="outline" onClick={() => setDrawerOpen(false)}>
                 {isEs ? "Cancelar" : "Cancel"}
               </Button>
-              <Button onClick={handleSave} disabled={!form.name.trim() || saving}>
-                {saving ? (isEs ? "Guardando..." : "Saving...") : (isEs ? "Guardar" : "Save")}
+              <Button onClick={handleSave} disabled={!form.name.trim()}>
+                {isEs ? "Guardar" : "Save"}
               </Button>
             </div>
           </div>
