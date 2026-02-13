@@ -47,6 +47,10 @@ export default function Datos() {
   const [loading, setLoading] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState<DrawerType>(null);
   const [saving, setSaving] = useState(false);
+  const [orderCustSearch, setOrderCustSearch] = useState("");
+  const [orderCustDropdown, setOrderCustDropdown] = useState(false);
+  const [vehicleCustSearch, setVehicleCustSearch] = useState("");
+  const [vehicleCustDropdown, setVehicleCustDropdown] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
   const [statsLoading, setStatsLoading] = useState(false);
   const [stats, setStats] = useState<DatosStats>({
@@ -190,6 +194,7 @@ export default function Datos() {
     });
     setSaving(false);
     setDrawerOpen(null);
+    setOrderCustSearch("");
     setOrderForm({ customer_id: "", vehicle_id: "", service_name: "", scheduled_at: "", notes: "" });
     fetchData();
   };
@@ -209,6 +214,7 @@ export default function Datos() {
     });
     setSaving(false);
     setDrawerOpen(null);
+    setVehicleCustSearch("");
     setVehicleForm({ customer_id: "", brand: "", model: "", license_plate: "", color: "", size: "", condition_notes: "" });
     fetchData();
   };
@@ -551,10 +557,29 @@ export default function Datos() {
               {drawerOpen === "order" && (
                 <>
                   <Field label={isEs ? "Cliente" : "Customer"}>
-                    <select value={orderForm.customer_id} onChange={(e) => setOrderForm({ ...orderForm, customer_id: e.target.value, vehicle_id: "" })} className="input-field">
-                      <option value="">{isEs ? "Seleccionar..." : "Select..."}</option>
-                      {customers.map((c) => <option key={c.id} value={c.id}>{c.full_name}</option>)}
-                    </select>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder={isEs ? "Buscar cliente..." : "Search customer..."}
+                        value={orderCustSearch}
+                        onChange={(e) => { setOrderCustSearch(e.target.value); setOrderCustDropdown(true); if (!e.target.value) setOrderForm({ ...orderForm, customer_id: "", vehicle_id: "" }); }}
+                        onFocus={() => setOrderCustDropdown(true)}
+                        onBlur={() => setTimeout(() => setOrderCustDropdown(false), 150)}
+                        className="input-field"
+                      />
+                      {orderCustDropdown && (() => {
+                        const filtered = customers.filter((c: any) => c.full_name.toLowerCase().includes(orderCustSearch.toLowerCase()));
+                        return filtered.length > 0 ? (
+                          <ul className="absolute z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border bg-background shadow-lg">
+                            {filtered.map((c: any) => (
+                              <li key={c.id} className="cursor-pointer px-4 py-2 text-sm hover:bg-muted" onMouseDown={(e) => { e.preventDefault(); setOrderForm({ ...orderForm, customer_id: c.id, vehicle_id: "" }); setOrderCustSearch(c.full_name); setOrderCustDropdown(false); }}>
+                                {c.full_name}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null;
+                      })()}
+                    </div>
                   </Field>
                   <Field label={isEs ? "Vehículo" : "Vehicle"}>
                     <select value={orderForm.vehicle_id} onChange={(e) => setOrderForm({ ...orderForm, vehicle_id: e.target.value })} className="input-field">
@@ -582,10 +607,29 @@ export default function Datos() {
               {drawerOpen === "vehicle" && (
                 <>
                   <Field label={`${isEs ? "Cliente (propietario)" : "Customer (owner)"} *`}>
-                    <select value={vehicleForm.customer_id} onChange={(e) => setVehicleForm({ ...vehicleForm, customer_id: e.target.value })} className="input-field">
-                      <option value="">{isEs ? "Seleccionar..." : "Select..."}</option>
-                      {customers.map((c) => <option key={c.id} value={c.id}>{c.full_name}</option>)}
-                    </select>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder={isEs ? "Buscar cliente..." : "Search customer..."}
+                        value={vehicleCustSearch}
+                        onChange={(e) => { setVehicleCustSearch(e.target.value); setVehicleCustDropdown(true); if (!e.target.value) setVehicleForm({ ...vehicleForm, customer_id: "" }); }}
+                        onFocus={() => setVehicleCustDropdown(true)}
+                        onBlur={() => setTimeout(() => setVehicleCustDropdown(false), 150)}
+                        className="input-field"
+                      />
+                      {vehicleCustDropdown && (() => {
+                        const filtered = customers.filter((c: any) => c.full_name.toLowerCase().includes(vehicleCustSearch.toLowerCase()));
+                        return filtered.length > 0 ? (
+                          <ul className="absolute z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border bg-background shadow-lg">
+                            {filtered.map((c: any) => (
+                              <li key={c.id} className="cursor-pointer px-4 py-2 text-sm hover:bg-muted" onMouseDown={(e) => { e.preventDefault(); setVehicleForm({ ...vehicleForm, customer_id: c.id }); setVehicleCustSearch(c.full_name); setVehicleCustDropdown(false); }}>
+                                {c.full_name}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null;
+                      })()}
+                    </div>
                   </Field>
                   <Field label={isEs ? "Matrícula / Bastidor" : "Plate / VIN"}>
                     <input type="text" value={vehicleForm.license_plate} onChange={(e) => setVehicleForm({ ...vehicleForm, license_plate: e.target.value })} className="input-field" />
