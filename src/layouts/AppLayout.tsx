@@ -158,9 +158,6 @@ export default function AppLayout() {
             </div>
           </div>
         </div>
-        <div className="mx-auto w-full max-w-6xl px-6 pb-3 md:hidden">
-          <MainNav className="w-full justify-start overflow-x-auto" />
-        </div>
       </header>
       <div className="mx-auto flex w-full max-w-6xl flex-1 gap-4 px-3 py-6 sm:gap-6 sm:px-6 sm:py-10">
         <aside className={cn(
