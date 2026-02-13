@@ -558,21 +558,27 @@ export default function Datos() {
                 <>
                   <Field label={isEs ? "Cliente" : "Customer"}>
                     <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                       <input
                         type="text"
-                        placeholder={isEs ? "Buscar cliente..." : "Search customer..."}
+                        placeholder={isEs ? "🔍 Buscar cliente por nombre..." : "🔍 Search customer by name..."}
                         value={orderCustSearch}
                         onChange={(e) => { setOrderCustSearch(e.target.value); setOrderCustDropdown(true); if (!e.target.value) setOrderForm({ ...orderForm, customer_id: "", vehicle_id: "" }); }}
                         onFocus={() => setOrderCustDropdown(true)}
                         onBlur={() => setTimeout(() => setOrderCustDropdown(false), 150)}
-                        className="input-field"
+                        className="input-field pl-9"
                       />
+                      {orderForm.customer_id && (
+                        <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => { setOrderForm({ ...orderForm, customer_id: "", vehicle_id: "" }); setOrderCustSearch(""); }}>
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
                       {orderCustDropdown && (() => {
                         const filtered = customers.filter((c: any) => c.full_name.toLowerCase().includes(orderCustSearch.toLowerCase()));
                         return filtered.length > 0 ? (
                           <ul className="absolute z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border bg-background shadow-lg">
                             {filtered.map((c: any) => (
-                              <li key={c.id} className="cursor-pointer px-4 py-2 text-sm hover:bg-muted" onMouseDown={(e) => { e.preventDefault(); setOrderForm({ ...orderForm, customer_id: c.id, vehicle_id: "" }); setOrderCustSearch(c.full_name); setOrderCustDropdown(false); }}>
+                              <li key={c.id} className={cn("cursor-pointer px-4 py-2 text-sm hover:bg-muted transition-colors", orderForm.customer_id === c.id && "bg-emerald-50 text-emerald-700 font-medium")} onMouseDown={(e) => { e.preventDefault(); setOrderForm({ ...orderForm, customer_id: c.id, vehicle_id: "" }); setOrderCustSearch(c.full_name); setOrderCustDropdown(false); }}>
                                 {c.full_name}
                               </li>
                             ))}
@@ -608,21 +614,27 @@ export default function Datos() {
                 <>
                   <Field label={`${isEs ? "Cliente (propietario)" : "Customer (owner)"} *`}>
                     <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                       <input
                         type="text"
-                        placeholder={isEs ? "Buscar cliente..." : "Search customer..."}
+                        placeholder={isEs ? "🔍 Buscar cliente por nombre..." : "🔍 Search customer by name..."}
                         value={vehicleCustSearch}
                         onChange={(e) => { setVehicleCustSearch(e.target.value); setVehicleCustDropdown(true); if (!e.target.value) setVehicleForm({ ...vehicleForm, customer_id: "" }); }}
                         onFocus={() => setVehicleCustDropdown(true)}
                         onBlur={() => setTimeout(() => setVehicleCustDropdown(false), 150)}
-                        className="input-field"
+                        className="input-field pl-9"
                       />
+                      {vehicleForm.customer_id && (
+                        <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => { setVehicleForm({ ...vehicleForm, customer_id: "" }); setVehicleCustSearch(""); }}>
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
                       {vehicleCustDropdown && (() => {
                         const filtered = customers.filter((c: any) => c.full_name.toLowerCase().includes(vehicleCustSearch.toLowerCase()));
                         return filtered.length > 0 ? (
                           <ul className="absolute z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border bg-background shadow-lg">
                             {filtered.map((c: any) => (
-                              <li key={c.id} className="cursor-pointer px-4 py-2 text-sm hover:bg-muted" onMouseDown={(e) => { e.preventDefault(); setVehicleForm({ ...vehicleForm, customer_id: c.id }); setVehicleCustSearch(c.full_name); setVehicleCustDropdown(false); }}>
+                              <li key={c.id} className={cn("cursor-pointer px-4 py-2 text-sm hover:bg-muted transition-colors", vehicleForm.customer_id === c.id && "bg-emerald-50 text-emerald-700 font-medium")} onMouseDown={(e) => { e.preventDefault(); setVehicleForm({ ...vehicleForm, customer_id: c.id }); setVehicleCustSearch(c.full_name); setVehicleCustDropdown(false); }}>
                                 {c.full_name}
                               </li>
                             ))}
