@@ -1,4 +1,4 @@
-﻿import { FormEvent, useEffect, useMemo, useState } from "react"
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react"
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import {
   ArrowLeft,
@@ -90,6 +90,8 @@ export default function NewBookingPage() {
   const [staffOptions, setStaffOptions] = useState<StaffOption[]>([])
 
   const [selectedCustomerId, setSelectedCustomerId] = useState("")
+  const [customerSearch, setCustomerSearch] = useState("")
+  const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false)
   const [selectedVehicleId, setSelectedVehicleId] = useState("")
   const [serviceNameDraft, setServiceNameDraft] = useState("")
   const [priceDraft, setPriceDraft] = useState("")
@@ -467,6 +469,8 @@ export default function NewBookingPage() {
       }
       if (matchedCustomerId) {
         setSelectedCustomerId(matchedCustomerId)
+        const matched = customers.find((c) => c.id === matchedCustomerId)
+        if (matched) setCustomerSearch(matched.full_name)
       }
 
       if (lead.conversation_id) {
@@ -652,27 +656,50 @@ export default function NewBookingPage() {
                 {copy.customerSection}
               </div>
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
+                <div className="space-y-2 relative">
                   <label className="text-sm font-medium text-foreground">{copy.customer}</label>
-                  <select
-                    name="customer_id"
-                    required
-                    value={selectedCustomerId}
-                    onChange={(event) => {
-                      setSelectedCustomerId(event.target.value)
-                      setSelectedVehicleId("")
+                  <input
+                    type="text"
+                    placeholder={copy.selectCustomer}
+                    value={customerSearch}
+                    onChange={(e) => {
+                      setCustomerSearch(e.target.value)
+                      setCustomerDropdownOpen(true)
+                      if (!e.target.value) {
+                        setSelectedCustomerId("")
+                        setSelectedVehicleId("")
+                      }
                     }}
+                    onFocus={() => setCustomerDropdownOpen(true)}
+                    onBlur={() => setTimeout(() => setCustomerDropdownOpen(false), 150)}
                     className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
-                  >
-                    <option value="" disabled>
-                      {copy.selectCustomer}
-                    </option>
-                    {customers.map((customer) => (
-                      <option key={customer.id} value={customer.id}>
-                        {customer.full_name}
-                      </option>
-                    ))}
-                  </select>
+                  />
+                  {/* Hidden required input for form validation */}
+                  <input type="hidden" name="customer_id" value={selectedCustomerId} required />
+                  {customerDropdownOpen && (() => {
+                    const filtered = customers.filter((c) =>
+                      c.full_name.toLowerCase().includes(customerSearch.toLowerCase())
+                    )
+                    return filtered.length > 0 ? (
+                      <ul className="absolute z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-input bg-background shadow-lg">
+                        {filtered.map((customer) => (
+                          <li
+                            key={customer.id}
+                            className="cursor-pointer px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              setSelectedCustomerId(customer.id)
+                              setCustomerSearch(customer.full_name)
+                              setSelectedVehicleId("")
+                              setCustomerDropdownOpen(false)
+                            }}
+                          >
+                            {customer.full_name}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null
+                  })()}
                 </div>
 
                 <div className="space-y-2">
