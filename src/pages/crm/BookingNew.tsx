@@ -8,10 +8,12 @@ import {
   DollarSign,
   Loader2,
   Save,
+  Search,
   User,
   Wrench,
   Bot,
   UserCheck,
+  X,
 } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/page-header"
@@ -658,22 +660,30 @@ export default function NewBookingPage() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2 relative">
                   <label className="text-sm font-medium text-foreground">{copy.customer}</label>
-                  <input
-                    type="text"
-                    placeholder={copy.selectCustomer}
-                    value={customerSearch}
-                    onChange={(e) => {
-                      setCustomerSearch(e.target.value)
-                      setCustomerDropdownOpen(true)
-                      if (!e.target.value) {
-                        setSelectedCustomerId("")
-                        setSelectedVehicleId("")
-                      }
-                    }}
-                    onFocus={() => setCustomerDropdownOpen(true)}
-                    onBlur={() => setTimeout(() => setCustomerDropdownOpen(false), 150)}
-                    className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
-                  />
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                    <input
+                      type="text"
+                      placeholder={isEs ? "🔍 Buscar cliente por nombre..." : "🔍 Search customer by name..."}
+                      value={customerSearch}
+                      onChange={(e) => {
+                        setCustomerSearch(e.target.value)
+                        setCustomerDropdownOpen(true)
+                        if (!e.target.value) {
+                          setSelectedCustomerId("")
+                          setSelectedVehicleId("")
+                        }
+                      }}
+                      onFocus={() => setCustomerDropdownOpen(true)}
+                      onBlur={() => setTimeout(() => setCustomerDropdownOpen(false), 150)}
+                      className="w-full rounded-xl border border-input bg-background pl-9 pr-9 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
+                    />
+                    {selectedCustomerId && (
+                      <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => { setSelectedCustomerId(""); setCustomerSearch(""); setSelectedVehicleId(""); }}>
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
                   {/* Hidden required input for form validation */}
                   <input type="hidden" name="customer_id" value={selectedCustomerId} required />
                   {customerDropdownOpen && (() => {
@@ -685,7 +695,10 @@ export default function NewBookingPage() {
                         {filtered.map((customer) => (
                           <li
                             key={customer.id}
-                            className="cursor-pointer px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+                            className={cn(
+                              "cursor-pointer px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors",
+                              selectedCustomerId === customer.id && "bg-rose-50 text-rose-700 font-medium"
+                            )}
                             onMouseDown={(e) => {
                               e.preventDefault()
                               setSelectedCustomerId(customer.id)
