@@ -1,38 +1,34 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { CrmGettingStarted } from "@/components/crm/crm-getting-started";
-import { CreditCard, Loader2, Save } from "lucide-react";
+import { CreditCard, CheckCircle2, Clock, AlertCircle } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import { useLanguage } from "@/components/providers/language-provider";
 import { useCurrentBusiness } from "@/hooks/use-current-business";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
-type PaymentSettings = {
-  enabled: boolean;
-  requireDeposit: boolean;
-  depositPct: number;
-  allowCard: boolean;
-  allowBankTransfer: boolean;
-  allowCash: boolean;
+type PaymentStatus = "paid" | "pending" | "all";
+
+type BookingRow = {
+  id: string;
+  service_name: string;
+  price: number | null;
+  status: string;
+  payment_status: string | null;
+  scheduled_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  customer_name: string | null;
+  work_order_no: string | null;
 };
 
-type PaymentStats = {
-  paidInvoicesAmount: number;
-  paidInvoicesCount: number;
-  pendingInvoicesCount: number;
-  pendingInvoicesAmount: number;
-  upcomingBookingsAmount: number;
-};
-
-const defaultSettings: PaymentSettings = {
-  enabled: false,
-  requireDeposit: false,
-  depositPct: 20,
-  allowCard: true,
-  allowBankTransfer: true,
-  allowCash: true,
+const PAYMENT_BADGE: Record<string, { class: string; labelEs: string; labelEn: string }> = {
+  paid: { class: "bg-emerald-100 text-emerald-700 border-emerald-200", labelEs: "Pagado", labelEn: "Paid" },
+  pending: { class: "bg-amber-100 text-amber-700 border-amber-200", labelEs: "Pendiente", labelEn: "Pending" },
 };
 
 export default function Pagos() {
@@ -40,184 +36,121 @@ export default function Pagos() {
   const isEs = lang === "es";
   const { businessId } = useCurrentBusiness();
 
+  const [rows, setRows] = useState<BookingRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [settings, setSettings] = useState<PaymentSettings>(defaultSettings);
-  const [stats, setStats] = useState<PaymentStats>({
-    paidInvoicesAmount: 0,
-    paidInvoicesCount: 0,
-    pendingInvoicesCount: 0,
-    pendingInvoicesAmount: 0,
-    upcomingBookingsAmount: 0,
-  });
+  const [filter, setFilter] = useState<PaymentStatus>("all");
+  const [toggling, setToggling] = useState<string | null>(null);
 
   const copy = isEs
     ? {
         title: "Pagos",
-        subtitle: "Configura cobros online y controla facturacion desde una sola vista.",
-        active: "Cobro online activo",
-        inactive: "Cobro online inactivo",
-        methods: "Metodos permitidos",
-        requireDeposit: "Solicitar senal",
-        depositPct: "Porcentaje de senal",
-        save: "Guardar configuracion",
-        paidAmount: "Cobrado (facturas pagadas)",
-        paidCount: "Facturas pagadas",
-        pendingCount: "Facturas pendientes",
-        pendingAmount: "Pendiente por cobrar",
-        upcomingBookings: "Reservas futuras con importe",
-        card: "Tarjeta",
-        transfer: "Transferencia",
-        cash: "Efectivo",
+        subtitle: "Controla el estado de pago de las órdenes completadas.",
+        all: "Todas",
+        paid: "Pagadas",
+        pending: "Pendientes",
+        service: "Servicio",
+        customer: "Cliente",
+        price: "Precio",
+        status: "Estado pago",
+        completedAt: "Completada",
+        order: "Orden",
+        markPaid: "Marcar pagado",
+        markPending: "Marcar pendiente",
+        empty: "No hay órdenes completadas aún.",
         noBusiness: "No hay negocio seleccionado.",
+        totalCollected: "Total cobrado",
+        totalPending: "Pendiente de cobro",
+        completedOrders: "Órdenes completadas",
       }
     : {
         title: "Payments",
-        subtitle: "Configure online payments and track billing from one operational view.",
-        active: "Online payments enabled",
-        inactive: "Online payments disabled",
-        methods: "Allowed methods",
-        requireDeposit: "Require deposit",
-        depositPct: "Deposit percentage",
-        save: "Save settings",
-        paidAmount: "Collected (paid invoices)",
-        paidCount: "Paid invoices",
-        pendingCount: "Pending invoices",
-        pendingAmount: "Pending amount",
-        upcomingBookings: "Upcoming bookings with price",
-        card: "Card",
-        transfer: "Bank transfer",
-        cash: "Cash",
+        subtitle: "Track payment status for completed orders.",
+        all: "All",
+        paid: "Paid",
+        pending: "Pending",
+        service: "Service",
+        customer: "Customer",
+        price: "Price",
+        status: "Payment status",
+        completedAt: "Completed",
+        order: "Order",
+        markPaid: "Mark as paid",
+        markPending: "Mark as pending",
+        empty: "No completed orders yet.",
         noBusiness: "No business selected.",
+        totalCollected: "Total collected",
+        totalPending: "Pending collection",
+        completedOrders: "Completed orders",
       };
 
-  useEffect(() => {
-    const load = async () => {
-      if (!businessId) {
-        setLoading(false);
-        return;
-      }
-      setLoading(true);
-      setError(null);
+  const fetchData = useCallback(async () => {
+    if (!businessId) return;
+    setLoading(true);
 
-      const nowIso = new Date().toISOString();
-      const [businessRes, paidRes, pendingRes, upcomingRes] = await Promise.all([
-        supabase.from("businesses").select("booking_rules").eq("id", businessId).single(),
-        supabase
-          .from("documents")
-          .select("total", { count: "exact" })
-          .eq("business_id", businessId)
-          .eq("doc_type", "invoice")
-          .eq("status", "paid"),
-        supabase
-          .from("documents")
-          .select("total", { count: "exact" })
-          .eq("business_id", businessId)
-          .eq("doc_type", "invoice")
-          .in("status", ["draft", "sent"]),
-        supabase
-          .from("bookings")
-          .select("price")
-          .eq("business_id", businessId)
-          .gte("scheduled_at", nowIso)
-          .not("price", "is", null),
-      ]);
+    // Fetch completed bookings with customer info
+    const { data } = await supabase
+      .from("bookings")
+      .select("id, service_name, price, status, scheduled_at, created_at, work_order_no, confirmation_notes, customers(full_name)")
+      .eq("business_id", businessId)
+      .eq("status", "completed")
+      .order("created_at", { ascending: false });
 
-      if (businessRes.error) {
-        setError(businessRes.error.message);
-      } else {
-        const raw = businessRes.data?.booking_rules;
-        const asRecord = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : null;
-        const payments =
-          asRecord &&
-          "payments" in asRecord &&
-          asRecord.payments &&
-          typeof asRecord.payments === "object" &&
-          !Array.isArray(asRecord.payments)
-            ? (asRecord.payments as Partial<Record<string, unknown>>)
-            : null;
+    const mapped: BookingRow[] = (data || []).map((b: any) => {
+      // Use confirmation_notes to store payment_status (paid/pending)
+      // Default completed orders to "pending" payment
+      const paymentStatus = b.confirmation_notes?.startsWith("payment:") 
+        ? b.confirmation_notes.replace("payment:", "").trim()
+        : "pending";
 
-        setSettings({
-          enabled: typeof payments?.enabled === "boolean" ? payments.enabled : defaultSettings.enabled,
-          requireDeposit:
-            typeof payments?.requireDeposit === "boolean" ? payments.requireDeposit : defaultSettings.requireDeposit,
-          depositPct:
-            typeof payments?.depositPct === "number"
-              ? payments.depositPct
-              : typeof payments?.depositPct === "string"
-                ? Number(payments.depositPct) || defaultSettings.depositPct
-                : defaultSettings.depositPct,
-          allowCard: typeof payments?.allowCard === "boolean" ? payments.allowCard : defaultSettings.allowCard,
-          allowBankTransfer:
-            typeof payments?.allowBankTransfer === "boolean"
-              ? payments.allowBankTransfer
-              : defaultSettings.allowBankTransfer,
-          allowCash: typeof payments?.allowCash === "boolean" ? payments.allowCash : defaultSettings.allowCash,
-        });
-      }
+      return {
+        id: b.id,
+        service_name: b.service_name,
+        price: b.price,
+        status: b.status,
+        payment_status: paymentStatus,
+        scheduled_at: b.scheduled_at,
+        completed_at: b.scheduled_at, // use scheduled_at as proxy
+        created_at: b.created_at,
+        customer_name: b.customers?.full_name || null,
+        work_order_no: b.work_order_no,
+      };
+    });
 
-      const paidAmount = (paidRes.data || []).reduce((acc, row) => acc + Number(row.total || 0), 0);
-      const pendingAmount = (pendingRes.data || []).reduce((acc, row) => acc + Number(row.total || 0), 0);
-      const upcomingBookingsAmount = (upcomingRes.data || []).reduce((acc, row) => acc + Number(row.price || 0), 0);
-
-      setStats({
-        paidInvoicesAmount: paidAmount,
-        paidInvoicesCount: paidRes.count || 0,
-        pendingInvoicesCount: pendingRes.count || 0,
-        pendingInvoicesAmount: pendingAmount,
-        upcomingBookingsAmount,
-      });
-
-      setLoading(false);
-    };
-
-    load();
+    setRows(mapped);
+    setLoading(false);
   }, [businessId]);
 
-  const canSave = useMemo(() => settings.depositPct >= 0 && settings.depositPct <= 100, [settings.depositPct]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  const handleSave = async () => {
-    if (!businessId || !canSave || saving) return;
-    setSaving(true);
-    setError(null);
+  const togglePaymentStatus = async (bookingId: string, currentStatus: string) => {
+    if (!businessId) return;
+    setToggling(bookingId);
+    const newStatus = currentStatus === "paid" ? "pending" : "paid";
 
-    const { data: businessRes, error: businessErr } = await supabase
-      .from("businesses")
-      .select("booking_rules")
-      .eq("id", businessId)
-      .single();
-    if (businessErr) {
-      setError(businessErr.message);
-      setSaving(false);
-      return;
-    }
+    await supabase
+      .from("bookings")
+      .update({ confirmation_notes: `payment:${newStatus}` })
+      .eq("id", bookingId)
+      .eq("business_id", businessId);
 
-    const currentRules =
-      businessRes?.booking_rules && typeof businessRes.booking_rules === "object" && !Array.isArray(businessRes.booking_rules)
-        ? { ...businessRes.booking_rules }
-        : {};
-
-    const nextRules = {
-      ...currentRules,
-      payments: {
-        enabled: settings.enabled,
-        requireDeposit: settings.requireDeposit,
-        depositPct: settings.depositPct,
-        allowCard: settings.allowCard,
-        allowBankTransfer: settings.allowBankTransfer,
-        allowCash: settings.allowCash,
-      },
-    };
-
-    const { error: updateErr } = await supabase
-      .from("businesses")
-      .update({ booking_rules: nextRules, updated_at: new Date().toISOString() })
-      .eq("id", businessId);
-    if (updateErr) setError(updateErr.message);
-
-    setSaving(false);
+    setRows((prev) =>
+      prev.map((r) => (r.id === bookingId ? { ...r, payment_status: newStatus } : r))
+    );
+    setToggling(null);
   };
+
+  const filtered = rows.filter((r) => {
+    if (filter === "all") return true;
+    return r.payment_status === filter;
+  });
+
+  const totalCollected = rows
+    .filter((r) => r.payment_status === "paid")
+    .reduce((acc, r) => acc + (r.price || 0), 0);
+
+  const totalPending = rows
+    .filter((r) => r.payment_status === "pending")
+    .reduce((acc, r) => acc + (r.price || 0), 0);
 
   if (!businessId) {
     return <div className="text-sm text-muted-foreground">{copy.noBusiness}</div>;
@@ -228,127 +161,145 @@ export default function Pagos() {
       <CrmGettingStarted
         titleEs="¿Cómo usar Pagos?"
         titleEn="How to use Payments?"
-        storageKey="crm-tips-pagos"
+        storageKey="crm-tips-pagos-v2"
         steps={[
-          { emoji: "1️⃣", textEs: "Activa 'Cobro online' para permitir pagos con tarjeta, transferencia o efectivo.", textEn: "Enable 'Online payments' to allow card, transfer or cash payments." },
-          { emoji: "2️⃣", textEs: "Configura si quieres solicitar una señal (depósito) al reservar.", textEn: "Set whether you want to require a deposit when booking." },
-          { emoji: "3️⃣", textEs: "Revisa las estadísticas de facturas cobradas y pendientes.", textEn: "Review statistics for paid and pending invoices." },
-          { emoji: "💡", textEs: "Haz click en 'Guardar configuración' después de cada cambio.", textEn: "Click 'Save settings' after each change." },
+          { emoji: "✅", textEs: "Cuando una orden se completa, aparece aquí como 'Pendiente' de pago.", textEn: "When an order is completed, it appears here as 'Pending' payment." },
+          { emoji: "💰", textEs: "Haz click en 'Marcar pagado' cuando el cliente pague.", textEn: "Click 'Mark as paid' when the customer pays." },
+          { emoji: "📊", textEs: "Usa los filtros para ver solo pagadas o pendientes.", textEn: "Use filters to see only paid or pending orders." },
         ]}
       />
-      <div className="flex items-start justify-between gap-4">
+
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <CreditCard className="h-7 w-7 text-foreground" />
         <div>
-          <div className="flex items-center gap-3">
-            <CreditCard className="h-7 w-7 text-foreground" />
-            <h1 className="text-2xl font-bold text-foreground">{copy.title}</h1>
-            <Badge className={settings.enabled ? "bg-emerald-600 text-white" : "bg-muted text-muted-foreground"}>
-              {settings.enabled ? copy.active : copy.inactive}
-            </Badge>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">{copy.subtitle}</p>
+          <h1 className="text-2xl font-bold text-foreground">{copy.title}</h1>
+          <p className="text-sm text-muted-foreground">{copy.subtitle}</p>
         </div>
       </div>
 
-      {error && <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</div>}
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <KpiCard label={copy.paidAmount} value={stats.paidInvoicesAmount} money />
-        <KpiCard label={copy.paidCount} value={stats.paidInvoicesCount} />
-        <KpiCard label={copy.pendingCount} value={stats.pendingInvoicesCount} />
-        <KpiCard label={copy.pendingAmount} value={stats.pendingInvoicesAmount} money />
-        <KpiCard label={copy.upcomingBookings} value={stats.upcomingBookingsAmount} money />
+      {/* KPI Cards */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+              <p className="text-xs text-muted-foreground">{copy.totalCollected}</p>
+            </div>
+            <p className="mt-2 text-2xl font-bold text-emerald-700">€{totalCollected.toFixed(2)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-amber-600" />
+              <p className="text-xs text-muted-foreground">{copy.totalPending}</p>
+            </div>
+            <p className="mt-2 text-2xl font-bold text-amber-700">€{totalPending.toFixed(2)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground">{copy.completedOrders}</p>
+            </div>
+            <p className="mt-2 text-2xl font-bold text-foreground">{rows.length}</p>
+          </CardContent>
+        </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{copy.methods}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <ToggleRow
-            label={copy.active}
-            checked={settings.enabled}
-            onChange={(checked) => setSettings((prev) => ({ ...prev, enabled: checked }))}
-          />
-          <ToggleRow
-            label={copy.requireDeposit}
-            checked={settings.requireDeposit}
-            onChange={(checked) => setSettings((prev) => ({ ...prev, requireDeposit: checked }))}
-          />
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium">{copy.depositPct}</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              value={settings.depositPct}
-              onChange={(event) =>
-                setSettings((prev) => ({
-                  ...prev,
-                  depositPct: Number(event.target.value),
-                }))
-              }
-              className="input-field max-w-xs"
-            />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <ToggleRow
-              label={copy.card}
-              checked={settings.allowCard}
-              onChange={(checked) => setSettings((prev) => ({ ...prev, allowCard: checked }))}
-            />
-            <ToggleRow
-              label={copy.transfer}
-              checked={settings.allowBankTransfer}
-              onChange={(checked) => setSettings((prev) => ({ ...prev, allowBankTransfer: checked }))}
-            />
-            <ToggleRow
-              label={copy.cash}
-              checked={settings.allowCash}
-              onChange={(checked) => setSettings((prev) => ({ ...prev, allowCash: checked }))}
-            />
-          </div>
-          <Button onClick={handleSave} disabled={saving || loading || !canSave} className="bg-emerald-600 hover:bg-emerald-500 text-white">
-            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-            {copy.save}
-          </Button>
-        </CardContent>
-      </Card>
+      {/* Filters */}
+      <div className="flex gap-2">
+        {(["all", "paid", "pending"] as PaymentStatus[]).map((key) => (
+          <button
+            key={key}
+            onClick={() => setFilter(key)}
+            className={cn(
+              "rounded-full px-4 py-1.5 text-sm font-medium border transition-colors",
+              filter === key
+                ? "bg-foreground text-background border-foreground"
+                : "bg-background text-muted-foreground border-input hover:text-foreground"
+            )}
+          >
+            {key === "all" ? copy.all : key === "paid" ? copy.paid : copy.pending}
+          </button>
+        ))}
+      </div>
+
+      {/* Table */}
+      <div className="rounded-xl border bg-card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-muted/50">
+                <th className="px-4 py-3 text-left font-semibold text-muted-foreground">{copy.order}</th>
+                <th className="px-4 py-3 text-left font-semibold text-muted-foreground">{copy.customer}</th>
+                <th className="px-4 py-3 text-left font-semibold text-muted-foreground">{copy.service}</th>
+                <th className="px-4 py-3 text-left font-semibold text-muted-foreground">{copy.price}</th>
+                <th className="px-4 py-3 text-left font-semibold text-muted-foreground">{copy.completedAt}</th>
+                <th className="px-4 py-3 text-left font-semibold text-muted-foreground">{copy.status}</th>
+                <th className="px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-16 text-center text-muted-foreground">
+                    {isEs ? "Cargando..." : "Loading..."}
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-16 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="text-5xl">💳</div>
+                      <p className="text-muted-foreground font-medium">{copy.empty}</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((row) => {
+                  const badge = PAYMENT_BADGE[row.payment_status || "pending"] || PAYMENT_BADGE.pending;
+                  return (
+                    <tr key={row.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                      <td className="px-4 py-3">
+                        <Link to={`/crm/bookings/${row.id}`} className="font-medium text-emerald-700 hover:underline">
+                          {row.work_order_no || row.id.slice(0, 8)}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3">{row.customer_name || "—"}</td>
+                      <td className="px-4 py-3">{row.service_name}</td>
+                      <td className="px-4 py-3 font-medium">
+                        {row.price != null ? `€${row.price.toFixed(2)}` : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {row.scheduled_at ? new Date(row.scheduled_at).toLocaleDateString() : "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant="outline" className={cn("text-xs border", badge.class)}>
+                          {isEs ? badge.labelEs : badge.labelEn}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={toggling === row.id}
+                          onClick={() => togglePaymentStatus(row.id, row.payment_status || "pending")}
+                          className="text-xs"
+                        >
+                          {row.payment_status === "paid" ? copy.markPending : copy.markPaid}
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
-  );
-}
-
-function KpiCard({ label, value, money = false }: { label: string; value: number; money?: boolean }) {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="mt-2 text-2xl font-bold">{money ? `€${value.toFixed(2)}` : value}</p>
-      </CardContent>
-    </Card>
-  );
-}
-
-function ToggleRow({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <label className="flex items-center justify-between rounded-lg border p-3">
-      <span className="text-sm font-medium">{label}</span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onChange(!checked)}
-        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${checked ? "bg-emerald-600" : "bg-muted"}`}
-      >
-        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${checked ? "translate-x-6" : "translate-x-1"}`} />
-      </button>
-    </label>
   );
 }
