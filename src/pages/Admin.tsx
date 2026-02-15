@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  AlertTriangle,
   Activity,
   ArrowUpRight,
   Bell,
@@ -100,6 +101,13 @@ export default function AdminPage() {
     pendingBookings: 0,
     monthlyLeads: 0,
   });
+  const [aiFailureLoading, setAiFailureLoading] = useState(false);
+  const [aiFailureError, setAiFailureError] = useState<string | null>(null);
+  const [aiFailureStats, setAiFailureStats] = useState({
+    last24h: 0,
+    unresolved: 0,
+  });
+  const [aiFailureRefreshKey, setAiFailureRefreshKey] = useState(0);
 
   const copy = isEs
     ? {
@@ -176,6 +184,10 @@ export default function AdminPage() {
         leads: "Leads",
         pending: "Pending",
       };
+  const aiFailuresTitle = isEs ? "Fallos IA" : "AI failures";
+  const aiFailuresDesc = isEs ? "Monitoreo de errores en webhooks/IA" : "Webhook/AI error monitoring";
+  const aiFailuresLast24h = isEs ? "Ultimas 24h" : "Last 24h";
+  const aiFailuresUnresolved = isEs ? "Sin resolver" : "Unresolved";
 
   // Load initial data
   useEffect(() => {
@@ -271,6 +283,41 @@ export default function AdminPage() {
     };
     loadRole();
   }, [businessId, user]);
+
+  useEffect(() => {
+    const loadAiFailures = async () => {
+      if (!businessId) return;
+      setAiFailureLoading(true);
+      setAiFailureError(null);
+
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const [last24Res, unresolvedRes] = await Promise.all([
+        supabase
+          .from("ai_failure_events")
+          .select("id", { count: "exact", head: true })
+          .eq("business_id", businessId)
+          .gte("created_at", since),
+        supabase
+          .from("ai_failure_events")
+          .select("id", { count: "exact", head: true })
+          .eq("business_id", businessId)
+          .eq("resolved", false),
+      ]);
+
+      if (last24Res.error || unresolvedRes.error) {
+        setAiFailureError(last24Res.error?.message || unresolvedRes.error?.message || "Failed to load AI failure metrics");
+      } else {
+        setAiFailureStats({
+          last24h: last24Res.count ?? 0,
+          unresolved: unresolvedRes.count ?? 0,
+        });
+      }
+
+      setAiFailureLoading(false);
+    };
+
+    loadAiFailures();
+  }, [businessId, aiFailureRefreshKey]);
 
   // Load WhatsApp data
   useEffect(() => {
@@ -499,6 +546,41 @@ export default function AdminPage() {
           </Card>
         ))}
       </div>
+
+      <Card className="border-amber-200/60 bg-amber-50/40">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              <CardTitle className="text-base">{aiFailuresTitle}</CardTitle>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setAiFailureRefreshKey((prev) => prev + 1)}
+              className="h-8"
+            >
+              <RefreshCw className="mr-2 h-3.5 w-3.5" />
+              Refresh
+            </Button>
+          </div>
+          <CardDescription>{aiFailuresDesc}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border bg-background p-3">
+              <p className="text-xs text-muted-foreground">{aiFailuresLast24h}</p>
+              <p className="mt-1 text-2xl font-semibold">{aiFailureLoading ? "..." : aiFailureStats.last24h}</p>
+            </div>
+            <div className="rounded-lg border bg-background p-3">
+              <p className="text-xs text-muted-foreground">{aiFailuresUnresolved}</p>
+              <p className="mt-1 text-2xl font-semibold">{aiFailureLoading ? "..." : aiFailureStats.unresolved}</p>
+            </div>
+          </div>
+          {aiFailureError && <p className="mt-2 text-xs text-destructive">{aiFailureError}</p>}
+        </CardContent>
+      </Card>
 
       {/* Main Grid */}
       <div className="grid gap-6 lg:grid-cols-3">

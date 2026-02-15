@@ -35,6 +35,8 @@ function SignupForm() {
   const { session, loading: authLoading } = useAuth()
   const { lang } = useLanguage()
   const isEs = lang === "es"
+  const inviteOnlyEnabled = String(import.meta.env.VITE_INVITE_ONLY_MODE || "").toLowerCase() === "true"
+  const requiredInviteCode = String(import.meta.env.VITE_INVITE_ACCESS_CODE || "").trim()
 
   const copy = isEs
     ? {
@@ -81,6 +83,12 @@ function SignupForm() {
       }
 
   const redirect = params.get("redirect") ?? "/dashboard"
+  const inviteCodeFromUrl = (params.get("code") || "").trim()
+  const inviteGatePassed = !inviteOnlyEnabled || (requiredInviteCode.length > 0 && inviteCodeFromUrl === requiredInviteCode)
+  const inviteOnlyTitle = isEs ? "Registro por invitacion" : "Invite-only onboarding"
+  const inviteOnlyBody = isEs
+    ? "El registro publico esta pausado temporalmente. Usa tu enlace de invitacion o inicia sesion."
+    : "Public signup is temporarily paused. Please use your invite link or sign in."
 
   useEffect(() => {
     if (!toast) return
@@ -97,6 +105,11 @@ function SignupForm() {
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setError(null)
+
+    if (!inviteGatePassed) {
+      setError(inviteOnlyBody)
+      return
+    }
 
     if (password !== confirmPassword) {
       setError(copy.mismatch)
@@ -150,6 +163,13 @@ function SignupForm() {
         <p className="text-muted-foreground">{copy.subtitle}</p>
       </div>
 
+      {!inviteGatePassed && (
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p className="font-semibold">{inviteOnlyTitle}</p>
+          <p className="mt-1">{inviteOnlyBody}</p>
+        </div>
+      )}
+
       {/* Features List */}
       <div className="mb-6 flex flex-wrap justify-center gap-2">
         {copy.features.map((feature, idx) => (
@@ -163,6 +183,7 @@ function SignupForm() {
       {/* Form Card */}
       <div className="rounded-2xl border border-border bg-card shadow-xl shadow-black/5 p-8">
         <form className="space-y-4" onSubmit={handleSubmit}>
+          <fieldset disabled={!inviteGatePassed || submitting} className="space-y-4">
           {/* Full Name Field */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">{copy.fullName}</label>
@@ -255,11 +276,12 @@ function SignupForm() {
           <Button
             className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 text-white hover:from-emerald-500 hover:to-emerald-400 shadow-lg shadow-emerald-500/20 py-6 text-base font-semibold"
             type="submit"
-            disabled={submitting}
+            disabled={submitting || !inviteGatePassed}
           >
             <span className="text-white font-semibold">{submitting ? copy.submitting : copy.submit}</span>
             <ArrowRight className="ml-2 size-4 text-white" />
           </Button>
+          </fieldset>
         </form>
       </div>
 

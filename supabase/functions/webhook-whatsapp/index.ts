@@ -17,6 +17,26 @@ const DEFAULT_MODEL = "openai/gpt-oss-120b";
 // Intents that can trigger flyer sending
 const FLYER_INTENTS = ["pricing", "services", "packages", "quote"];
 
+async function logAiFailureEvent(
+  supabase: any,
+  businessId: string | null,
+  functionName: string,
+  errorMessage: string,
+  context: Record<string, unknown> = {}
+) {
+  if (!businessId) return;
+  try {
+    await supabase.from("ai_failure_events").insert({
+      business_id: businessId,
+      function_name: functionName,
+      error_message: errorMessage,
+      context,
+    });
+  } catch (logError) {
+    console.error("[webhook-whatsapp] Failed to log AI failure event:", logError);
+  }
+}
+
 serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -64,6 +84,7 @@ serve(async (req: Request) => {
 
   // Handle POST (incoming messages)
   if (req.method === "POST") {
+    let requestBusinessId: string | null = null;
     try {
       const payload = await req.json();
       console.log("WhatsApp webhook payload:", JSON.stringify(payload));
@@ -72,6 +93,7 @@ serve(async (req: Request) => {
 
       // Extract business_id from custom field or use default logic
       const businessId = payload.business_id || url.searchParams.get("business_id");
+      requestBusinessId = businessId || null;
       
       if (!businessId) {
         console.error("Missing business_id in webhook payload");
@@ -171,6 +193,14 @@ serve(async (req: Request) => {
     } catch (err) {
       const error = err as Error;
       console.error("WhatsApp webhook error:", error);
+      try {
+        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        await logAiFailureEvent(supabase, requestBusinessId, "webhook-whatsapp", error.message, {
+          scope: "handler",
+        });
+      } catch (_inner) {
+        // ignore secondary logging errors
+      }
       return new Response(JSON.stringify({ error: error.message }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -641,6 +671,10 @@ async function generateAIResponse(
     if (!response.ok) {
       const errorText = await response.text();
       console.error("ai-chat error:", response.status, errorText);
+      await logAiFailureEvent(supabase, message.business_id, "webhook-whatsapp", `ai-chat HTTP ${response.status}`, {
+        scope: "generateAIResponse",
+        details: errorText?.slice(0, 1000),
+      });
       return null;
     }
 
@@ -651,6 +685,9 @@ async function generateAIResponse(
     return { reply, handoffRequired: !!data?.handoffRequired };
   } catch (error) {
     console.error("AI response generation failed:", error);
+    await logAiFailureEvent(supabase, message.business_id, "webhook-whatsapp", (error as Error)?.message || "Unknown AI response error", {
+      scope: "generateAIResponse",
+    });
     return null;
   }
 }

@@ -107,6 +107,7 @@ export default function NewBookingPage() {
   const [scheduledAtDraft, setScheduledAtDraft] = useState("")
   const [pendingVehicleHint, setPendingVehicleHint] = useState<Record<string, unknown> | null>(null)
   const [scheduleConflicts, setScheduleConflicts] = useState<Booking[]>([])
+  const [allowConflictOverride, setAllowConflictOverride] = useState(false)
 
   const [vehiclesLoading, setVehiclesLoading] = useState(false)
   const [vehiclesError, setVehiclesError] = useState<string | null>(null)
@@ -190,6 +191,12 @@ export default function NewBookingPage() {
         scheduleSection: "Scheduling",
         operationalSection: "Operations",
       }
+  const conflictOverrideLabel = isEs
+    ? "Permitir guardar de todos modos para este horario"
+    : "Allow save anyway for this schedule"
+  const conflictBlockError = isEs
+    ? "Hay un conflicto de agenda. Activa la opción de override para guardar."
+    : "There is a schedule conflict. Enable override to save."
 
   const getTimeZoneOffsetMinutes = (date: Date, tz: string) => {
     const formatter = new Intl.DateTimeFormat("en-US", {
@@ -429,6 +436,12 @@ export default function NewBookingPage() {
     findScheduleConflicts()
   }, [businessId, selectedCustomerId, scheduledAtDraft])
 
+  useEffect(() => {
+    if (scheduleConflicts.length === 0 && allowConflictOverride) {
+      setAllowConflictOverride(false)
+    }
+  }, [allowConflictOverride, scheduleConflicts.length])
+
   const handleServiceChange = (serviceName: string, options?: { forcePrice?: boolean }) => {
     setServiceNameDraft(serviceName)
     setServiceSearch(serviceName)
@@ -530,6 +543,10 @@ export default function NewBookingPage() {
 
     if (!businessId) {
       setError(copy.errorNoBusiness)
+      return
+    }
+    if (scheduleConflicts.length > 0 && !allowConflictOverride) {
+      setError(conflictBlockError)
       return
     }
 
@@ -897,7 +914,10 @@ export default function NewBookingPage() {
                     name="scheduled_at"
                     type="datetime-local"
                     value={scheduledAtDraft}
-                    onChange={(event) => setScheduledAtDraft(event.target.value)}
+                    onChange={(event) => {
+                      setScheduledAtDraft(event.target.value)
+                      setAllowConflictOverride(false)
+                    }}
                     className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
                   />
                   <div className="rounded-lg border border-amber-200 bg-amber-50 p-2">
@@ -911,6 +931,15 @@ export default function NewBookingPage() {
                             {entry.service_name} - {entry.scheduled_at ? new Date(entry.scheduled_at).toLocaleString() : "No date"}
                           </Link>
                         ))}
+                        <label className="mt-2 inline-flex items-center gap-2 text-xs font-medium text-amber-900">
+                          <input
+                            type="checkbox"
+                            checked={allowConflictOverride}
+                            onChange={(event) => setAllowConflictOverride(event.target.checked)}
+                            className="rounded border-amber-300 text-amber-700 focus:ring-amber-500"
+                          />
+                          {conflictOverrideLabel}
+                        </label>
                       </div>
                     )}
                   </div>

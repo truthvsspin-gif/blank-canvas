@@ -29,6 +29,14 @@ type IntegrationData = {
   webhook_verify_token: string
 }
 
+type WhatsAppHealth = {
+  quality_rating: string | null
+  messaging_limit_tier: string | null
+  display_phone_number: string | null
+  verified_name: string | null
+  checked_at: string
+}
+
 export default function Integrations() {
   const navigate = useNavigate()
   const { businessId, loading: businessLoading } = useCurrentBusiness()
@@ -47,6 +55,9 @@ export default function Integrations() {
   })
 
   const [originalData, setOriginalData] = useState<IntegrationData | null>(null)
+  const [whatsAppHealth, setWhatsAppHealth] = useState<WhatsAppHealth | null>(null)
+  const [whatsAppHealthLoading, setWhatsAppHealthLoading] = useState(false)
+  const [whatsAppHealthError, setWhatsAppHealthError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!businessLoading && !businessId) {
@@ -79,8 +90,43 @@ export default function Integrations() {
       }
       setFormData(integrationData)
       setOriginalData(integrationData)
+      await fetchWhatsAppHealth(integrationData)
     }
     setLoading(false)
+  }
+
+  async function fetchWhatsAppHealth(integration?: IntegrationData) {
+    if (!businessId) return
+    const source = integration || formData
+
+    if (!source.whatsapp_access_token || !source.whatsapp_phone_number_id) {
+      setWhatsAppHealth(null)
+      setWhatsAppHealthError(null)
+      return
+    }
+
+    setWhatsAppHealthLoading(true)
+    setWhatsAppHealthError(null)
+
+    const { data, error } = await supabase.functions.invoke("whatsapp-health", {
+      body: { businessId },
+    })
+
+    setWhatsAppHealthLoading(false)
+
+    if (error || !data?.success) {
+      setWhatsAppHealth(null)
+      setWhatsAppHealthError(data?.error || error?.message || "Unable to load WhatsApp quality data")
+      return
+    }
+
+    setWhatsAppHealth({
+      quality_rating: data.quality_rating || null,
+      messaging_limit_tier: data.messaging_limit_tier || null,
+      display_phone_number: data.display_phone_number || null,
+      verified_name: data.verified_name || null,
+      checked_at: new Date().toISOString(),
+    })
   }
 
   async function handleSave() {
@@ -123,6 +169,7 @@ export default function Integrations() {
 
     if (!error) {
       setOriginalData(formData)
+      await fetchWhatsAppHealth()
     }
   }
 
@@ -213,6 +260,57 @@ export default function Integrations() {
           </CardContent>
         </Card>
       </div>
+
+      {whatsAppConfigured && (
+        <Card className="mb-6">
+          <CardHeader>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <CardTitle className="text-lg">WhatsApp Quality & Tier</CardTitle>
+                <CardDescription>Live status from Meta for this connected number</CardDescription>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  void fetchWhatsAppHealth()
+                }}
+                disabled={whatsAppHealthLoading}
+              >
+                {whatsAppHealthLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                Refresh
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Quality rating</p>
+              <p className="mt-1 text-sm font-semibold">{whatsAppHealth?.quality_rating || "Unknown"}</p>
+            </div>
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Messaging tier</p>
+              <p className="mt-1 text-sm font-semibold">{whatsAppHealth?.messaging_limit_tier || "Unknown"}</p>
+            </div>
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Phone</p>
+              <p className="mt-1 text-sm font-semibold">{whatsAppHealth?.display_phone_number || "Unknown"}</p>
+            </div>
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Verified name</p>
+              <p className="mt-1 text-sm font-semibold">{whatsAppHealth?.verified_name || "Unknown"}</p>
+            </div>
+            {whatsAppHealthError && (
+              <p className="text-xs text-rose-600 sm:col-span-2">{whatsAppHealthError}</p>
+            )}
+            {whatsAppHealth?.checked_at && (
+              <p className="text-xs text-muted-foreground sm:col-span-2">
+                Last checked: {new Date(whatsAppHealth.checked_at).toLocaleString()}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* WhatsApp Configuration */}
       <Card className="mb-6">
