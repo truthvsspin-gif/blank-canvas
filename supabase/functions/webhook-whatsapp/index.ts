@@ -311,12 +311,13 @@ function parseWhatsAppPayload(payload: any, businessId: string): NormalizedMessa
       const waMessages = Array.isArray(value.messages) ? value.messages : [];
 
       for (const message of waMessages) {
-        const textBody = message?.text?.body;
-        if (typeof textBody !== "string" || !textBody.trim()) continue;
+        const textBody = extractIncomingMessageText(message);
+        if (!textBody) continue;
 
         const from = message?.from;
         const messageId = message?.id;
         const contextId = message?.context?.id;
+        const messageType = typeof message?.type === "string" ? message.type : "text";
         const timestamp = normalizeTimestamp(message?.timestamp);
         const senderHandle = typeof from === "string" ? from : contactId;
         const conversationId = contextId || messageId || senderHandle || "whatsapp";
@@ -333,6 +334,7 @@ function parseWhatsAppPayload(payload: any, businessId: string): NormalizedMessa
             provider: "whatsapp",
             message_id: messageId ?? null,
             entry_id: entry?.id ?? null,
+            message_type: messageType,
           },
         });
       }
@@ -340,6 +342,37 @@ function parseWhatsAppPayload(payload: any, businessId: string): NormalizedMessa
   }
 
   return messages;
+}
+
+function extractIncomingMessageText(message: any): string | null {
+  const type = typeof message?.type === "string" ? message.type : "";
+
+  const textBody = message?.text?.body;
+  if (typeof textBody === "string" && textBody.trim()) return textBody.trim();
+
+  const buttonText = message?.button?.text;
+  if (typeof buttonText === "string" && buttonText.trim()) return buttonText.trim();
+
+  const interactiveTitle =
+    message?.interactive?.button_reply?.title ||
+    message?.interactive?.list_reply?.title;
+  if (typeof interactiveTitle === "string" && interactiveTitle.trim()) return interactiveTitle.trim();
+
+  const caption =
+    message?.image?.caption ||
+    message?.document?.caption ||
+    message?.video?.caption;
+  if (typeof caption === "string" && caption.trim()) return caption.trim();
+
+  if (type === "image") return "[Image]";
+  if (type === "document") return "[Document]";
+  if (type === "video") return "[Video]";
+  if (type === "audio") return "[Audio]";
+  if (type === "sticker") return "[Sticker]";
+  if (type === "location") return "[Location]";
+  if (type === "contacts") return "[Contact]";
+
+  return null;
 }
 
 function normalizeTimestamp(value: unknown): string {

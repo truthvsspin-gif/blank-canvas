@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { cn } from "@/lib/utils"
 import { CrmGettingStarted } from "@/components/crm/crm-getting-started"
 import { 
@@ -60,6 +60,27 @@ export default function CrmInboxPage() {
   const [sending, setSending] = useState(false)
   const [aiSuggestion, setAiSuggestion] = useState<string | null>(null)
 
+  const loadThreads = useCallback(async (silent = false) => {
+    if (!businessId) return
+    if (!silent) setLoading(true)
+
+    const { data, error } = await supabase
+      .from("inbox_threads")
+      .select("id, channel, contact_name, contact_handle, last_message_text, last_message_at, last_intent, unread_count")
+      .eq("business_id", businessId)
+      .order("updated_at", { ascending: false })
+
+    if (!error) {
+      const rows = (data ?? []) as InboxThread[]
+      setThreads(rows)
+      setActiveThreadId((prev) => {
+        if (prev && rows.some((r) => r.id === prev)) return prev
+        return rows[0]?.id ?? null
+      })
+    }
+    if (!silent) setLoading(false)
+  }, [businessId])
+
   const copy = isEs
     ? {
         title: "Bandeja de Entrada",
@@ -94,24 +115,17 @@ export default function CrmInboxPage() {
 
   useEffect(() => {
     if (!businessId) return
-    const loadThreads = async () => {
-      setLoading(true)
-      const { data, error } = await supabase
-        .from("inbox_threads")
-        .select("id, channel, contact_name, contact_handle, last_message_text, last_message_at, last_intent, unread_count")
-        .eq("business_id", businessId)
-        .order("updated_at", { ascending: false })
-      if (!error) {
-        const rows = (data ?? []) as InboxThread[]
-        setThreads(rows)
-        if (!activeThreadId && rows.length > 0) {
-          setActiveThreadId(rows[0].id)
-        }
-      }
-      setLoading(false)
+    void loadThreads(false)
+
+    // Keep inbox in sync while page is open.
+    const intervalId = window.setInterval(() => {
+      void loadThreads(true)
+    }, 5000)
+
+    return () => {
+      window.clearInterval(intervalId)
     }
-    loadThreads()
-  }, [businessId])
+  }, [businessId, loadThreads])
 
   useEffect(() => {
     if (!activeThreadId) {
