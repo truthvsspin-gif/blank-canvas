@@ -175,20 +175,14 @@ serve(async (req: Request) => {
         });
       }
 
-      // Check if chatbot is enabled for this business
+      // Load business automation settings.
       const { data: business } = await supabase
         .from("businesses")
         .select("chatbot_enabled, ai_reply_enabled, language_preference, greeting_message, flyer_cooldown_hours, office_hours")
         .eq("id", businessId)
         .single();
-
-      if (!business?.chatbot_enabled) {
-        console.log("Chatbot disabled for business:", businessId);
-        return new Response(JSON.stringify({ status: "chatbot_disabled" }), {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+      const chatbotEnabled = !!business?.chatbot_enabled;
+      const aiReplyEnabled = !!business?.ai_reply_enabled;
 
       // Parse WhatsApp messages
       const messages = parseWhatsAppPayload(payload, businessId);
@@ -213,7 +207,7 @@ serve(async (req: Request) => {
         // Track conversation window for usage
         await trackConversationWindow(supabase, message);
         // Generate AI response if enabled
-        if (business.ai_reply_enabled) {
+        if (chatbotEnabled && aiReplyEnabled) {
           const aiResult = await generateAIResponse(supabase, message, business);
 
           if (aiResult?.reply) {
@@ -239,7 +233,7 @@ serve(async (req: Request) => {
         const flyerCooldownHours = Number.isFinite(business.flyer_cooldown_hours)
           ? business.flyer_cooldown_hours
           : 24;
-        if (requestedFlyerType) {
+        if (chatbotEnabled && requestedFlyerType) {
           await maybeSendFlyer(
             supabase,
             message,
