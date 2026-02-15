@@ -38,6 +38,8 @@ type WhatsAppHealth = {
   checked_at: string
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
 export default function Integrations() {
   const navigate = useNavigate()
   const { businessId, loading: businessLoading } = useCurrentBusiness()
@@ -148,6 +150,11 @@ export default function Integrations() {
 
     setSaving(true)
     const webhookBusinessId = (formData.webhook_business_id || "").trim() || businessId
+    if (!UUID_REGEX.test(webhookBusinessId)) {
+      setSaving(false)
+      toast({ message: "Business ID must be a valid UUID.", variant: "error" })
+      return
+    }
 
     const payload = {
       business_id: businessId,
@@ -191,8 +198,9 @@ export default function Integrations() {
 
   const hasChanges = JSON.stringify(formData) !== JSON.stringify(originalData)
   const webhookBusinessId = (formData.webhook_business_id || businessId || "").trim()
+  const validWebhookBusinessId = UUID_REGEX.test(webhookBusinessId) ? webhookBusinessId : (businessId || "")
   const whatsappWebhookUrl = webhookBusinessId
-    ? `https://ybifjdlelpvgzmzvgwls.supabase.co/functions/v1/webhook-whatsapp?business_id=${encodeURIComponent(webhookBusinessId)}`
+    ? `https://ybifjdlelpvgzmzvgwls.supabase.co/functions/v1/webhook-whatsapp?business_id=${encodeURIComponent(validWebhookBusinessId)}`
     : "https://ybifjdlelpvgzmzvgwls.supabase.co/functions/v1/webhook-whatsapp"
   
   const whatsAppConfigured = Boolean(formData.whatsapp_access_token && formData.whatsapp_phone_number_id)
@@ -355,7 +363,7 @@ export default function Integrations() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-2">Business ID</label>
+            <label className="block text-sm font-medium mb-2">Business ID (UUID)</label>
             <div className="flex gap-2">
               <input
                 type="text"
@@ -373,7 +381,7 @@ export default function Integrations() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Saved in backend and used by webhook routing fallback.
+              Must be your CRM business UUID. Saved in backend and used by webhook routing fallback.
             </p>
           </div>
 

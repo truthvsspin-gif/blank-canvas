@@ -91,6 +91,7 @@ const INDUSTRY_PRESETS: Record<string, { description: { en: string; es: string }
 };
 
 type IndustryType = keyof typeof INDUSTRY_PRESETS;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 interface KnowledgeSource {
   id: string;
@@ -395,6 +396,13 @@ export default function ChatbotPage() {
     setSaveMessage(null);
     setSaveError(null);
 
+    const webhookBusinessId = integrationState.webhookBusinessId.trim() || businessId;
+    if (!UUID_REGEX.test(webhookBusinessId)) {
+      setSaveError("Business ID must be a valid UUID.");
+      setSaveLoading(false);
+      return;
+    }
+
     const { error: businessError } = await supabase
       .from("businesses")
       .update({
@@ -421,7 +429,7 @@ export default function ChatbotPage() {
 
     const integrationPayload = {
       business_id: businessId,
-      webhook_business_id: integrationState.webhookBusinessId.trim() || businessId,
+      webhook_business_id: webhookBusinessId,
       whatsapp_access_token: integrationState.whatsappAccessToken.trim() || null,
       whatsapp_phone_number_id: integrationState.whatsappPhoneNumberId.trim() || null,
       instagram_access_token: integrationState.instagramAccessToken.trim() || null,
@@ -814,7 +822,7 @@ export default function ChatbotPage() {
                 className="w-full rounded-lg border bg-background px-3 py-2 text-sm transition-colors focus:border-accent focus:outline-none"
                 value={integrationState.webhookBusinessId}
                 onChange={(e) => setIntegrationState((p) => ({ ...p, webhookBusinessId: e.target.value }))}
-                placeholder="Business ID"
+                placeholder="Business ID (UUID)"
               />
               <input
                 type="text"

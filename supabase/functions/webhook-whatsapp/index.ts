@@ -16,6 +16,7 @@ const DEFAULT_MODEL = "openai/gpt-oss-120b";
 
 // Intents that can trigger flyer sending
 const FLYER_INTENTS = ["pricing", "services", "packages", "quote"];
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 async function logAiFailureEvent(
   supabase: any,
@@ -95,6 +96,18 @@ serve(async (req: Request) => {
       let businessId = payload.business_id || url.searchParams.get("business_id");
       const phoneNumberId = extractWhatsAppPhoneNumberId(payload);
 
+      // If explicit business_id is invalid/non-existent, discard and fallback to phone number mapping.
+      if (businessId && !isUuid(businessId)) {
+        console.warn("Ignoring non-UUID business_id from payload/query:", businessId);
+        businessId = null;
+      } else if (businessId) {
+        const explicitExists = await businessExists(supabase, businessId);
+        if (!explicitExists) {
+          console.warn("Ignoring unknown business_id from payload/query:", businessId);
+          businessId = null;
+        }
+      }
+
       if (!businessId && phoneNumberId) {
         let integration: { business_id?: string | null; webhook_business_id?: string | null } | null = null;
         let integrationError: any = null;
@@ -123,7 +136,25 @@ serve(async (req: Request) => {
           console.error("Failed resolving business from whatsapp_phone_number_id:", integrationError);
         }
 
-        const resolvedBusinessId = integration?.webhook_business_id || integration?.business_id;
+        const overrideId = integration?.webhook_business_id ?? null;
+        const primaryId = integration?.business_id ?? null;
+        let resolvedBusinessId: string | null = null;
+
+        // Use override only if it is a valid UUID and points to an existing business.
+        if (overrideId && isUuid(overrideId) && await businessExists(supabase, overrideId)) {
+          resolvedBusinessId = overrideId;
+        } else if (overrideId) {
+          console.warn(
+            "Invalid webhook_business_id override for phone_number_id, falling back to integration.business_id:",
+            phoneNumberId,
+            overrideId
+          );
+        }
+
+        if (!resolvedBusinessId && primaryId && isUuid(primaryId) && await businessExists(supabase, primaryId)) {
+          resolvedBusinessId = primaryId;
+        }
+
         if (resolvedBusinessId) {
           businessId = resolvedBusinessId;
           console.log(
@@ -731,6 +762,21 @@ async function generateAIResponse(
     });
     return null;
   }
+}
+
+function isUuid(value: string): boolean {
+  return UUID_REGEX.test(value);
+}
+
+async function businessExists(supabase: any, businessId: string): Promise<boolean> {
+  if (!isUuid(businessId)) return false;
+  const { data, error } = await supabase
+    .from("businesses")
+    .select("id")
+    .eq("id", businessId)
+    .maybeSingle();
+  if (error) return false;
+  return !!data?.id;
 }
 
 function extractWhatsAppPhoneNumberId(payload: any): string | null {
