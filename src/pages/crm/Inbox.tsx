@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { CrmGettingStarted } from "@/components/crm/crm-getting-started"
 import { 
@@ -59,6 +59,8 @@ export default function CrmInboxPage() {
   const [replyText, setReplyText] = useState("")
   const [sending, setSending] = useState(false)
   const [aiSuggestion, setAiSuggestion] = useState<string | null>(null)
+  const [sendError, setSendError] = useState<string | null>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const loadThreads = useCallback(async (silent = false) => {
     if (!businessId) return
@@ -145,7 +147,12 @@ export default function CrmInboxPage() {
       }
     }
     loadMessages()
+    setSendError(null)
   }, [activeThreadId, businessId])
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages])
 
   const fetchAiSuggestion = async (threadId: string, recentMessages: InboxMessage[]) => {
     if (!businessId) return
@@ -163,11 +170,14 @@ export default function CrmInboxPage() {
   const handleSendReply = async () => {
     if (!replyText.trim() || !activeThreadId || !businessId || sending) return
     setSending(true)
+    setSendError(null)
     try {
-      const { error } = await supabase.functions.invoke("send-reply", {
+      const { data, error } = await supabase.functions.invoke("send-reply", {
         body: { threadId: activeThreadId, messageText: replyText.trim(), businessId },
       })
-      if (!error) {
+      if (error) {
+        setSendError(error.message || "Failed to send")
+      } else {
         // Optimistically add message
         const newMessage: InboxMessage = {
           id: crypto.randomUUID(),
@@ -182,9 +192,14 @@ export default function CrmInboxPage() {
           t.id === activeThreadId ? { ...t, last_message_text: replyText.trim(), unread_count: 0 } : t
         ))
         fetchAiSuggestion(activeThreadId, [...messages, newMessage])
+        // Show warning if message wasn't actually delivered
+        if (data?.sendError) {
+          setSendError(`Message saved but not delivered: ${data.sendError}`)
+        }
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Send error:", e)
+      setSendError(e?.message || "Failed to send")
     }
     setSending(false)
   }
@@ -485,7 +500,15 @@ export default function CrmInboxPage() {
                     </div>
                   ))
                 )}
+                <div ref={messagesEndRef} />
               </div>
+
+              {/* Send Error */}
+              {sendError && (
+                <div className="px-4 py-2 border-t border-destructive/30 bg-destructive/5">
+                  <p className="text-xs text-destructive">{sendError}</p>
+                </div>
+              )}
 
               {/* AI Suggestion */}
               {aiSuggestion && (
