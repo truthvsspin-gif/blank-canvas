@@ -1,0 +1,1 @@
+ALTER TABLE public.inbox_threads ADD COLUMN IF NOT EXISTS last_intent text;
