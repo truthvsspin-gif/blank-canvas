@@ -14,6 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_failure_events: {
+        Row: {
+          business_id: string
+          context: Json
+          created_at: string
+          error_message: string
+          function_name: string
+          id: string
+          resolved: boolean
+          resolved_at: string | null
+        }
+        Insert: {
+          business_id: string
+          context?: Json
+          created_at?: string
+          error_message: string
+          function_name: string
+          id?: string
+          resolved?: boolean
+          resolved_at?: string | null
+        }
+        Update: {
+          business_id?: string
+          context?: Json
+          created_at?: string
+          error_message?: string
+          function_name?: string
+          id?: string
+          resolved?: boolean
+          resolved_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_failure_events_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bookings: {
         Row: {
           assigned_to: string | null
@@ -737,6 +778,7 @@ export type Database = {
           conversation_id: string
           created_at: string
           id: string
+          last_intent: string | null
           last_message_at: string | null
           last_message_direction: string | null
           last_message_text: string | null
@@ -754,6 +796,7 @@ export type Database = {
           conversation_id: string
           created_at?: string
           id?: string
+          last_intent?: string | null
           last_message_at?: string | null
           last_message_direction?: string | null
           last_message_text?: string | null
@@ -771,6 +814,7 @@ export type Database = {
           conversation_id?: string
           created_at?: string
           id?: string
+          last_intent?: string | null
           last_message_at?: string | null
           last_message_direction?: string | null
           last_message_text?: string | null

@@ -640,7 +640,7 @@ async function ensureThread(
   const { data: inserted } = await supabase
     .from("inbox_threads")
     .insert({ ...payload, created_at: now })
-    .select("id, stage")
+    .select("id")
     .single();
 
   return inserted?.id;
