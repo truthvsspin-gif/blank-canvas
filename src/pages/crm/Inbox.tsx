@@ -142,6 +142,14 @@ export default function CrmInboxPage() {
         .order("message_timestamp", { ascending: true })
       if (!error) {
         const rows = (data ?? []) as InboxMessage[]
+        // Sort: by timestamp ASC, then inbound before outbound when timestamps match
+        rows.sort((a, b) => {
+          const diff = new Date(a.message_timestamp).getTime() - new Date(b.message_timestamp).getTime()
+          if (diff !== 0) return diff
+          if (a.direction === "inbound" && b.direction === "outbound") return -1
+          if (a.direction === "outbound" && b.direction === "inbound") return 1
+          return 0
+        })
         setMessages(rows)
         if (businessId) fetchAiSuggestion(activeThreadId, rows)
       }
