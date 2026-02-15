@@ -131,6 +131,7 @@ export type Database = {
           instagram_access_token: string | null
           instagram_business_id: string | null
           updated_at: string
+          webhook_business_id: string | null
           webhook_verify_token: string | null
           whatsapp_access_token: string | null
           whatsapp_phone_number_id: string | null
@@ -142,6 +143,7 @@ export type Database = {
           instagram_access_token?: string | null
           instagram_business_id?: string | null
           updated_at?: string
+          webhook_business_id?: string | null
           webhook_verify_token?: string | null
           whatsapp_access_token?: string | null
           whatsapp_phone_number_id?: string | null
@@ -153,6 +155,7 @@ export type Database = {
           instagram_access_token?: string | null
           instagram_business_id?: string | null
           updated_at?: string
+          webhook_business_id?: string | null
           webhook_verify_token?: string | null
           whatsapp_access_token?: string | null
           whatsapp_phone_number_id?: string | null

@@ -26,6 +26,7 @@ type IntegrationData = {
   whatsapp_phone_number_id: string
   instagram_access_token: string
   instagram_business_id: string
+  webhook_business_id: string
   webhook_verify_token: string
 }
 
@@ -51,6 +52,7 @@ export default function Integrations() {
     whatsapp_phone_number_id: "",
     instagram_access_token: "",
     instagram_business_id: "",
+    webhook_business_id: "",
     webhook_verify_token: "",
   })
 
@@ -86,11 +88,23 @@ export default function Integrations() {
         whatsapp_phone_number_id: data.whatsapp_phone_number_id || "",
         instagram_access_token: data.instagram_access_token || "",
         instagram_business_id: data.instagram_business_id || "",
+        webhook_business_id: data.webhook_business_id || businessId,
         webhook_verify_token: (data as any).webhook_verify_token || "",
       }
       setFormData(integrationData)
       setOriginalData(integrationData)
       await fetchWhatsAppHealth(integrationData)
+    } else {
+      const integrationData = {
+        whatsapp_access_token: "",
+        whatsapp_phone_number_id: "",
+        instagram_access_token: "",
+        instagram_business_id: "",
+        webhook_business_id: businessId,
+        webhook_verify_token: "",
+      }
+      setFormData(integrationData)
+      setOriginalData(integrationData)
     }
     setLoading(false)
   }
@@ -133,6 +147,7 @@ export default function Integrations() {
     if (!businessId) return
 
     setSaving(true)
+    const webhookBusinessId = (formData.webhook_business_id || "").trim() || businessId
 
     const payload = {
       business_id: businessId,
@@ -140,6 +155,7 @@ export default function Integrations() {
       whatsapp_phone_number_id: formData.whatsapp_phone_number_id || null,
       instagram_access_token: formData.instagram_access_token || null,
       instagram_business_id: formData.instagram_business_id || null,
+      webhook_business_id: webhookBusinessId,
       webhook_verify_token: formData.webhook_verify_token || null,
       updated_at: new Date().toISOString(),
     }
@@ -168,12 +184,16 @@ export default function Integrations() {
     setSaving(false)
 
     if (!error) {
-      setOriginalData(formData)
+      setOriginalData({ ...formData, webhook_business_id: webhookBusinessId })
       await fetchWhatsAppHealth()
     }
   }
 
   const hasChanges = JSON.stringify(formData) !== JSON.stringify(originalData)
+  const webhookBusinessId = (formData.webhook_business_id || businessId || "").trim()
+  const whatsappWebhookUrl = webhookBusinessId
+    ? `https://ybifjdlelpvgzmzvgwls.supabase.co/functions/v1/webhook-whatsapp?business_id=${encodeURIComponent(webhookBusinessId)}`
+    : "https://ybifjdlelpvgzmzvgwls.supabase.co/functions/v1/webhook-whatsapp"
   
   const whatsAppConfigured = Boolean(formData.whatsapp_access_token && formData.whatsapp_phone_number_id)
   const instagramConfigured = Boolean(formData.instagram_access_token && formData.instagram_business_id)
@@ -335,6 +355,29 @@ export default function Integrations() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
+            <label className="block text-sm font-medium mb-2">Business ID</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={formData.webhook_business_id}
+                onChange={(e) => setFormData({ ...formData, webhook_business_id: e.target.value })}
+                placeholder="e.g., 5bc08537-786d-451b-8dd2-f09666266028"
+                className="w-full px-4 py-2 rounded-lg border bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setFormData({ ...formData, webhook_business_id: businessId || "" })}
+              >
+                Use Current
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Saved in backend and used by webhook routing fallback.
+            </p>
+          </div>
+
+          <div>
             <label className="block text-sm font-medium mb-2">Phone Number ID</label>
             <input
               type="text"
@@ -374,7 +417,7 @@ export default function Integrations() {
           <div className="p-4 rounded-lg bg-muted/50 border">
             <p className="text-sm font-medium mb-2">Webhook URL</p>
             <code className="text-xs bg-background px-2 py-1 rounded border block overflow-x-auto">
-              https://ybifjdlelpvgzmzvgwls.supabase.co/functions/v1/webhook-whatsapp
+              {whatsappWebhookUrl}
             </code>
             <p className="text-xs text-muted-foreground mt-2">
               Configure this URL in your Meta App → WhatsApp → Configuration → Webhooks

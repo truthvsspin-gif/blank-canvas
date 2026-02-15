@@ -91,10 +91,51 @@ serve(async (req: Request) => {
 
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-      // Extract business_id from custom field or use default logic
-      const businessId = payload.business_id || url.searchParams.get("business_id");
+      // Prefer explicit business_id, then resolve from Meta phone_number_id.
+      let businessId = payload.business_id || url.searchParams.get("business_id");
+      const phoneNumberId = extractWhatsAppPhoneNumberId(payload);
+
+      if (!businessId && phoneNumberId) {
+        let integration: { business_id?: string | null; webhook_business_id?: string | null } | null = null;
+        let integrationError: any = null;
+
+        const withOverride = await supabase
+          .from("business_integrations")
+          .select("business_id, webhook_business_id")
+          .eq("whatsapp_phone_number_id", phoneNumberId)
+          .maybeSingle();
+
+        integration = withOverride.data;
+        integrationError = withOverride.error;
+
+        // Backward compatibility if migration has not been applied yet.
+        if (integrationError && String(integrationError.message || "").includes("webhook_business_id")) {
+          const legacy = await supabase
+            .from("business_integrations")
+            .select("business_id")
+            .eq("whatsapp_phone_number_id", phoneNumberId)
+            .maybeSingle();
+          integration = legacy.data;
+          integrationError = legacy.error;
+        }
+
+        if (integrationError) {
+          console.error("Failed resolving business from whatsapp_phone_number_id:", integrationError);
+        }
+
+        const resolvedBusinessId = integration?.webhook_business_id || integration?.business_id;
+        if (resolvedBusinessId) {
+          businessId = resolvedBusinessId;
+          console.log(
+            "Resolved business_id from whatsapp_phone_number_id:",
+            phoneNumberId,
+            businessId
+          );
+        }
+      }
+
       requestBusinessId = businessId || null;
-      
+
       if (!businessId) {
         console.error("Missing business_id in webhook payload");
         return new Response(JSON.stringify({ error: "Missing business_id" }), {
@@ -690,6 +731,25 @@ async function generateAIResponse(
     });
     return null;
   }
+}
+
+function extractWhatsAppPhoneNumberId(payload: any): string | null {
+  const entries = Array.isArray(payload?.entry) ? payload.entry : [];
+
+  for (const entry of entries) {
+    const changes = Array.isArray(entry?.changes) ? entry.changes : [];
+    for (const change of changes) {
+      const phoneNumberId = change?.value?.metadata?.phone_number_id;
+      if (typeof phoneNumberId === "string" && phoneNumberId.trim()) {
+        return phoneNumberId.trim();
+      }
+      if (typeof phoneNumberId === "number" && Number.isFinite(phoneNumberId)) {
+        return String(phoneNumberId);
+      }
+    }
+  }
+
+  return null;
 }
 async function maybeSendFlyer(
   supabase: any,

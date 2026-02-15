@@ -122,6 +122,7 @@ export default function ChatbotPage() {
   
   // Integration state
   const [integrationState, setIntegrationState] = useState({
+    webhookBusinessId: "",
     whatsappAccessToken: "",
     whatsappPhoneNumberId: "",
     instagramAccessToken: "",
@@ -331,17 +332,23 @@ export default function ChatbotPage() {
 
       const { data: integrations } = await supabase
         .from("business_integrations")
-        .select("whatsapp_access_token, whatsapp_phone_number_id, instagram_access_token, instagram_business_id")
+        .select("whatsapp_access_token, whatsapp_phone_number_id, instagram_access_token, instagram_business_id, webhook_business_id")
         .eq("business_id", businessId)
         .maybeSingle();
-        
+         
       if (integrations) {
         setIntegrationState({
+          webhookBusinessId: integrations.webhook_business_id ?? businessId,
           whatsappAccessToken: integrations.whatsapp_access_token ?? "",
           whatsappPhoneNumberId: integrations.whatsapp_phone_number_id ?? "",
           instagramAccessToken: integrations.instagram_access_token ?? "",
           instagramBusinessId: integrations.instagram_business_id ?? "",
         });
+      } else {
+        setIntegrationState((prev) => ({
+          ...prev,
+          webhookBusinessId: businessId,
+        }));
       }
       setIntegrationsLoading(false);
     };
@@ -414,6 +421,7 @@ export default function ChatbotPage() {
 
     const integrationPayload = {
       business_id: businessId,
+      webhook_business_id: integrationState.webhookBusinessId.trim() || businessId,
       whatsapp_access_token: integrationState.whatsappAccessToken.trim() || null,
       whatsapp_phone_number_id: integrationState.whatsappPhoneNumberId.trim() || null,
       instagram_access_token: integrationState.instagramAccessToken.trim() || null,
@@ -801,6 +809,13 @@ export default function ChatbotPage() {
                 <Phone className="h-4 w-4 text-emerald-600" />
                 <span className="font-medium text-emerald-700">WhatsApp</span>
               </div>
+              <input
+                type="text"
+                className="w-full rounded-lg border bg-background px-3 py-2 text-sm transition-colors focus:border-accent focus:outline-none"
+                value={integrationState.webhookBusinessId}
+                onChange={(e) => setIntegrationState((p) => ({ ...p, webhookBusinessId: e.target.value }))}
+                placeholder="Business ID"
+              />
               <input
                 type="text"
                 className="w-full rounded-lg border bg-background px-3 py-2 text-sm transition-colors focus:border-accent focus:outline-none"
