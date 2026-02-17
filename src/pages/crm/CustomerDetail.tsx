@@ -153,7 +153,7 @@ export default function CustomerDetailPage() {
         .from("customers")
         .select("*")
         .eq("business_id", businessId)
-        .eq("id", id)
+        .eq("id", id!)
         .single()
       if (err) {
         setError(err.message)

@@ -501,7 +501,7 @@ export default function NewBookingPage() {
       if (lead.conversation_id) {
         const { data: snapshotData } = await supabase
           .from("conversations")
-          .select("vehicle_info, recommendation_summary, scheduled_day, scheduled_time, scheduled_hour, scheduled_minute")
+          .select("vehicle_info, recommendation_summary, scheduled_day, scheduled_time")
           .eq("business_id", businessId)
           .eq("conversation_id", lead.conversation_id)
           .order("updated_at", { ascending: false })
@@ -580,7 +580,7 @@ export default function NewBookingPage() {
           : null,
     }
 
-    const { data, error: insertError } = await supabase.from("bookings").insert(payload).select("id").single()
+    const { data, error: insertError } = await supabase.from("bookings").insert(payload as any).select("id").single()
 
     if (insertError) {
       setLoading(false)
