@@ -168,6 +168,9 @@ export type Database = {
         Row: {
           business_id: string
           created_at: string
+          google_calendar_connected: boolean
+          google_calendar_id: string | null
+          google_calendar_refresh_token: string | null
           id: string
           instagram_access_token: string | null
           instagram_business_id: string | null
@@ -180,6 +183,9 @@ export type Database = {
         Insert: {
           business_id: string
           created_at?: string
+          google_calendar_connected?: boolean
+          google_calendar_id?: string | null
+          google_calendar_refresh_token?: string | null
           id?: string
           instagram_access_token?: string | null
           instagram_business_id?: string | null
@@ -192,6 +198,9 @@ export type Database = {
         Update: {
           business_id?: string
           created_at?: string
+          google_calendar_connected?: boolean
+          google_calendar_id?: string | null
+          google_calendar_refresh_token?: string | null
           id?: string
           instagram_access_token?: string | null
           instagram_business_id?: string | null
