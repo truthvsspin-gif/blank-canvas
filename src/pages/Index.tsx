@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { 
   ArrowRight, 
   Check, 
@@ -25,16 +25,26 @@ import { appSections } from "@/config/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { useLanguage } from "@/components/providers/language-provider"
+import { useAuth } from "@/hooks/useAuth"
 
 export default function Home() {
   const { lang, toggleLang } = useLanguage()
   const isEs = lang === "es"
   const [mounted, setMounted] = React.useState(false)
   const [menuOpen, setMenuOpen] = React.useState(false)
+  const { session, loading } = useAuth()
+  const navigate = useNavigate()
 
   React.useEffect(() => {
     setMounted(true)
   }, [])
+
+  // Redirect authenticated users (e.g. after email confirmation) to dashboard
+  React.useEffect(() => {
+    if (!loading && session) {
+      navigate("/dashboard", { replace: true })
+    }
+  }, [loading, session, navigate])
 
   if (!mounted) {
     return null
