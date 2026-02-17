@@ -36,3 +36,6 @@ verify_jwt = false
 [functions.lead-notify]
 verify_jwt = false
 
+[functions.google-calendar-auth]
+verify_jwt = false
+
