@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback, type ChangeEvent, type ReactNode } from "react";
 import { CrmGettingStarted } from "@/components/crm/crm-getting-started";
-import { BarChart3, ImagePlus, Loader2, Plus, Save, Settings, Trash2, X } from "lucide-react";
+import { BarChart3, CalendarDays, CheckCircle2, ImagePlus, Loader2, Plus, Save, Settings, Trash2, X, XCircle } from "lucide-react";
 
 import { useCurrentBusiness } from "@/hooks/use-current-business";
 import { useLanguage } from "@/components/providers/language-provider";
@@ -123,6 +123,9 @@ export default function Negocio() {
   const [statsLoading, setStatsLoading] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [gcalConnected, setGcalConnected] = useState(false);
+  const [gcalCalendarId, setGcalCalendarId] = useState<string | null>(null);
+  const [gcalLoading, setGcalLoading] = useState(false);
 
   const [form, setForm] = useState({
     name: "",
@@ -209,6 +212,123 @@ export default function Negocio() {
     };
 
     load();
+  }, [businessId]);
+
+  // --- Google Calendar status check ---
+  useEffect(() => {
+    if (!businessId) return;
+    const checkGcalStatus = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      try {
+        const res = await fetch(
+          `https://ybifjdlelpvgzmzvgwls.supabase.co/functions/v1/google-calendar-auth?action=status&businessId=${businessId}`,
+          { headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" } }
+        );
+        const json = await res.json();
+        setGcalConnected(json.connected ?? false);
+        setGcalCalendarId(json.calendarId ?? null);
+      } catch { /* ignore */ }
+    };
+    checkGcalStatus();
+  }, [businessId]);
+
+  // --- Handle Google Calendar OAuth callback ---
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    const state = params.get("state");
+    if (!code || !state) return;
+
+    // Clean URL
+    window.history.replaceState({}, "", window.location.pathname);
+
+    const exchangeCode = async () => {
+      setGcalLoading(true);
+      try {
+        const redirectUri = `${window.location.origin}/crm/negocio`;
+        const res = await fetch(
+          `https://ybifjdlelpvgzmzvgwls.supabase.co/functions/v1/google-calendar-auth?action=callback`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code, redirectUri, state }),
+          }
+        );
+        const json = await res.json();
+        if (json.success) {
+          setGcalConnected(true);
+          setGcalCalendarId(json.calendarId ?? null);
+        } else {
+          setError(json.error ?? "Google Calendar connection failed");
+        }
+      } catch (err) {
+        setError("Google Calendar connection failed");
+      } finally {
+        setGcalLoading(false);
+      }
+    };
+    exchangeCode();
+  }, []);
+
+  const handleGcalConnect = useCallback(async () => {
+    if (!businessId) return;
+    setGcalLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const redirectUri = `${window.location.origin}/crm/negocio`;
+      const res = await fetch(
+        `https://ybifjdlelpvgzmzvgwls.supabase.co/functions/v1/google-calendar-auth?action=initiate`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ businessId, redirectUri }),
+        }
+      );
+      const json = await res.json();
+      if (json.url) {
+        window.location.href = json.url;
+      } else {
+        setError(json.error ?? "Failed to start Google Calendar auth");
+        setGcalLoading(false);
+      }
+    } catch {
+      setError("Failed to start Google Calendar auth");
+      setGcalLoading(false);
+    }
+  }, [businessId]);
+
+  const handleGcalDisconnect = useCallback(async () => {
+    if (!businessId) return;
+    setGcalLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch(
+        `https://ybifjdlelpvgzmzvgwls.supabase.co/functions/v1/google-calendar-auth?action=disconnect`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ businessId }),
+        }
+      );
+      const json = await res.json();
+      if (json.success) {
+        setGcalConnected(false);
+        setGcalCalendarId(null);
+      }
+    } catch {
+      setError("Failed to disconnect Google Calendar");
+    } finally {
+      setGcalLoading(false);
+    }
   }, [businessId]);
 
   useEffect(() => {
@@ -620,6 +740,54 @@ export default function Negocio() {
                   setSettings((prev) => ({ ...prev, extras: { ...prev.extras, automatedReminders: checked } }))
                 }
               />
+
+              {/* Google Calendar Integration */}
+              <div className="mt-4 rounded-xl border bg-muted/30 p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <CalendarDays className="h-5 w-5 text-emerald-600" />
+                  <h3 className="text-sm font-semibold">Google Calendar</h3>
+                </div>
+                {gcalConnected ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm text-emerald-700">
+                      <CheckCircle2 className="h-4 w-4" />
+                      <span>{isEs ? "Conectado" : "Connected"}</span>
+                    </div>
+                    {gcalCalendarId && (
+                      <p className="text-xs text-muted-foreground truncate">
+                        Calendar: {gcalCalendarId}
+                      </p>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleGcalDisconnect}
+                      disabled={gcalLoading}
+                      className="text-destructive border-destructive/30 hover:bg-destructive/5"
+                    >
+                      {gcalLoading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <XCircle className="mr-1.5 h-3.5 w-3.5" />}
+                      {isEs ? "Desconectar" : "Disconnect"}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground">
+                      {isEs
+                        ? "Conecta Google Calendar para sincronizar reservas automaticamente."
+                        : "Connect Google Calendar to automatically sync bookings."}
+                    </p>
+                    <Button
+                      size="sm"
+                      onClick={handleGcalConnect}
+                      disabled={gcalLoading}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white"
+                    >
+                      {gcalLoading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <CalendarDays className="mr-1.5 h-3.5 w-3.5" />}
+                      {isEs ? "Conectar Google Calendar" : "Connect Google Calendar"}
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
