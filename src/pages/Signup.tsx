@@ -1,6 +1,6 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { Suspense, useEffect, useState } from "react"
-import { ArrowRight, Check, Eye, EyeOff, Lock, Mail, Sparkles, User } from "lucide-react"
+import { ArrowRight, Check, Eye, EyeOff, Lock, Mail, Sparkles, User, MailCheck } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -32,6 +32,7 @@ function SignupForm() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<{ message: string; variant: "success" | "error" } | null>(null)
+  const [showConfirmation, setShowConfirmation] = useState(false)
   const { session, loading: authLoading } = useAuth()
   const { lang } = useLanguage()
   const isEs = lang === "es"
@@ -134,8 +135,7 @@ function SignupForm() {
     }
 
     if (!data.session) {
-      setToast({ variant: "success", message: copy.toastConfirm })
-      navigate("/login")
+      setShowConfirmation(true)
       setSubmitting(false)
       return
     }
@@ -148,6 +148,38 @@ function SignupForm() {
   }
 
   const passwordMatch = password.length > 0 && confirmPassword.length > 0 && password === confirmPassword
+
+  if (showConfirmation) {
+    return (
+      <div className="w-full max-w-md mx-auto text-center">
+        <div className="inline-flex items-center justify-center mb-6">
+          <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-600 to-emerald-400 shadow-xl shadow-emerald-500/30">
+            <MailCheck className="h-10 w-10 text-white" />
+          </div>
+        </div>
+        <h1 className="text-2xl font-bold text-foreground mb-3">
+          {isEs ? "Revisa tu correo electrónico" : "Check your email"}
+        </h1>
+        <p className="text-muted-foreground mb-2">
+          {isEs
+            ? `Hemos enviado un enlace de confirmación a:`
+            : `We've sent a confirmation link to:`}
+        </p>
+        <p className="font-semibold text-foreground mb-6">{email}</p>
+        <div className="rounded-xl border border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground mb-8">
+          {isEs
+            ? "Haz clic en el enlace del correo para activar tu cuenta. Revisa también la carpeta de spam."
+            : "Click the link in the email to activate your account. Check your spam folder too."}
+        </div>
+        <Link
+          to="/login"
+          className="text-sm text-emerald-600 font-semibold hover:underline"
+        >
+          {isEs ? "Ir a iniciar sesión" : "Go to sign in"}
+        </Link>
+      </div>
+    )
+  }
 
   return (
     <div className="w-full max-w-md mx-auto">
