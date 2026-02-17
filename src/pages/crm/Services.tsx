@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, useCallback, type ReactNode } from "react";
 import { CrmGettingStarted } from "@/components/crm/crm-getting-started";
-import { BarChart3, Plus, Search, Settings, Trash2, X } from "lucide-react";
+import { BarChart3, Plus, Search, Settings, Trash2, X, Car } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,6 +8,19 @@ import { useCurrentBusiness } from "@/hooks/use-current-business";
 import { Service } from "@/types/crm";
 import { useLanguage } from "@/components/providers/language-provider";
 import { cn } from "@/lib/utils";
+
+const VEHICLE_SIZES = ["small", "medium", "large", "suv"] as const;
+type VehicleSize = (typeof VEHICLE_SIZES)[number];
+
+const SIZE_LABELS: Record<VehicleSize, { en: string; es: string }> = {
+  small: { en: "Small", es: "Pequeño" },
+  medium: { en: "Medium", es: "Mediano" },
+  large: { en: "Large", es: "Grande" },
+  suv: { en: "SUV", es: "SUV" },
+};
+
+type SizePriceRow = { size: VehicleSize; price: number };
+type SizePricesMap = Record<string, SizePriceRow[]>; // keyed by service_id
 
 type ServiceTab = "services" | "variants" | "surcharges" | "discounts";
 
@@ -78,6 +91,11 @@ export default function ServicesPage() {
   const [discounts, setDiscounts] = useState<ServiceDiscount[]>([]);
   const [pageSettings, setPageSettings] = useState<ServicesSettings>(defaultServicesSettings);
 
+  const [sizePrices, setSizePrices] = useState<SizePricesMap>({});
+  const [formSizePrices, setFormSizePrices] = useState<Record<VehicleSize, string>>({
+    small: "", medium: "", large: "", suv: "",
+  });
+
   const [serviceForm, setServiceForm] = useState({
     name: "",
     description: "",
@@ -119,8 +137,23 @@ export default function ServicesPage() {
     setLoading(false);
   };
 
+  const fetchSizePrices = useCallback(async () => {
+    if (!businessId) return;
+    const { data } = await supabase
+      .from("service_size_prices")
+      .select("service_id, size, price")
+      .eq("business_id", businessId);
+    const map: SizePricesMap = {};
+    for (const row of data || []) {
+      if (!map[row.service_id]) map[row.service_id] = [];
+      map[row.service_id].push({ size: row.size as VehicleSize, price: Number(row.price) });
+    }
+    setSizePrices(map);
+  }, [businessId]);
+
   useEffect(() => {
     fetchServices();
+    fetchSizePrices();
   }, [businessId]);
 
   useEffect(() => {
@@ -200,6 +233,7 @@ export default function ServicesPage() {
 
   const resetForms = () => {
     setServiceForm({ name: "", description: "", base_price: "", duration_minutes: "", is_active: true });
+    setFormSizePrices({ small: "", medium: "", large: "", suv: "" });
     setVariantForm({ name: "", description: "", showInGuide: true, active: true });
     setSurchargeForm({ name: "", price: "", services: "" });
     setDiscountForm({ code: "", discountPct: "", validity: "", status: "active", services: "" });
@@ -211,15 +245,32 @@ export default function ServicesPage() {
 
     if (activeTab === "services") {
       if (!serviceForm.name.trim()) return;
-      await supabase.from("services").insert({
+      const { data: inserted } = await supabase.from("services").insert({
         business_id: businessId,
         name: serviceForm.name.trim(),
         description: serviceForm.description || null,
         base_price: serviceForm.base_price ? Number(serviceForm.base_price) : null,
         duration_minutes: serviceForm.duration_minutes ? Number(serviceForm.duration_minutes) : null,
         is_active: serviceForm.is_active,
-      });
+      }).select("id").single();
+
+      // Save size prices if any were provided
+      if (inserted?.id) {
+        const sizePriceRows = VEHICLE_SIZES
+          .filter((size) => formSizePrices[size] && Number(formSizePrices[size]) > 0)
+          .map((size) => ({
+            service_id: inserted.id,
+            business_id: businessId,
+            size,
+            price: Number(formSizePrices[size]),
+          }));
+        if (sizePriceRows.length > 0) {
+          await supabase.from("service_size_prices").insert(sizePriceRows);
+        }
+      }
+
       await fetchServices();
+      await fetchSizePrices();
     } else if (activeTab === "variants") {
       if (!variantForm.name.trim()) return;
       const next = [
@@ -414,7 +465,8 @@ export default function ServicesPage() {
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase">{isEs ? "Nombre" : "Name"}</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase">{isEs ? "Descripcion" : "Description"}</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase">{isEs ? "Precio" : "Price"}</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase">{isEs ? "Precio base" : "Base Price"}</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase">{isEs ? "Precios por tamaño" : "Size Prices"}</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase">{isEs ? "Duracion" : "Duration"}</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase">{isEs ? "Activo" : "Active"}</th>
                     <th className="px-4 py-3 text-right text-xs font-semibold uppercase">{isEs ? "Acciones" : "Actions"}</th>
@@ -450,27 +502,44 @@ export default function ServicesPage() {
               </thead>
               <tbody>
                 {activeTab === "services" &&
-                  filteredServices.map((service) => (
-                    <tr key={service.id} className="border-t">
-                      <td className="px-4 py-3 font-medium">{service.name}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{service.description || "—"}</td>
-                      <td className="px-4 py-3">{service.base_price != null ? `€${service.base_price}` : "—"}</td>
-                      <td className="px-4 py-3">{service.duration_minutes ? `${service.duration_minutes} min` : "—"}</td>
-                      <td className="px-4 py-3">{service.is_active ? (isEs ? "Si" : "Yes") : (isEs ? "No" : "No")}</td>
-                      <td className="px-4 py-3 text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={async () => {
-                            await supabase.from("services").delete().eq("id", service.id);
-                            fetchServices();
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
+                  filteredServices.map((service) => {
+                    const sp = sizePrices[service.id] || [];
+                    return (
+                      <tr key={service.id} className="border-t">
+                        <td className="px-4 py-3 font-medium">{service.name}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{service.description || "—"}</td>
+                        <td className="px-4 py-3">{service.base_price != null ? `€${service.base_price}` : "—"}</td>
+                        <td className="px-4 py-3">
+                          {sp.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {sp.map((row) => (
+                                <span key={row.size} className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium">
+                                  {SIZE_LABELS[row.size][lang]}: €{row.price}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">{service.duration_minutes ? `${service.duration_minutes} min` : "—"}</td>
+                        <td className="px-4 py-3">{service.is_active ? (isEs ? "Si" : "Yes") : (isEs ? "No" : "No")}</td>
+                        <td className="px-4 py-3 text-right">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={async () => {
+                              await supabase.from("services").delete().eq("id", service.id);
+                              fetchServices();
+                              fetchSizePrices();
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
 
                 {activeTab === "variants" &&
                   filteredVariants.map((variant) => (
@@ -600,6 +669,35 @@ export default function ServicesPage() {
                     />
                     {isEs ? "Activo" : "Active"}
                   </label>
+
+                  {/* Size-based pricing grid */}
+                  <div className="space-y-2 rounded-lg border p-4 bg-muted/30">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <Car className="h-4 w-4 text-muted-foreground" />
+                      {isEs ? "Precios por tamaño" : "Prices by size"}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {isEs ? "Deja en blanco para usar el precio base" : "Leave blank to use base price"}
+                    </p>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {VEHICLE_SIZES.map((size) => (
+                        <div key={size} className="flex items-center gap-2">
+                          <span className="text-xs font-medium w-16">{SIZE_LABELS[size][lang]}</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="€"
+                            className="input-field flex-1"
+                            value={formSizePrices[size]}
+                            onChange={(e) =>
+                              setFormSizePrices((prev) => ({ ...prev, [size]: e.target.value }))
+                            }
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </>
               )}
 
