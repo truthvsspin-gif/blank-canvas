@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { CrmGettingStarted } from "@/components/crm/crm-getting-started";
 import { useCurrentBusiness } from "@/hooks/use-current-business";
 import { useLanguage } from "@/components/providers/language-provider";
@@ -40,6 +41,7 @@ type DatosStats = {
 export default function Datos() {
   const { businessId } = useCurrentBusiness();
   const { lang } = useLanguage();
+  const navigate = useNavigate();
   const isEs = lang === "es";
   const [activeTab, setActiveTab] = useState<TabKey>("orders");
   const [search, setSearch] = useState("");
@@ -222,7 +224,7 @@ export default function Datos() {
   const handleCreateCustomer = async () => {
     if (!businessId || !customerForm.full_name.trim()) return;
     setSaving(true);
-    await supabase.from("customers").insert({
+    const { error: err } = await supabase.from("customers").insert({
       business_id: businessId,
       full_name: customerForm.full_name.trim(),
       phone: customerForm.phone || null,
@@ -230,6 +232,11 @@ export default function Datos() {
       notes: customerForm.notes || null,
     });
     setSaving(false);
+    if (err) {
+      console.error("Customer creation error:", err);
+      alert(isEs ? `Error al crear cliente: ${err.message}` : `Error creating customer: ${err.message}`);
+      return;
+    }
     setDrawerOpen(null);
     setCustomerForm({ full_name: "", phone: "", email: "", notes: "" });
     fetchData();
@@ -498,7 +505,16 @@ export default function Datos() {
                 </tr>
               ) : (
                 filtered.map((item: any, idx: number) => (
-                  <tr key={item.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors cursor-pointer">
+                  <tr
+                    key={item.id}
+                    className="border-b last:border-0 hover:bg-muted/30 transition-colors cursor-pointer"
+                    onClick={() => {
+                      if (activeTab === "customers") navigate(`/crm/customers/${item.id}`);
+                      else if (activeTab === "orders") navigate(`/crm/bookings/${item.booking_id || item.id}`);
+                      else if (activeTab === "vehicles" && item.customer_id) navigate(`/crm/customers/${item.customer_id}`);
+                      else if (activeTab === "requests") navigate(`/crm/bookings/${item.id}`);
+                    }}
+                  >
                     {renderRow(item, idx)}
                   </tr>
                 ))
