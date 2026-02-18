@@ -82,6 +82,14 @@ export const appSections: AppSection[] = [
     group: "crm",
   },
   {
+    name: { en: "Services", es: "Servicios" },
+    href: "/crm/services",
+    summary: { en: "Service catalog and pricing.", es: "Catálogo de servicios y precios." },
+    badge: { en: "Svc", es: "Svc" },
+    icon: Wrench,
+    group: "crm",
+  },
+  {
     name: { en: "Business", es: "Negocio" },
     href: "/crm/negocio",
     summary: { en: "Business settings and configuration.", es: "Configuración del negocio." },
