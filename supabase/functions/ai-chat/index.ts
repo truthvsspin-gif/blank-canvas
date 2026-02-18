@@ -1820,20 +1820,20 @@ async function processStateMachine(
         newContext.vehicleInfo = { ...(newContext.vehicleInfo || {}), ...vehicleInfo };
         console.log(`[STATE MACHINE] Vehicle updated: ${JSON.stringify(newContext.vehicleInfo)}`);
       }
+      // Store early benefit/duration signals but do NOT skip STATE_2_BENEFIT.
+      // We ALWAYS ask the customer's main concern to validate their need
+      // before prescribing any service. This lets us guide the conversation
+      // and avoids offering the entry service when the customer actually
+      // wants premium protection.
       const earlyBenefit = parseBenefitIntent(userMessage);
       if (earlyBenefit && !newContext.benefitIntent) newContext.benefitIntent = earlyBenefit;
       const earlyDuration = parseProtectionDuration(userMessage);
       if (earlyDuration && !newContext.protectionDuration) newContext.protectionDuration = earlyDuration;
       if (hasVehicleCore(newContext.vehicleInfo)) {
-        if (newContext.benefitIntent) {
-          if (newContext.benefitIntent === "protection" && !newContext.protectionDuration) {
-            newContext.currentState = STATES.STATE_3_USAGE;
-          } else {
-            newContext.currentState = STATES.STATE_4_PRESCRIPTION;
-          }
-        } else {
-          newContext.currentState = STATES.STATE_2_BENEFIT;
-        }
+        // Always go to STATE_2_BENEFIT to ask the customer's main concern.
+        // Even if we detected a benefit keyword, we confirm it with the customer
+        // so they feel heard and we validate the actual need.
+        newContext.currentState = STATES.STATE_2_BENEFIT;
       }
       break;
     }
