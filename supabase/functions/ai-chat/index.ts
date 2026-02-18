@@ -1519,23 +1519,34 @@ Let them know no services are configured and offer to try again later.
   const otherTeaserEn = otherCount > 0
     ? ` We also offer ${otherCount} more package${otherCount > 1 ? "s" : ""} for different needs.`
     : "";
+  // Build a short list of other services by name + price for when customer asks
+  const otherServices = services.filter(s => !s.is_trojan_horse);
+  const otherListEs = otherServices.map(s => `- ${s.name}${s.base_price ? ` (~$${s.base_price})` : ""}`).join("\n");
+  const otherListEn = otherServices.map(s => `- ${s.name}${s.base_price ? ` (~$${s.base_price})` : ""}`).join("\n");
+
   const trojanHorseRule = trojanHorse
     ? language === "es"
       ? `
-REGLA TROJAN HORSE: Para consultas generales ("que servicios tienen", "cuanto cuesta", "informacion")
+REGLA TROJAN HORSE: Para consultas generales iniciales ("que servicios tienen", "cuanto cuesta", "informacion")
       Recomienda "${trojanHorse.name}"${trojanHorse.base_price ? ` (~$${trojanHorse.base_price})` : ""} como punto de entrada y menciona brevemente: "${otherTeaserEs.trim()}".
-      NO listes todos los servicios con detalle. Si ya conoces el vehiculo, personaliza la recomendacion.`
+      Si ya conoces el vehiculo, personaliza la recomendacion.
+      PERO si el cliente PREGUNTA EXPLICITAMENTE por otros servicios ("que otros servicios", "que mas ofrecen", "cuales son los otros"), DEBES listar los servicios por nombre y precio:
+${otherListEs}
+      Despues de listarlos, pregunta cual les interesa.`
       : `
-TROJAN HORSE RULE: For general inquiries ("what services", "how much", "information")
+TROJAN HORSE RULE: For initial general inquiries ("what services", "how much", "information")
       Recommend "${trojanHorse.name}"${trojanHorse.base_price ? ` (~$${trojanHorse.base_price})` : ""} as the entry point and briefly mention: "${otherTeaserEn.trim()}".
-      DO NOT list all services in detail. If you already know the vehicle, personalize the recommendation.`
+      If you already know the vehicle, personalize the recommendation.
+      BUT if the customer EXPLICITLY ASKS about other services ("what other services", "what else do you offer", "what are the others"), you MUST list the services by name and price:
+${otherListEn}
+      After listing them, ask which one interests them.`
     : "";
 
   const rulesBlock = language === "es"
     ? `REGLAS DE USO:
 - SOLO puedes recomendar servicios listados aqui
 - NUNCA inventes servicios, paquetes o precios
-- NUNCA listes todos los servicios al cliente con detalle
+- NO listes todos los servicios EXCEPTO cuando el cliente pregunte explicitamente por otros servicios
 - Selecciona UNA mejor opcion basada en su situacion
 - Si nada aplica, haz UNA pregunta de aclaracion o cierra de forma amable
 - SIEMPRE menciona el precio cuando recomiendes un servicio
@@ -1543,7 +1554,7 @@ TROJAN HORSE RULE: For general inquiries ("what services", "how much", "informat
     : `USAGE RULES:
 - You may ONLY recommend services listed here
 - NEVER invent services, packages, or prices
-- NEVER list all services to the customer in detail
+- Do NOT list all services UNLESS the customer explicitly asks about other services
 - Select ONE best option based on their situation
 - If nothing fits, ask ONE clarifying question or close politely
 - ALWAYS mention the price when recommending a service
