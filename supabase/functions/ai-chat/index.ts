@@ -1348,39 +1348,39 @@ Ask: "Are you looking for something that lasts a few months, or long-term protec
 
     case STATES.STATE_4_PRESCRIPTION:
       stateGoal = language === "es"
-        ? `OBJETIVO: Hacer UNA recomendacion con PRECIO basada en el CONTEXTO DE NEGOCIO.
+        ? `OBJETIVO: Recomendar PRIMERO el servicio Trojan Horse (entrada) con PRECIO.
 1. Breve resumen mostrando que entiendes su situacion
 2. Enmarca el beneficio principal (no proceso tecnico)
-3. Haz UNA recomendacion del servicio que MEJOR APLICA de tu contexto
-4. INCLUYE el precio exacto del servicio (ej: '$199')
-5. Si es la primera recomendacion, cierra con UNA pregunta binaria para avanzar venta
-6. Si el cliente pregunta aclaraciones ("cual opcion", "que incluye", "precio"), RESPONDE eso primero y no repitas el mismo pitch literal
-7. Si piden opcion robusta, vuelve a recomendar UNA opcion superior (sin listar menu completo)
-8. Si preguntan por OTROS servicios/paquetes, menciona brevemente las opciones sin dar detalles extensos y luego recomienda la que mejor aplica
+3. Recomienda el servicio marcado como Trojan Horse (entrada) con su precio exacto (ej: '$99')
+4. Cierra SIEMPRE con esta pregunta: "Te interesa este servicio o prefieres algo mas completo y profundo?"
+5. Si el cliente dice que SI quiere el basico, avanza a agendar (STATE 5)
+6. Si el cliente pide algo mas completo/profundo, recomienda UNA opcion superior con precio y cierra con pregunta binaria para avanzar
+7. Si pregunta aclaraciones ("que incluye", "precio"), responde eso primero sin repetir el mismo pitch
+8. Si preguntan por TODOS los servicios, menciona brevemente las opciones y recomienda la que mejor aplica
 
 CRITICO: Ya tienes TODA la informacion del vehiculo en INFORMACION CONFIRMADA.
 NO vuelvas a preguntar marca, modelo ni tipo de vehiculo.
 USA esa informacion para personalizar tu recomendacion.
 
-IMPORTANTE: Selecciona el servicio que mejor encaja basandote en:
+IMPORTANTE: Selecciona precios basandote en:
 - Vehiculo del cliente (tamano, tipo)
 - Objetivo deseado (brillo, proteccion, interior)
 - Duracion de proteccion si aplica`
-        : `GOAL: Make ONE recommendation with PRICE based on BUSINESS CONTEXT.
+        : `GOAL: Recommend the Trojan Horse (entry-level) service FIRST with PRICE.
 1. Brief summary showing you understand their situation
 2. Frame the primary benefit (not technical process)
-3. Make ONE recommendation for the BEST MATCHING service from your context
-4. INCLUDE the exact price (e.g., '$199')
-5. If this is the first recommendation, close with ONE binary next-step question
-6. If customer asks clarification ("which option", "what is included", "price"), answer that first and avoid repeating the exact same pitch
-7. If they ask for a robust option, recommend ONE stronger service (do not list full menu)
-8. If they ask about OTHER services/packages, briefly mention available options without extensive detail and then recommend the best fit
+3. Recommend the Trojan Horse (entry) service with its exact price (e.g., '$99')
+4. ALWAYS close with: "Is this something you'd like, or would you prefer a deeper, more complete service?"
+5. If the customer says YES to the basic, advance to scheduling (STATE 5)
+6. If the customer asks for something deeper/more complete, recommend ONE superior option with price and close with a binary next-step question
+7. If customer asks clarification ("what's included", "price"), answer that first without repeating the same pitch
+8. If they ask about ALL services, briefly mention options and recommend the best fit
 
 CRITICAL: You already have ALL vehicle information in CONFIRMED INFORMATION.
 DO NOT ask for make, model, or vehicle type again.
 USE that information to personalize your recommendation.
 
-IMPORTANT: Select the service that best fits based on:
+IMPORTANT: Select prices based on:
 - Customer's vehicle (size, type)
 - Desired outcome (shine, protection, interior)
 - Protection duration if applicable`;
