@@ -397,8 +397,8 @@ export default function ServicesPage() {
         ctaLabelEn="+ Service"
         onCtaClick={() => setShowModal(true)}
       />
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-foreground">{isEs ? "Servicios" : "Services"}</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <h1 className="text-xl sm:text-2xl font-bold text-foreground">{isEs ? "Servicios" : "Services"}</h1>
         <div className="flex items-center gap-3">
           <button
             className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
@@ -406,7 +406,7 @@ export default function ServicesPage() {
             type="button"
           >
             <BarChart3 className="h-4 w-4" />
-            {isEs ? "Ver estadisticas" : "View stats"}
+            <span className="hidden sm:inline">{isEs ? "Ver estadisticas" : "View stats"}</span>
           </button>
           <button
             className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
@@ -414,19 +414,19 @@ export default function ServicesPage() {
             type="button"
           >
             <Settings className="h-4 w-4" />
-            {isEs ? "Ajustes" : "Settings"}
+            <span className="hidden sm:inline">{isEs ? "Ajustes" : "Settings"}</span>
           </button>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-1 border-b">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex gap-1 border-b overflow-x-auto scrollbar-thin">
           {serviceTabs.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
               className={cn(
-                "border-b-2 -mb-px px-4 py-2.5 text-sm font-medium transition-colors",
+                "border-b-2 -mb-px px-3 sm:px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap",
                 activeTab === tab.key ? "border-emerald-600 text-emerald-700" : "border-transparent text-muted-foreground hover:text-foreground"
               )}
             >
@@ -434,23 +434,24 @@ export default function ServicesPage() {
             </button>
           ))}
         </div>
-        <Button onClick={() => setShowModal(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white">
+        <Button onClick={() => setShowModal(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white w-full sm:w-auto">
           <Plus className="mr-1 h-4 w-4" />
           {createLabel}
         </Button>
       </div>
 
-      <div className="relative max-w-sm">
+      <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <input
-          className="w-full rounded-lg border bg-background pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+          className="w-full sm:max-w-sm rounded-lg border bg-background pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
           placeholder={isEs ? "Escribe para buscar..." : "Search..."}
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
       </div>
 
-      <div className="rounded-xl border bg-card overflow-hidden">
+      {/* Desktop table */}
+      <div className="hidden md:block rounded-xl border bg-card overflow-hidden">
         <div className="overflow-x-auto">
           {loading ? (
             <div className="px-4 py-16 text-sm text-muted-foreground">{isEs ? "Cargando..." : "Loading..."}</div>
@@ -525,22 +526,13 @@ export default function ServicesPage() {
                         <td className="px-4 py-3">{service.duration_minutes ? `${service.duration_minutes} min` : "—"}</td>
                         <td className="px-4 py-3">{service.is_active ? (isEs ? "Si" : "Yes") : (isEs ? "No" : "No")}</td>
                         <td className="px-4 py-3 text-right">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={async () => {
-                              await supabase.from("services").delete().eq("id", service.id);
-                              fetchServices();
-                              fetchSizePrices();
-                            }}
-                          >
+                          <Button variant="ghost" size="icon" onClick={async () => { await supabase.from("services").delete().eq("id", service.id); fetchServices(); fetchSizePrices(); }}>
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                         </td>
                       </tr>
                     );
                   })}
-
                 {activeTab === "variants" &&
                   filteredVariants.map((variant) => (
                     <tr key={variant.id} className="border-t">
@@ -549,21 +541,12 @@ export default function ServicesPage() {
                       <td className="px-4 py-3">{variant.showInGuide ? (isEs ? "Si" : "Yes") : (isEs ? "No" : "No")}</td>
                       <td className="px-4 py-3">{variant.active ? (isEs ? "Si" : "Yes") : (isEs ? "No" : "No")}</td>
                       <td className="px-4 py-3 text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            const next = variants.filter((row) => row.id !== variant.id);
-                            setVariants(next);
-                            persistMeta({ variants: next });
-                          }}
-                        >
+                        <Button variant="ghost" size="icon" onClick={() => { const next = variants.filter((row) => row.id !== variant.id); setVariants(next); persistMeta({ variants: next }); }}>
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </td>
                     </tr>
                   ))}
-
                 {activeTab === "surcharges" &&
                   filteredSurcharges.map((row) => (
                     <tr key={row.id} className="border-t">
@@ -571,21 +554,12 @@ export default function ServicesPage() {
                       <td className="px-4 py-3">€{row.price.toFixed(2)}</td>
                       <td className="px-4 py-3 text-muted-foreground">{row.services || "—"}</td>
                       <td className="px-4 py-3 text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            const next = surcharges.filter((s) => s.id !== row.id);
-                            setSurcharges(next);
-                            persistMeta({ surcharges: next });
-                          }}
-                        >
+                        <Button variant="ghost" size="icon" onClick={() => { const next = surcharges.filter((s) => s.id !== row.id); setSurcharges(next); persistMeta({ surcharges: next }); }}>
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </td>
                     </tr>
                   ))}
-
                 {activeTab === "discounts" &&
                   filteredDiscounts.map((row) => (
                     <tr key={row.id} className="border-t">
@@ -595,15 +569,7 @@ export default function ServicesPage() {
                       <td className="px-4 py-3">{row.status}</td>
                       <td className="px-4 py-3 text-muted-foreground">{row.services || "—"}</td>
                       <td className="px-4 py-3 text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            const next = discounts.filter((s) => s.id !== row.id);
-                            setDiscounts(next);
-                            persistMeta({ discounts: next });
-                          }}
-                        >
+                        <Button variant="ghost" size="icon" onClick={() => { const next = discounts.filter((s) => s.id !== row.id); setDiscounts(next); persistMeta({ discounts: next }); }}>
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </td>
@@ -615,10 +581,109 @@ export default function ServicesPage() {
         </div>
       </div>
 
+      {/* Mobile cards */}
+      <div className="md:hidden space-y-3">
+        {loading ? (
+          <div className="py-12 text-center text-sm text-muted-foreground">{isEs ? "Cargando..." : "Loading..."}</div>
+        ) : !hasData ? (
+          <div className="py-12 text-center text-sm text-muted-foreground">
+            {isEs ? `Aun no hay ${createLabel.toLowerCase()}s.` : `No ${createLabel.toLowerCase()}s yet.`}
+          </div>
+        ) : (
+          <>
+            {activeTab === "services" && filteredServices.map((service) => {
+              const sp = sizePrices[service.id] || [];
+              return (
+                <div key={service.id} className="rounded-xl border bg-card p-4 space-y-2">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="font-semibold text-foreground">{service.name}</p>
+                      {service.description && <p className="text-xs text-muted-foreground mt-0.5">{service.description}</p>}
+                    </div>
+                    <Button variant="ghost" size="icon" className="shrink-0 -mt-1 -mr-2" onClick={async () => { await supabase.from("services").delete().eq("id", service.id); fetchServices(); fetchSizePrices(); }}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    {service.base_price != null && (
+                      <span className="rounded-full bg-muted px-2 py-0.5 font-medium">€{service.base_price}</span>
+                    )}
+                    {service.duration_minutes && (
+                      <span className="rounded-full bg-muted px-2 py-0.5">{service.duration_minutes} min</span>
+                    )}
+                    <span className={cn("rounded-full px-2 py-0.5", service.is_active ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground")}>
+                      {service.is_active ? (isEs ? "Activo" : "Active") : (isEs ? "Inactivo" : "Inactive")}
+                    </span>
+                  </div>
+                  {sp.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {sp.map((row) => (
+                        <span key={row.size} className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium">
+                          {SIZE_LABELS[row.size][lang]}: €{row.price}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {activeTab === "variants" && filteredVariants.map((variant) => (
+              <div key={variant.id} className="rounded-xl border bg-card p-4 space-y-2">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="font-semibold text-foreground">{variant.name}</p>
+                    {variant.description && <p className="text-xs text-muted-foreground mt-0.5">{variant.description}</p>}
+                  </div>
+                  <Button variant="ghost" size="icon" className="shrink-0 -mt-1 -mr-2" onClick={() => { const next = variants.filter((r) => r.id !== variant.id); setVariants(next); persistMeta({ variants: next }); }}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+                <div className="flex gap-2 text-xs">
+                  <span className={cn("rounded-full px-2 py-0.5", variant.active ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground")}>
+                    {variant.active ? (isEs ? "Activo" : "Active") : (isEs ? "Inactivo" : "Inactive")}
+                  </span>
+                  {variant.showInGuide && <span className="rounded-full bg-muted px-2 py-0.5">{isEs ? "En guia" : "In guide"}</span>}
+                </div>
+              </div>
+            ))}
+            {activeTab === "surcharges" && filteredSurcharges.map((row) => (
+              <div key={row.id} className="rounded-xl border bg-card p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-semibold text-foreground">{row.name}</p>
+                    <p className="text-sm text-muted-foreground mt-0.5">€{row.price.toFixed(2)}{row.services ? ` · ${row.services}` : ""}</p>
+                  </div>
+                  <Button variant="ghost" size="icon" className="shrink-0" onClick={() => { const next = surcharges.filter((s) => s.id !== row.id); setSurcharges(next); persistMeta({ surcharges: next }); }}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+            {activeTab === "discounts" && filteredDiscounts.map((row) => (
+              <div key={row.id} className="rounded-xl border bg-card p-4 space-y-1">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="font-semibold text-foreground">{row.code}</p>
+                    <p className="text-sm text-muted-foreground">{row.discountPct}%{row.validity ? ` · ${row.validity}` : ""}</p>
+                  </div>
+                  <Button variant="ghost" size="icon" className="shrink-0 -mt-1 -mr-2" onClick={() => { const next = discounts.filter((s) => s.id !== row.id); setDiscounts(next); persistMeta({ discounts: next }); }}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+                <div className="flex gap-2 text-xs">
+                  <span className={cn("rounded-full px-2 py-0.5", row.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground")}>{row.status}</span>
+                  {row.services && <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">{row.services}</span>}
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-20">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-start justify-center sm:pt-20">
           <div className="absolute inset-0 bg-black/30" onClick={resetForms} />
-          <div className="relative w-full max-w-lg rounded-xl border bg-background shadow-2xl">
+          <div className="relative w-full max-w-lg rounded-t-xl sm:rounded-xl border bg-background shadow-2xl max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b px-6 py-4">
               <h2 className="text-lg font-bold">{isEs ? `Crear ${createLabel}` : `Create ${createLabel}`}</h2>
               <Button variant="ghost" size="icon" onClick={resetForms}>
