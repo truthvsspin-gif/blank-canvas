@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, useCallback, type ReactNode } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef, type ReactNode } from "react";
 import { CrmGettingStarted } from "@/components/crm/crm-getting-started";
-import { BarChart3, Plus, Search, Settings, Trash2, X, Car, Star } from "lucide-react";
+import { BarChart3, Plus, Search, Settings, Trash2, X, Car, Star, Upload, Image } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -104,6 +104,9 @@ export default function ServicesPage() {
     duration_minutes: "",
     is_active: true,
   });
+  const [flyerFile, setFlyerFile] = useState<File | null>(null);
+  const [flyerPreview, setFlyerPreview] = useState<string | null>(null);
+  const flyerInputRef = useRef<HTMLInputElement>(null);
   const [variantForm, setVariantForm] = useState({
     name: "",
     description: "",
@@ -235,6 +238,8 @@ export default function ServicesPage() {
   const resetForms = () => {
     setServiceForm({ name: "", description: "", base_price: "", duration_minutes: "", is_active: true });
     setFormSizePrices({ small: "", medium: "", large: "", suv: "" });
+    setFlyerFile(null);
+    setFlyerPreview(null);
     setVariantForm({ name: "", description: "", showInGuide: true, active: true });
     setSurchargeForm({ name: "", price: "", services: "" });
     setDiscountForm({ code: "", discountPct: "", validity: "", status: "active", services: "" });
@@ -248,6 +253,19 @@ export default function ServicesPage() {
 
     if (activeTab === "services") {
       if (!serviceForm.name.trim()) return;
+
+      // Upload flyer if provided
+      let flyerUrl: string | null = null;
+      if (flyerFile && businessId) {
+        const ext = flyerFile.name.split(".").pop() || "jpg";
+        const path = `${businessId}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const { error: uploadErr } = await supabase.storage.from("flyers").upload(path, flyerFile, { contentType: flyerFile.type });
+        if (!uploadErr) {
+          const { data: publicUrl } = supabase.storage.from("flyers").getPublicUrl(path);
+          flyerUrl = publicUrl.publicUrl;
+        }
+      }
+
       const { data: inserted } = await supabase.from("services").insert({
         business_id: businessId,
         name: serviceForm.name.trim(),
@@ -255,6 +273,7 @@ export default function ServicesPage() {
         base_price: serviceForm.base_price ? Number(serviceForm.base_price) : null,
         duration_minutes: serviceForm.duration_minutes ? Number(serviceForm.duration_minutes) : null,
         is_active: serviceForm.is_active,
+        flyer_url: flyerUrl,
       }).select("id").single();
 
       // Save size prices if any were provided
@@ -478,6 +497,7 @@ export default function ServicesPage() {
               <thead className="bg-muted/50">
                 {activeTab === "services" && (
                   <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase">Flyer</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase">{isEs ? "Nombre" : "Name"}</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase">{isEs ? "Descripcion" : "Description"}</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase">{isEs ? "Precio base" : "Base Price"}</th>
@@ -522,6 +542,15 @@ export default function ServicesPage() {
                     const sp = sizePrices[service.id] || [];
                     return (
                       <tr key={service.id} className="border-t">
+                        <td className="px-4 py-3">
+                          {service.flyer_url ? (
+                            <img src={service.flyer_url} alt="" className="h-10 w-10 rounded object-cover" />
+                          ) : (
+                            <span className="inline-flex h-10 w-10 items-center justify-center rounded bg-muted text-muted-foreground">
+                              <Image className="h-4 w-4" />
+                            </span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 font-medium">{service.name}</td>
                         <td className="px-4 py-3 text-muted-foreground">{service.description || "—"}</td>
                         <td className="px-4 py-3">{service.base_price != null ? `€${service.base_price}` : "—"}</td>
@@ -625,6 +654,9 @@ export default function ServicesPage() {
               const sp = sizePrices[service.id] || [];
               return (
                 <div key={service.id} className="rounded-xl border bg-card p-4 space-y-2">
+                  {service.flyer_url && (
+                    <img src={service.flyer_url} alt="" className="rounded-lg w-full h-32 object-cover" />
+                  )}
                   <div className="flex items-start justify-between">
                     <div>
                       <p className="font-semibold text-foreground">{service.name}</p>
@@ -806,6 +838,51 @@ export default function ServicesPage() {
                         </div>
                       ))}
                     </div>
+                  </div>
+
+                  {/* Flyer upload */}
+                  <div className="space-y-2 rounded-lg border p-4 bg-muted/30">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <Image className="h-4 w-4 text-muted-foreground" />
+                      {isEs ? "Flyer del servicio" : "Service flyer"}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {isEs ? "Imagen que el chatbot enviará al recomendar este servicio" : "Image the chatbot will send when recommending this service"}
+                    </p>
+                    <input
+                      ref={flyerInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setFlyerFile(file);
+                          setFlyerPreview(URL.createObjectURL(file));
+                        }
+                      }}
+                    />
+                    {flyerPreview ? (
+                      <div className="relative">
+                        <img src={flyerPreview} alt="Flyer preview" className="rounded-lg max-h-40 object-contain w-full" />
+                        <button
+                          type="button"
+                          className="absolute top-1 right-1 rounded-full bg-black/60 p-1 text-white hover:bg-black/80"
+                          onClick={() => { setFlyerFile(null); setFlyerPreview(null); }}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => flyerInputRef.current?.click()}
+                        className="flex items-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/30 px-4 py-6 w-full justify-center text-sm text-muted-foreground hover:border-emerald-500 hover:text-foreground transition-colors"
+                      >
+                        <Upload className="h-4 w-4" />
+                        {isEs ? "Subir imagen" : "Upload image"}
+                      </button>
+                    )}
                   </div>
                 </>
               )}

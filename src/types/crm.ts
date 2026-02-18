@@ -33,6 +33,7 @@ export type Service = {
   duration_minutes: number | null
   is_active: boolean
   is_trojan_horse: boolean
+  flyer_url: string | null
   created_at: string
 }
 
