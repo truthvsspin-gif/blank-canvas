@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback, useRef, type ReactNode } from "react";
 import { CrmGettingStarted } from "@/components/crm/crm-getting-started";
-import { BarChart3, Plus, Search, Settings, Trash2, X, Car, Star, Upload, Image } from "lucide-react";
+import { BarChart3, Plus, Search, Settings, Trash2, X, Car, Star, Upload, Image, Pencil } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -83,6 +83,7 @@ export default function ServicesPage() {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
+  const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
   const [statsOpen, setStatsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -240,10 +241,33 @@ export default function ServicesPage() {
     setFormSizePrices({ small: "", medium: "", large: "", suv: "" });
     setFlyerFile(null);
     setFlyerPreview(null);
+    setEditingServiceId(null);
     setVariantForm({ name: "", description: "", showInGuide: true, active: true });
     setSurchargeForm({ name: "", price: "", services: "" });
     setDiscountForm({ code: "", discountPct: "", validity: "", status: "active", services: "" });
     setShowModal(false);
+  };
+
+  const openEditService = (service: Service) => {
+    setEditingServiceId(service.id);
+    setServiceForm({
+      name: service.name,
+      description: service.description || "",
+      base_price: service.base_price != null ? String(service.base_price) : "",
+      duration_minutes: service.duration_minutes != null ? String(service.duration_minutes) : "",
+      is_active: service.is_active,
+    });
+    setFlyerPreview(service.flyer_url || null);
+    setFlyerFile(null);
+    // Load size prices for this service
+    const sp = sizePrices[service.id] || [];
+    const spMap: Record<VehicleSize, string> = { small: "", medium: "", large: "", suv: "" };
+    for (const row of sp) {
+      spMap[row.size] = String(row.price);
+    }
+    setFormSizePrices(spMap);
+    setActiveTab("services");
+    setShowModal(true);
   };
 
   const handleCreate = async () => {
@@ -255,7 +279,7 @@ export default function ServicesPage() {
       if (!serviceForm.name.trim()) return;
 
       // Upload flyer if provided
-      let flyerUrl: string | null = null;
+      let flyerUrl: string | null = flyerPreview && !flyerFile ? flyerPreview : null;
       if (flyerFile && businessId) {
         const ext = flyerFile.name.split(".").pop() || "jpg";
         const path = `${businessId}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
@@ -266,22 +290,37 @@ export default function ServicesPage() {
         }
       }
 
-      const { data: inserted } = await supabase.from("services").insert({
-        business_id: businessId,
+      const servicePayload = {
         name: serviceForm.name.trim(),
         description: serviceForm.description || null,
         base_price: serviceForm.base_price ? Number(serviceForm.base_price) : null,
         duration_minutes: serviceForm.duration_minutes ? Number(serviceForm.duration_minutes) : null,
         is_active: serviceForm.is_active,
         flyer_url: flyerUrl,
-      }).select("id").single();
+      };
 
-      // Save size prices if any were provided
-      if (inserted?.id) {
+      let serviceId = editingServiceId;
+
+      if (editingServiceId) {
+        // UPDATE existing service
+        await supabase.from("services").update(servicePayload).eq("id", editingServiceId);
+        // Replace size prices: delete old, insert new
+        await supabase.from("service_size_prices").delete().eq("service_id", editingServiceId);
+      } else {
+        // INSERT new service
+        const { data: inserted } = await supabase.from("services").insert({
+          business_id: businessId,
+          ...servicePayload,
+        }).select("id").single();
+        serviceId = inserted?.id || null;
+      }
+
+      // Save size prices
+      if (serviceId) {
         const sizePriceRows = VEHICLE_SIZES
           .filter((size) => formSizePrices[size] && Number(formSizePrices[size]) > 0)
           .map((size) => ({
-            service_id: inserted.id,
+            service_id: serviceId!,
             business_id: businessId,
             size,
             price: Number(formSizePrices[size]),
@@ -584,7 +623,10 @@ export default function ServicesPage() {
                             {service.is_trojan_horse && <Star className="h-3 w-3 text-white fill-white" />}
                           </button>
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-4 py-3 text-right flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => openEditService(service)}>
+                            <Pencil className="h-4 w-4 text-muted-foreground" />
+                          </Button>
                           <Button variant="ghost" size="icon" onClick={async () => { await supabase.from("services").delete().eq("id", service.id); fetchServices(); fetchSizePrices(); }}>
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
@@ -662,9 +704,14 @@ export default function ServicesPage() {
                       <p className="font-semibold text-foreground">{service.name}</p>
                       {service.description && <p className="text-xs text-muted-foreground mt-0.5">{service.description}</p>}
                     </div>
-                    <Button variant="ghost" size="icon" className="shrink-0 -mt-1 -mr-2" onClick={async () => { await supabase.from("services").delete().eq("id", service.id); fetchServices(); fetchSizePrices(); }}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                    <div className="flex items-center gap-1 shrink-0 -mt-1 -mr-2">
+                      <Button variant="ghost" size="icon" onClick={() => openEditService(service)}>
+                        <Pencil className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={async () => { await supabase.from("services").delete().eq("id", service.id); fetchServices(); fetchSizePrices(); }}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 text-xs">
                     {service.base_price != null && (
@@ -761,7 +808,11 @@ export default function ServicesPage() {
           <div className="absolute inset-0 bg-black/30" onClick={resetForms} />
           <div className="relative w-full max-w-lg rounded-t-xl sm:rounded-xl border bg-background shadow-2xl max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b px-6 py-4">
-              <h2 className="text-lg font-bold">{isEs ? `Crear ${createLabel}` : `Create ${createLabel}`}</h2>
+              <h2 className="text-lg font-bold">
+                {editingServiceId
+                  ? (isEs ? `Editar ${createLabel}` : `Edit ${createLabel}`)
+                  : (isEs ? `Crear ${createLabel}` : `Create ${createLabel}`)}
+              </h2>
               <Button variant="ghost" size="icon" onClick={resetForms}>
                 <X className="h-5 w-5" />
               </Button>
