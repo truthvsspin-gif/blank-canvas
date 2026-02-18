@@ -1414,14 +1414,22 @@ Ask: "${askEn}"`;
     }
     case STATES.STATE_6_ACTION:
       stateGoal = language === "es"
-        ? `OBJETIVO: Confirmar la reserva creada.
+        ? `OBJETIVO: Recopilar datos de confirmacion para la cita.
+Pide al cliente los siguientes datos para confirmar:
+1. Nombre completo
+2. Vehiculo (marca y modelo, si aun no lo tienes confirmado)
+3. Numero de WhatsApp o telefono de contacto
 Menciona el dia/horario si ya lo tienes.
 No transfieras a humano.
-Respuesta CORTA (1-2 oraciones).`
-        : `GOAL: Confirm the booking is created.
+Respuesta CORTA (2-3 oraciones).`
+        : `GOAL: Collect confirmation details for the appointment.
+Ask the customer for the following to confirm:
+1. Full name
+2. Vehicle (make and model, if not already confirmed)
+3. WhatsApp or phone number for contact
 Mention the day/time if available.
 Do not hand off to a human.
-SHORT response (1-2 sentences).`;
+SHORT response (2-3 sentences).`;
       break;
 
     case STATES.STATE_7_HANDOFF:
