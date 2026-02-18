@@ -85,6 +85,7 @@ export default function ServicesPage() {
   const [showModal, setShowModal] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const [variants, setVariants] = useState<ServiceVariant[]>([]);
   const [surcharges, setSurcharges] = useState<ServiceSurcharge[]>([]);
@@ -241,7 +242,9 @@ export default function ServicesPage() {
   };
 
   const handleCreate = async () => {
-    if (!businessId) return;
+    if (!businessId || saving) return;
+    setSaving(true);
+    try {
 
     if (activeTab === "services") {
       if (!serviceForm.name.trim()) return;
@@ -313,6 +316,9 @@ export default function ServicesPage() {
       ];
       setDiscounts(next);
       persistMeta({ discounts: next });
+    }
+    } finally {
+      setSaving(false);
     }
 
     resetForms();
@@ -826,7 +832,7 @@ export default function ServicesPage() {
               <Button variant="outline" onClick={resetForms}>
                 {isEs ? "Cancelar" : "Cancel"}
               </Button>
-              <Button onClick={handleCreate} className="bg-emerald-600 hover:bg-emerald-500 text-white">
+              <Button onClick={handleCreate} disabled={saving} className="bg-emerald-600 hover:bg-emerald-500 text-white">
                 {isEs ? "Guardar" : "Save"}
               </Button>
             </div>
