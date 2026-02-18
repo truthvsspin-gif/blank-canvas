@@ -60,6 +60,16 @@ export default function BookingDetailPage() {
     return leads.find((lead) => lead.id === booking.lead_id) || null
   }, [booking?.lead_id, leads])
 
+  const selectedCustomer = useMemo(() => {
+    if (!selectedCustomerId) return null
+    return customers.find((c) => c.id === selectedCustomerId) || null
+  }, [selectedCustomerId, customers])
+
+  const selectedVehicle = useMemo(() => {
+    if (!booking?.vehicle_id) return null
+    return vehicles.find((v) => v.id === booking.vehicle_id) || null
+  }, [booking?.vehicle_id, vehicles])
+
   const getStaffLabel = (member: StaffOption) => {
     const userRow = Array.isArray(member.users) ? member.users[0] : member.users
     return userRow?.full_name || userRow?.email || member.user_id
@@ -414,6 +424,42 @@ export default function BookingDetailPage() {
         </Card>
 
         <div className="space-y-6">
+          {/* Customer & Vehicle Info */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Customer & Vehicle</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm space-y-3">
+              {selectedCustomer ? (
+                <div>
+                  <p className="font-medium">{selectedCustomer.full_name}</p>
+                  {selectedCustomer.phone && <p className="text-muted-foreground">{selectedCustomer.phone}</p>}
+                  {selectedCustomer.email && <p className="text-muted-foreground">{selectedCustomer.email}</p>}
+                  <Link to={`/crm/customers/${selectedCustomer.id}`} className="text-xs text-primary hover:underline">
+                    View profile →
+                  </Link>
+                </div>
+              ) : (
+                <p className="text-muted-foreground">No customer linked.</p>
+              )}
+              <hr className="border-border" />
+              {selectedVehicle ? (
+                <div>
+                  <p className="font-medium">
+                    {[selectedVehicle.brand, selectedVehicle.model].filter(Boolean).join(" ") || "Vehicle"}
+                  </p>
+                  {selectedVehicle.license_plate && (
+                    <p className="text-muted-foreground">Plate: {selectedVehicle.license_plate}</p>
+                  )}
+                  {selectedVehicle.color && <p className="text-muted-foreground">Color: {selectedVehicle.color}</p>}
+                  {selectedVehicle.size && <p className="text-muted-foreground">Size: {selectedVehicle.size}</p>}
+                </div>
+              ) : (
+                <p className="text-muted-foreground">No vehicle linked.</p>
+              )}
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
