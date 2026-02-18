@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import { ArrowLeft, Bot, Loader2, Save, ShieldCheck, ShieldX, Trash2 } from "lucide-react"
+import { BookingCustomerVehicleCard } from "@/components/crm/booking-customer-vehicle-card"
 
 import { PageHeader } from "@/components/layout/page-header"
 import { Button } from "@/components/ui/button"
@@ -424,41 +425,17 @@ export default function BookingDetailPage() {
         </Card>
 
         <div className="space-y-6">
-          {/* Customer & Vehicle Info */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Customer & Vehicle</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm space-y-3">
-              {selectedCustomer ? (
-                <div>
-                  <p className="font-medium">{selectedCustomer.full_name}</p>
-                  {selectedCustomer.phone && <p className="text-muted-foreground">{selectedCustomer.phone}</p>}
-                  {selectedCustomer.email && <p className="text-muted-foreground">{selectedCustomer.email}</p>}
-                  <Link to={`/crm/customers/${selectedCustomer.id}`} className="text-xs text-primary hover:underline">
-                    View profile →
-                  </Link>
-                </div>
-              ) : (
-                <p className="text-muted-foreground">No customer linked.</p>
-              )}
-              <hr className="border-border" />
-              {selectedVehicle ? (
-                <div>
-                  <p className="font-medium">
-                    {[selectedVehicle.brand, selectedVehicle.model].filter(Boolean).join(" ") || "Vehicle"}
-                  </p>
-                  {selectedVehicle.license_plate && (
-                    <p className="text-muted-foreground">Plate: {selectedVehicle.license_plate}</p>
-                  )}
-                  {selectedVehicle.color && <p className="text-muted-foreground">Color: {selectedVehicle.color}</p>}
-                  {selectedVehicle.size && <p className="text-muted-foreground">Size: {selectedVehicle.size}</p>}
-                </div>
-              ) : (
-                <p className="text-muted-foreground">No vehicle linked.</p>
-              )}
-            </CardContent>
-          </Card>
+          <BookingCustomerVehicleCard
+            customer={selectedCustomer}
+            vehicle={selectedVehicle}
+            businessId={businessId || ""}
+            onCustomerUpdated={(updated) => {
+              setCustomers((prev) => prev.map((c) => (c.id === updated.id ? updated : c)))
+            }}
+            onVehicleUpdated={(updated) => {
+              setVehicles((prev) => prev.map((v) => (v.id === updated.id ? updated : v)))
+            }}
+          />
 
           <Card>
             <CardHeader>
