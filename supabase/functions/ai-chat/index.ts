@@ -1292,24 +1292,20 @@ ABSOLUTE RULES (NEVER BREAK):
           ? missingLabels.join(", ")
           : (language === "es" ? "marca y modelo" : "brand and model");
 
-        // If user is asking about services/prices/options, show Trojan Horse + teaser FIRST, then ask vehicle
+        // ALWAYS ask for vehicle first before any recommendation
         stateGoal = language === "es"
-          ? `OBJETIVO: Si el cliente pregunta por servicios, opciones, precios o informacion general:
-1. Menciona brevemente el servicio de entrada (marcado como ENTRY-LEVEL en tu contexto) con su precio
-2. Menciona brevemente cuantos paquetes mas hay disponibles
-3. Luego pregunta marca y modelo del vehiculo para personalizar la recomendacion
-
-Si el cliente NO pregunta por servicios (saludo simple, pregunta especifica):
-Pregunta por ${missingText} en UNA sola pregunta.
-NO pidas el ano del vehiculo.`
-          : `GOAL: If the customer asks about services, options, prices, or general info:
-1. Briefly mention the entry-level service (marked ENTRY-LEVEL in your context) with its price
-2. Briefly mention how many more packages are available
-3. Then ask for make and model to personalize the recommendation
-
-If the customer is NOT asking about services (simple greeting, specific question):
-Ask for ${missingText} in ONE short question.
-Do NOT ask for the vehicle year.`;
+          ? `OBJETIVO: Necesitas saber el vehiculo PRIMERO antes de recomendar cualquier servicio.
+1. Saluda brevemente y de forma calida
+2. Pregunta por ${missingText} del vehiculo en UNA sola pregunta
+3. NO menciones servicios, precios ni paquetes todavia - primero necesitas saber el vehiculo
+4. NO pidas el ano del vehiculo
+5. Si el cliente pregunta por servicios o precios, di que con gusto le ayudas pero primero necesitas saber su vehiculo para dar la mejor recomendacion`
+          : `GOAL: You need to know the vehicle FIRST before recommending any service.
+1. Greet briefly and warmly
+2. Ask for the vehicle ${missingText} in ONE short question
+3. DO NOT mention services, prices, or packages yet - you need the vehicle info first
+4. Do NOT ask for the vehicle year
+5. If the customer asks about services or prices, say you'd love to help but first need their vehicle info to give the best recommendation`;
       } else {
         stateGoal = language === "es"
           ? `OBJETIVO: Confirmar y avanzar.
@@ -1360,6 +1356,11 @@ Ask: "Are you looking for something that lasts a few months, or long-term protec
 5. Si es la primera recomendacion, cierra con UNA pregunta binaria para avanzar venta
 6. Si el cliente pregunta aclaraciones ("cual opcion", "que incluye", "precio"), RESPONDE eso primero y no repitas el mismo pitch literal
 7. Si piden opcion robusta, vuelve a recomendar UNA opcion superior (sin listar menu completo)
+8. Si preguntan por OTROS servicios/paquetes, menciona brevemente las opciones sin dar detalles extensos y luego recomienda la que mejor aplica
+
+CRITICO: Ya tienes TODA la informacion del vehiculo en INFORMACION CONFIRMADA.
+NO vuelvas a preguntar marca, modelo ni tipo de vehiculo.
+USA esa informacion para personalizar tu recomendacion.
 
 IMPORTANTE: Selecciona el servicio que mejor encaja basandote en:
 - Vehiculo del cliente (tamano, tipo)
@@ -1373,6 +1374,11 @@ IMPORTANTE: Selecciona el servicio que mejor encaja basandote en:
 5. If this is the first recommendation, close with ONE binary next-step question
 6. If customer asks clarification ("which option", "what is included", "price"), answer that first and avoid repeating the exact same pitch
 7. If they ask for a robust option, recommend ONE stronger service (do not list full menu)
+8. If they ask about OTHER services/packages, briefly mention available options without extensive detail and then recommend the best fit
+
+CRITICAL: You already have ALL vehicle information in CONFIRMED INFORMATION.
+DO NOT ask for make, model, or vehicle type again.
+USE that information to personalize your recommendation.
 
 IMPORTANT: Select the service that best fits based on:
 - Customer's vehicle (size, type)
@@ -1518,11 +1524,11 @@ Let them know no services are configured and offer to try again later.
       ? `
 REGLA TROJAN HORSE: Para consultas generales ("que servicios tienen", "cuanto cuesta", "informacion")
       Recomienda "${trojanHorse.name}"${trojanHorse.base_price ? ` (~$${trojanHorse.base_price})` : ""} como punto de entrada y menciona brevemente: "${otherTeaserEs.trim()}".
-      Luego pregunta sobre su vehiculo para personalizar la recomendacion. NO listes todos los servicios con detalle.`
+      NO listes todos los servicios con detalle. Si ya conoces el vehiculo, personaliza la recomendacion.`
       : `
 TROJAN HORSE RULE: For general inquiries ("what services", "how much", "information")
       Recommend "${trojanHorse.name}"${trojanHorse.base_price ? ` (~$${trojanHorse.base_price})` : ""} as the entry point and briefly mention: "${otherTeaserEn.trim()}".
-      Then ask about their vehicle to personalize the recommendation. DO NOT list all services in detail.`
+      DO NOT list all services in detail. If you already know the vehicle, personalize the recommendation.`
     : "";
 
   const rulesBlock = language === "es"
