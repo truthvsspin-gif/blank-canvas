@@ -1882,6 +1882,18 @@ async function processStateMachine(
       break;
     }
   }
+
+  // Universal schedule extraction: parse schedule info from ANY state
+  // so that if a user provides day/time early, it's captured
+  if (!newContext.scheduledDay || !newContext.scheduledTime) {
+    const schedule = parseScheduleResponse(userMessage);
+    if (schedule.day && !newContext.scheduledDay) newContext.scheduledDay = schedule.day;
+    if (schedule.time && !newContext.scheduledTime) newContext.scheduledTime = schedule.time;
+    if (typeof schedule.hour === "number" && typeof newContext.scheduledHour === "undefined") {
+      newContext.scheduledHour = schedule.hour;
+      newContext.scheduledMinute = typeof schedule.minute === "number" ? schedule.minute : 0;
+    }
+  }
   
   const contextSummary = buildContextSummary(newContext, language);
   
@@ -2822,8 +2834,14 @@ Deno.serve(async (req: Request) => {
     }
     
     let bookingResult: BookingCreationResult = { bookingId: null, created: false, updated: false };
+    const bookingEligibleStates: State[] = [
+      STATES.STATE_4_PRESCRIPTION,
+      STATES.STATE_5_SCHEDULE,
+      STATES.STATE_6_ACTION,
+      STATES.STATE_7_HANDOFF,
+    ];
     const shouldCreateBooking =
-      newContext.currentState === STATES.STATE_6_ACTION &&
+      bookingEligibleStates.includes(newContext.currentState) &&
       newContext.scheduledDay &&
       newContext.scheduledTime &&
       (
