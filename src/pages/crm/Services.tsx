@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback, type ReactNode } from "react";
 import { CrmGettingStarted } from "@/components/crm/crm-getting-started";
-import { BarChart3, Plus, Search, Settings, Trash2, X, Car } from "lucide-react";
+import { BarChart3, Plus, Search, Settings, Trash2, X, Car, Star } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -324,6 +324,14 @@ export default function ServicesPage() {
     resetForms();
   };
 
+  const handleSetTrojanHorse = async (serviceId: string) => {
+    if (!businessId) return;
+    // Unset all, then set the selected one
+    await supabase.from("services").update({ is_trojan_horse: false }).eq("business_id", businessId);
+    await supabase.from("services").update({ is_trojan_horse: true }).eq("id", serviceId);
+    fetchServices();
+  };
+
   const filteredServices = services.filter((s) => !search || s.name.toLowerCase().includes(search.toLowerCase()));
   const filteredVariants = variants.filter((v) => !search || `${v.name} ${v.description}`.toLowerCase().includes(search.toLowerCase()));
   const filteredSurcharges = surcharges.filter((s) => !search || `${s.name} ${s.services}`.toLowerCase().includes(search.toLowerCase()));
@@ -476,6 +484,7 @@ export default function ServicesPage() {
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase">{isEs ? "Precios por tamaño" : "Size Prices"}</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase">{isEs ? "Duracion" : "Duration"}</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase">{isEs ? "Activo" : "Active"}</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase">{isEs ? "Entrada" : "Entry"}</th>
                     <th className="px-4 py-3 text-right text-xs font-semibold uppercase">{isEs ? "Acciones" : "Actions"}</th>
                   </tr>
                 )}
@@ -531,6 +540,21 @@ export default function ServicesPage() {
                         </td>
                         <td className="px-4 py-3">{service.duration_minutes ? `${service.duration_minutes} min` : "—"}</td>
                         <td className="px-4 py-3">{service.is_active ? (isEs ? "Si" : "Yes") : (isEs ? "No" : "No")}</td>
+                        <td className="px-4 py-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleSetTrojanHorse(service.id)}
+                            className={cn(
+                              "inline-flex items-center justify-center rounded-full w-5 h-5 border-2 transition-colors",
+                              service.is_trojan_horse
+                                ? "border-emerald-600 bg-emerald-600"
+                                : "border-muted-foreground/40 hover:border-emerald-500"
+                            )}
+                            title={isEs ? "Marcar como servicio de entrada" : "Set as entry-level service"}
+                          >
+                            {service.is_trojan_horse && <Star className="h-3 w-3 text-white fill-white" />}
+                          </button>
+                        </td>
                         <td className="px-4 py-3 text-right">
                           <Button variant="ghost" size="icon" onClick={async () => { await supabase.from("services").delete().eq("id", service.id); fetchServices(); fetchSizePrices(); }}>
                             <Trash2 className="h-4 w-4 text-destructive" />
@@ -610,7 +634,7 @@ export default function ServicesPage() {
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </div>
-                  <div className="flex flex-wrap gap-2 text-xs">
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
                     {service.base_price != null && (
                       <span className="rounded-full bg-muted px-2 py-0.5 font-medium">€{service.base_price}</span>
                     )}
@@ -620,6 +644,20 @@ export default function ServicesPage() {
                     <span className={cn("rounded-full px-2 py-0.5", service.is_active ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground")}>
                       {service.is_active ? (isEs ? "Activo" : "Active") : (isEs ? "Inactivo" : "Inactive")}
                     </span>
+                    <button
+                      type="button"
+                      onClick={() => handleSetTrojanHorse(service.id)}
+                      className={cn(
+                        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 border transition-colors",
+                        service.is_trojan_horse
+                          ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                          : "border-muted-foreground/30 text-muted-foreground hover:border-emerald-500"
+                      )}
+                      title={isEs ? "Marcar como servicio de entrada" : "Set as entry-level service"}
+                    >
+                      <Star className={cn("h-3 w-3", service.is_trojan_horse && "fill-emerald-600")} />
+                      {isEs ? "Entrada" : "Entry"}
+                    </button>
                   </div>
                   {sp.length > 0 && (
                     <div className="flex flex-wrap gap-1">
