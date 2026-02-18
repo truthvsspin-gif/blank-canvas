@@ -1235,6 +1235,7 @@ export type Database = {
           created_at: string
           description: string | null
           duration_minutes: number | null
+          flyer_url: string | null
           id: string
           is_active: boolean
           is_trojan_horse: boolean
@@ -1246,6 +1247,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           duration_minutes?: number | null
+          flyer_url?: string | null
           id?: string
           is_active?: boolean
           is_trojan_horse?: boolean
@@ -1257,6 +1259,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           duration_minutes?: number | null
+          flyer_url?: string | null
           id?: string
           is_active?: boolean
           is_trojan_horse?: boolean

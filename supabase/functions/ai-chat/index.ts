@@ -2713,7 +2713,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: services, error: svcError } = await supabase
       .from("services")
-      .select("name, description, base_price, duration_minutes, is_trojan_horse")
+      .select("name, description, base_price, duration_minutes, is_trojan_horse, flyer_url")
       .eq("business_id", businessId)
       .eq("is_active", true)
       .order("is_trojan_horse", { ascending: false })
@@ -2817,10 +2817,23 @@ Deno.serve(async (req: Request) => {
     const newContext = { ...stateMachine.newContext, detectedLanguage: language };
     const performance = stateMachine.performance;
     console.log(`[AI-CHAT] Response generated in ${performance.responseTimeMs}ms, fallback: ${performance.isFallback}`);
-    const requestedFlyerType = detectFlyerType(userMessage);
-    const flyerResult = requestedFlyerType
-      ? await lookupServicesFlyer(supabase, businessId, requestedFlyerType, true)
-      : { url: null, type: null };
+    // Determine flyer: prefer service-specific flyer_url based on which service is mentioned in the reply
+    let flyerResult: FlyerResult = { url: null, type: null };
+    if (services && services.length > 0) {
+      const replyLower = reply.toLowerCase();
+      const matchedService = services.find(s => s.flyer_url && replyLower.includes(s.name.toLowerCase()));
+      if (matchedService?.flyer_url) {
+        flyerResult = { url: matchedService.flyer_url, type: "service_flyer" };
+        console.log(`[FLYER] Using service-specific flyer for "${matchedService.name}"`);
+      }
+    }
+    // Fallback to generic flyer lookup if no service-specific flyer matched
+    if (!flyerResult.url) {
+      const requestedFlyerType = detectFlyerType(userMessage);
+      flyerResult = requestedFlyerType
+        ? await lookupServicesFlyer(supabase, businessId, requestedFlyerType, true)
+        : { url: null, type: null };
+    }
 
     await storeConversationState(supabase, businessId, conversationId || null, userMessage, reply, newContext, performance);
 
