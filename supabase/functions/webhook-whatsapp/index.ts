@@ -10,12 +10,6 @@ const corsHeaders = {
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-// Groq API configuration
-const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-const DEFAULT_MODEL = "openai/gpt-oss-120b";
-
-// Intents that can trigger flyer sending
-const FLYER_INTENTS = ["pricing", "services", "packages", "quote"];
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 async function logAiFailureEvent(
@@ -197,7 +191,7 @@ serve(async (req: Request) => {
       const results = [];
       
       for (const message of messages) {
-        // Detect intent
+        // Detect intent (lightweight, for CRM thread tagging only)
         const intent = detectIntent(message.message_text);
         
         // Store inbound message
@@ -206,7 +200,8 @@ serve(async (req: Request) => {
 
         // Track conversation window for usage
         await trackConversationWindow(supabase, message);
-        // Generate AI response if enabled
+
+        // Generate AI response via ai-chat (handles full state machine, flyers, leads, bookings)
         if (chatbotEnabled && aiReplyEnabled) {
           const aiResult = await generateAIResponse(supabase, message, business);
 
@@ -227,21 +222,6 @@ serve(async (req: Request) => {
               handoff_required: aiResult.handoffRequired,
             });
           }
-        }
-
-        const requestedFlyerType = detectFlyerType(message.message_text || "");
-        const flyerCooldownHours = Number.isFinite(business.flyer_cooldown_hours)
-          ? business.flyer_cooldown_hours
-          : 24;
-        if (chatbotEnabled && requestedFlyerType) {
-          await maybeSendFlyer(
-            supabase,
-            message,
-            threadId,
-            flyerCooldownHours,
-            requestedFlyerType,
-            business.language_preference || null
-          );
         }
 
         // Record inbound even if no AI reply
@@ -382,6 +362,8 @@ function normalizeTimestamp(value: unknown): string {
   return new Date().toISOString();
 }
 
+// Lightweight intent detection for CRM thread tagging only.
+// Full intent handling (flyers, leads, bookings) is delegated to ai-chat.
 function detectIntent(text: string): string {
   const lower = text.toLowerCase();
   const intents: Record<string, string[]> = {
@@ -396,200 +378,6 @@ function detectIntent(text: string): string {
     if (keywords.some((kw) => lower.includes(kw))) return intent;
   }
   return "general_question";
-}
-
-type FlyerType = "menu" | "price_list" | "services_flyer";
-
-function detectFlyerType(text: string): FlyerType | null {
-  const lower = text.toLowerCase();
-
-  const menuPatterns = [
-    /\bmenu\b/i,
-    /\bfood\b/i,
-    /\bcomida\b/i,
-    /\bdishes\b/i,
-    /\bplatos\b/i,
-    /\bdrink\b/i,
-    /\bbebida\b/i,
-    /\bbeverage\b/i,
-  ];
-
-  const priceListPatterns = [
-    /\bprice\s*list\b/i,
-    /\bpricing\b/i,
-    /\bprices\b/i,
-    /\brate[s]?\b/i,
-    /\bcost\b/i,
-    /\bquote\b/i,
-    /\bcotizacion\b/i,
-    /\bpresupuesto\b/i,
-    /\bprecio\b/i,
-    /\bcuanto\b/i,
-    /\bhow\s+much\b/i,
-  ];
-
-  const servicesFlyerPatterns = [
-    /\bservices?\b/i,
-    /\bservicios?\b/i,
-    /\bpackages?\b/i,
-    /\bpaquetes?\b/i,
-    /\boptions?\b/i,
-    /\bopciones?\b/i,
-    /\bwhat\s+do\s+you\s+offer\b/i,
-    /\bque\s+ofrecen\b/i,
-    /\bofferings\b/i,
-    /\bbrochure\b/i,
-    /\bcatalog\b/i,
-  ];
-
-  if (menuPatterns.some((p) => p.test(lower))) return "menu";
-  if (priceListPatterns.some((p) => p.test(lower))) return "price_list";
-  if (servicesFlyerPatterns.some((p) => p.test(lower))) return "services_flyer";
-
-  return null;
-}
-
-async function lookupFlyerAsset(
-  supabase: any,
-  businessId: string,
-  flyerType: FlyerType
-): Promise<{ id: string; file_url: string; title: string | null; asset_type: string; mime_type?: string | null } | null> {
-  const { data: preferredFlyer } = await supabase
-    .from("media_assets")
-    .select("id, file_url, title, asset_type, mime_type")
-    .eq("business_id", businessId)
-    .eq("is_active", true)
-    .eq("asset_type", flyerType)
-    .eq("is_default", true)
-    .maybeSingle();
-
-  if (preferredFlyer?.file_url) return preferredFlyer;
-
-  const { data: anyFlyer } = await supabase
-    .from("media_assets")
-    .select("id, file_url, title, asset_type, mime_type")
-    .eq("business_id", businessId)
-    .eq("is_active", true)
-    .eq("asset_type", flyerType)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (anyFlyer?.file_url) return anyFlyer;
-
-  return null;
-}
-
-function buildFlyerCaption(language: string | null | undefined, title?: string | null): string {
-  const cleanTitle = (title || "").trim();
-  if (cleanTitle) return cleanTitle;
-  return language === "es" ? "Aqui esta el flyer que pediste." : "Here is the flyer you requested.";
-}
-
-type ChatbotThreadState = {
-  vehicleType?: string | null;
-  serviceName?: string | null;
-  timePreference?: string | null;
-  updatedAt?: string | null;
-};
-
-function normalizeText(input: string): string {
-  return input.toLowerCase().replace(/[^a-z0-9\s]/gi, " ").replace(/\s+/g, " ").trim();
-}
-
-function detectVehicleType(text: string): string | null {
-  const lower = text.toLowerCase();
-  if (/\b(suv|crossover|camioneta|4x4)\b/i.test(lower)) return "SUV";
-  if (/\b(pickup|pick-up|pick up|troca)\b/i.test(lower)) return "Pickup";
-  if (/\b(truck|camion)\b/i.test(lower)) return "Truck";
-  if (/\b(sedan|sedÃ¡n)\b/i.test(lower)) return "Sedan";
-  if (/\b(coupe|coupÃ©|deportivo)\b/i.test(lower)) return "Coupe";
-  if (/\b(hatchback|hatch)\b/i.test(lower)) return "Hatchback";
-  if (/\b(van|minivan|mini van|furgoneta)\b/i.test(lower)) return "Van";
-  if (/\b(moto|motorcycle)\b/i.test(lower)) return "Motorcycle";
-  return null;
-}
-
-function detectTimePreference(text: string): string | null {
-  const lower = text.toLowerCase();
-  if (/\b(morning|maÃ±ana|manana|temprano)\b/i.test(lower)) return "morning";
-  if (/\b(afternoon|tarde)\b/i.test(lower)) return "afternoon";
-  if (/\b(evening|noche)\b/i.test(lower)) return "evening";
-  if (/\b(today|hoy|tomorrow|maÃ±ana)\b/i.test(lower)) return "soon";
-  return null;
-}
-
-function detectServiceName(
-  text: string,
-  services: Array<{ name?: string | null }>
-): string | null {
-  if (!services || services.length === 0) return null;
-  const normalized = normalizeText(text);
-  if (!normalized) return null;
-  const match = services.find((s) => {
-    const name = normalizeText(s.name || "");
-    return name && normalized.includes(name);
-  });
-  return match?.name || null;
-
-}
-
-async function loadThreadState(
-  supabase: any,
-  message: NormalizedMessage
-): Promise<ChatbotThreadState> {
-  const threadKey = message.sender_phone_or_handle || message.conversation_id;
-  const { data } = await supabase
-    .from("inbox_threads")
-    .select("metadata")
-    .eq("business_id", message.business_id)
-    .eq("channel", message.channel)
-    .eq("conversation_id", threadKey)
-    .maybeSingle();
-  const meta = data?.metadata || {};
-  const state = meta?.chatbot_state || {};
-  return {
-    vehicleType: state.vehicleType || null,
-    serviceName: state.serviceName || null,
-    timePreference: state.timePreference || null,
-    updatedAt: state.updatedAt || null,
-  };
-}
-
-async function saveThreadState(
-  supabase: any,
-  message: NormalizedMessage,
-  nextState: ChatbotThreadState
-): Promise<void> {
-  const threadKey = message.sender_phone_or_handle || message.conversation_id;
-  const { data } = await supabase
-    .from("inbox_threads")
-    .select("id, metadata")
-    .eq("business_id", message.business_id)
-    .eq("channel", message.channel)
-    .eq("conversation_id", threadKey)
-    .maybeSingle();
-  if (!data?.id) return;
-  const metadata = data.metadata || {};
-  const chatbotState = {
-    ...(metadata.chatbot_state || {}),
-    ...nextState,
-    updatedAt: new Date().toISOString(),
-  };
-  await supabase
-    .from("inbox_threads")
-    .update({ metadata: { ...metadata, chatbot_state: chatbotState } })
-    .eq("id", data.id);
-}
-
-function trimResponse(text: string, maxSentences = 2, maxChars = 360): string {
-  const cleaned = text.replace(/\s+/g, " ").trim();
-  if (cleaned.length <= maxChars) {
-    const sentences = cleaned.split(/(?<=[.!?])\s+/);
-    if (sentences.length <= maxSentences) return cleaned;
-    return sentences.slice(0, maxSentences).join(" ").trim();
-  }
-  return cleaned.slice(0, maxChars).trim();
 }
 
 async function ensureThread(
@@ -756,6 +544,7 @@ async function generateAIResponse(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "Authorization": `Bearer ${supabaseServiceKey}`,
       },
       body: JSON.stringify({
         businessId: message.business_id,
@@ -824,132 +613,6 @@ function extractWhatsAppPhoneNumberId(payload: any): string | null {
 
   return null;
 }
-async function maybeSendFlyer(
-  supabase: any,
-  message: NormalizedMessage,
-  threadId: string,
-  cooldownHours: number,
-  preferredType: FlyerType | null,
-  languagePreference?: string | null
-): Promise<boolean> {
-  if (!preferredType) return false;
-  const to = message.sender_phone_or_handle;
-  if (!to) return false;
-
-  const conversationId = message.sender_phone_or_handle || message.conversation_id;
-
-  // Check if flyer was sent recently
-  const cooldownMs = Math.max(0, cooldownHours) * 60 * 60 * 1000;
-  if (cooldownMs > 0) {
-    const cutoff = new Date(Date.now() - cooldownMs).toISOString();
-    const { data: recentSend } = await supabase
-      .from("flyer_send_log")
-      .select("id, stage")
-      .eq("business_id", message.business_id)
-      .eq("conversation_id", conversationId)
-      .gte("sent_at", cutoff)
-      .limit(1)
-      .maybeSingle();
-
-    if (recentSend) {
-      console.log("Flyer already sent recently, skipping");
-      return false;
-    }
-  }
-
-  const flyer = await lookupFlyerAsset(supabase, message.business_id, preferredType);
-  if (!flyer?.file_url) {
-    console.log("No flyer configured for type:", preferredType);
-    return false;
-  }
-
-  const caption = buildFlyerCaption(languagePreference || null, flyer.title);
-  const sent = await sendWhatsAppImage(supabase, message.business_id, to, flyer.file_url, caption);
-
-  if (sent) {
-    await supabase.from("flyer_send_log").insert({
-      business_id: message.business_id,
-      conversation_id: conversationId,
-      media_asset_id: flyer.id,
-      sent_at: new Date().toISOString(),
-    });
-
-    const now = new Date().toISOString();
-    const outboundMessage: NormalizedMessage = {
-      ...message,
-      message_text: caption,
-      timestamp: now,
-      metadata: { ...(message.metadata || {}), flyer: true, flyer_type: preferredType },
-    };
-
-    await recordMessage(supabase, outboundMessage, threadId, "outbound", null, {
-      messageType: "image",
-      mediaAssetId: flyer.id,
-      fileUrl: flyer.file_url,
-    });
-  }
-
-  return sent;
-}
-async function sendWhatsAppImage(
-  supabase: any,
-  businessId: string,
-  to: string,
-  imageUrl: string,
-  caption: string | null
-): Promise<boolean> {
-  const { data: integration } = await supabase
-    .from("business_integrations")
-    .select("whatsapp_access_token, whatsapp_phone_number_id")
-    .eq("business_id", businessId)
-    .maybeSingle();
-
-  const token = integration?.whatsapp_access_token;
-  const phoneNumberId = integration?.whatsapp_phone_number_id;
-
-  if (!token || !phoneNumberId) {
-    console.log("WhatsApp credentials not configured for business:", businessId);
-    return false;
-  }
-
-  const finalCaption = caption && caption.trim().length > 0
-    ? caption
-    : "Here is the flyer you requested.";
-
-  try {
-    const response = await fetch(
-      `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          to,
-          type: "image",
-          image: {
-            link: imageUrl,
-            caption: finalCaption,
-          },
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      const error = await response.json();
-      console.error("WhatsApp image send error:", error);
-      return false;
-    }
-    
-    console.log("WhatsApp image sent successfully to:", to);
-    return true;
-  } catch (error) {
-    console.error("Failed to send WhatsApp image:", error);
-    return false;
-  }
-}
 
 async function sendWhatsAppMessage(
   supabase: any,
@@ -996,79 +659,3 @@ async function sendWhatsAppMessage(
     console.error("Failed to send WhatsApp message:", error);
   }
 }
-
-async function qualifyLead(
-  supabase: any,
-  message: NormalizedMessage,
-  intent: string
-) {
-  if (intent !== "pricing" && intent !== "booking" && intent !== "services" && intent !== "packages") return;
-
-  const emailMatch = message.message_text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-  const phone = message.sender_phone_or_handle;
-  const email = emailMatch?.[0] || null;
-
-  const hasContact = email || phone;
-  if (!hasContact) return;
-
-  const threadKey = message.sender_phone_or_handle || message.conversation_id;
-
-  const { data: existingLead } = await supabase
-    .from("leads")
-    .select("id, stage")
-    .eq("business_id", message.business_id)
-    .eq("conversation_id", threadKey)
-    .maybeSingle();
-
-  if (existingLead?.id) {
-    const wasAlreadyQualified = existingLead.stage === "qualified";
-    await supabase
-      .from("leads")
-      .update({
-        qualification_reason: `intent=${intent}; source=whatsapp`,
-        email,
-        stage: "qualified",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", existingLead.id);
-
-    if (!wasAlreadyQualified) {
-      try {
-        await supabase.functions.invoke("lead-notify", {
-          body: { businessId: message.business_id, leadId: existingLead.id },
-        });
-      } catch (err) {
-        console.warn("[WHATSAPP] lead-notify invoke failed:", err);
-      }
-    }
-    return;
-  }
-
-  const { data: insertedLead } = await supabase
-    .from("leads")
-    .insert({
-      business_id: message.business_id,
-      email,
-      phone,
-      conversation_id: threadKey,
-      name: message.sender_name,
-      source: "whatsapp",
-      stage: "qualified",
-      qualification_reason: `intent=${intent}; source=whatsapp`,
-      updated_at: new Date().toISOString(),
-    })
-    .select("id, stage")
-    .single();
-
-  if (insertedLead?.id) {
-    try {
-      await supabase.functions.invoke("lead-notify", {
-        body: { businessId: message.business_id, leadId: insertedLead.id },
-      });
-    } catch (err) {
-      console.warn("[WHATSAPP] lead-notify invoke failed:", err);
-    }
-  }
-}
-
-
