@@ -54,12 +54,15 @@ serve(async (req: Request) => {
       );
     }
 
-    if (booking.status !== "confirmed") {
+    if (!["confirmed", "pending"].includes(booking.status)) {
       return new Response(
-        JSON.stringify({ skipped: true, reason: "status_not_confirmed" }),
+        JSON.stringify({ skipped: true, reason: "status_not_actionable" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    const isPending = booking.status === "pending";
+    const subjectAction = isPending ? "New booking pending review" : "New booking confirmed";
 
     const { data: business } = await supabase
       .from("businesses")
@@ -104,13 +107,17 @@ serve(async (req: Request) => {
       );
     }
 
-    const subject = `New booking confirmed - ${businessName}`;
+    const subject = `${subjectAction} - ${businessName}`;
     const scheduledAt = booking.scheduled_at ? new Date(booking.scheduled_at).toISOString() : "TBD";
     const priceText = booking.price != null ? `$${booking.price}` : "TBD";
+    const reviewNote = isPending
+      ? `<p style="color: #d97706; font-weight: bold;">⚠️ This booking needs your review. Please confirm or reject it in the CRM.</p>`
+      : "";
 
     const html = `
       <div style="font-family: Arial, sans-serif; line-height: 1.5;">
-        <h2>New booking confirmed</h2>
+        <h2>${subjectAction}</h2>
+        ${reviewNote}
         <p><strong>Business:</strong> ${businessName}</p>
         <p><strong>Service:</strong> ${booking.service_name}</p>
         <p><strong>Price:</strong> ${priceText}</p>
