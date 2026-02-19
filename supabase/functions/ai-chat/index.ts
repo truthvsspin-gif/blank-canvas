@@ -1318,17 +1318,49 @@ Do not list services at this step.`;
       break;
     }
 
-    case STATES.STATE_2_BENEFIT:
-      stateGoal = language === "es"
-        ? `OBJETIVO: Entender que beneficio/problema quieren resolver.
+    case STATES.STATE_2_BENEFIT: {
+      const earlyIntent = context.benefitIntent;
+      if (earlyIntent && language === "es") {
+        const intentLabel: Record<string, string> = {
+          protection: "protección",
+          shine: "brillo",
+          cleaning: "limpieza",
+          interior: "interior",
+          new_car: "cuidado de auto nuevo",
+        };
+        const label = intentLabel[earlyIntent] || earlyIntent;
+        stateGoal = `OBJETIVO: El cliente ya mencionó que le interesa "${label}".
+${vehicleRef ? `Menciona su ${vehicleRef} para mostrar que escuchaste.` : ""}
+Confirma esa necesidad con una pregunta corta, por ejemplo:
+"Mencionaste que te interesa ${label} para tu ${vehicleRef || "vehiculo"}. ¿Es esa tu prioridad principal o hay algo mas que te preocupe?"
+NO listes servicios ni opciones; solo CONFIRMA el objetivo.`;
+      } else if (earlyIntent) {
+        const intentLabelEn: Record<string, string> = {
+          protection: "protection",
+          shine: "shine",
+          cleaning: "cleaning",
+          interior: "interior care",
+          new_car: "new car care",
+        };
+        const label = intentLabelEn[earlyIntent] || earlyIntent;
+        stateGoal = `GOAL: The customer already mentioned interest in "${label}".
+${vehicleRef ? `Reference their ${vehicleRef} to show you listened.` : ""}
+Confirm that need with a short question, for example:
+"You mentioned ${label} for your ${vehicleRef || "vehicle"}. Is that your main priority, or is there something else you'd like to address?"
+DO NOT list services or options; just CONFIRM the goal.`;
+      } else {
+        stateGoal = language === "es"
+          ? `OBJETIVO: Entender que beneficio/problema quieren resolver.
 ${vehicleRef ? `Menciona su ${vehicleRef} para mostrar que escuchaste.` : ""}
 Pregunta cual es el resultado principal que buscan con su vehiculo.
 NO listes servicios ni opciones; pregunta por el RESULTADO que desean.`
-        : `GOAL: Understand what benefit/problem they want to solve.
+          : `GOAL: Understand what benefit/problem they want to solve.
 ${vehicleRef ? `Reference their ${vehicleRef} to show you listened.` : ""}
 Ask what main result they want for their vehicle.
 DO NOT list services or options; ask about the OUTCOME they want.`;
+      }
       break;
+    }
 
     case STATES.STATE_3_USAGE:
       if (!context.protectionDuration) {
@@ -1973,8 +2005,12 @@ async function processStateMachine(
       },
       STATE_1_VEHICLE: { en: "", es: "" },
       STATE_2_BENEFIT: {
-        en: "What main result do you want for your vehicle?",
-        es: "Cual es el resultado principal que buscas para tu vehiculo?"
+        en: context.benefitIntent
+          ? `You mentioned ${context.benefitIntent} for your ${vehicleRef || "vehicle"}. Is that your main priority, or is there something else?`
+          : "What main result do you want for your vehicle?",
+        es: context.benefitIntent
+          ? `Mencionaste ${context.benefitIntent} para tu ${vehicleRef || "vehiculo"}. Es esa tu prioridad principal o hay algo mas?`
+          : "Cual es el resultado principal que buscas para tu vehiculo?"
       },
       STATE_3_USAGE: {
         en: "Are you looking for something that lasts a few months, or long-term protection (1 to 3 years)?",
