@@ -1861,7 +1861,14 @@ async function processStateMachine(
       newContext.scheduledHour = schedule.hour;
       newContext.scheduledMinute = typeof schedule.minute === "number" ? schedule.minute : 0;
     }
-    if (newContext.scheduledDay && newContext.scheduledTime) {
+    
+    // Determine next state: need schedule first, then contact info
+    if (hasContactInfo(userMessage) && newContext.scheduledDay && newContext.scheduledTime) {
+      // Has both schedule AND contact info → go to handoff
+      newContext.handoffRequired = true;
+      newContext.currentState = STATES.STATE_7_HANDOFF;
+    } else if (newContext.scheduledDay && newContext.scheduledTime) {
+      // Has schedule but NO contact info → go to STATE_6 to collect it
       newContext.currentState = STATES.STATE_6_ACTION;
     } else {
       newContext.currentState = STATES.STATE_5_SCHEDULE;
@@ -1882,8 +1889,8 @@ async function processStateMachine(
       const timeText = newContext.scheduledTime ? newContext.scheduledTime : null;
       const scheduleFallback = newContext.currentState === STATES.STATE_6_ACTION
         ? (language === "es"
-            ? `Perfecto. Tu reserva queda para ${dayText || "el dia elegido"} ${timeText || ""}. Si necesitas cambiar algo, avisame.`
-            : `Perfect. Your booking is set for ${dayText || "the selected day"} ${timeText || ""}. If you need changes, just let me know.`)
+            ? `Perfecto! Para confirmar tu cita, necesito tu nombre completo y un numero de WhatsApp o telefono de contacto.`
+            : `Perfect! To confirm your appointment, I need your full name and a WhatsApp or phone number where we can reach you.`)
         : (language === "es"
             ? `Perfecto. Tengo disponible ${getNextBusinessSlotSuggestion(language)}. Te funciona ese horario o prefieres otro dia entre lunes y viernes?`
             : `Perfect. I have ${getNextBusinessSlotSuggestion(language)} available. Does that work, or do you prefer another day (Mon-Fri)?`);
@@ -1988,7 +1995,14 @@ async function processStateMachine(
       break;
     }
     case STATES.STATE_6_ACTION: {
-      newContext.currentState = STATES.STATE_6_ACTION;
+      // Check if user provided contact info (name + phone) in this message
+      if (hasContactInfo(userMessage)) {
+        newContext.handoffRequired = true;
+        newContext.currentState = STATES.STATE_7_HANDOFF;
+      } else {
+        // Stay in STATE_6 until contact info is provided
+        newContext.currentState = STATES.STATE_6_ACTION;
+      }
       break;
     }
     case STATES.STATE_7_HANDOFF: {
@@ -2046,6 +2060,9 @@ async function processStateMachine(
   
   if (error || !content) {
     usedFallback = true;
+    const vehicleRef = newContext.vehicleInfo?.brand
+      ? `${newContext.vehicleInfo.brand} ${newContext.vehicleInfo.model || ""}`.trim()
+      : null;
     const trojanHorse = services?.find((s: any) => s.is_trojan_horse);
     const trojanName = trojanHorse?.name || services?.[0]?.name || "our service";
     const trojanPrice = trojanHorse?.base_price || services?.[0]?.base_price || null;
@@ -2081,8 +2098,8 @@ async function processStateMachine(
         es: `Perfecto. Tengo disponible ${getNextBusinessSlotSuggestion(language)}. Te funciona ese horario o prefieres otro dia entre lunes y viernes?`
       },
       STATE_6_ACTION: {
-        en: "Your booking is confirmed. If you need changes, just let me know.",
-        es: "Tu reserva esta confirmada. Si necesitas cambios, avisame."
+        en: "Great! To confirm your appointment, I just need your full name and a WhatsApp or phone number where we can reach you.",
+        es: "Perfecto! Para confirmar tu cita, solo necesito tu nombre completo y un numero de WhatsApp o telefono donde podamos contactarte."
       },
       STATE_7_HANDOFF: {
         en: "Perfect. Your booking is confirmed.",
@@ -2967,18 +2984,13 @@ Deno.serve(async (req: Request) => {
       STATES.STATE_6_ACTION,
       STATES.STATE_7_HANDOFF,
     ];
+    // Only create booking AFTER contact info is collected (STATE_7) or hasContactInfo in current message
+    const hasContact = hasContactInfo(userMessage);
+    const justReachedHandoff = newContext.currentState === STATES.STATE_7_HANDOFF && context.currentState !== STATES.STATE_7_HANDOFF;
     const shouldCreateBooking =
-      bookingEligibleStates.includes(newContext.currentState) &&
+      (justReachedHandoff || hasContact) &&
       newContext.scheduledDay &&
-      newContext.scheduledTime &&
-      (
-        !context.scheduledDay ||
-        !context.scheduledTime ||
-        context.scheduledDay !== newContext.scheduledDay ||
-        context.scheduledTime !== newContext.scheduledTime ||
-        context.scheduledHour !== newContext.scheduledHour ||
-        context.scheduledMinute !== newContext.scheduledMinute
-      );
+      newContext.scheduledTime;
 
     if (shouldCreateBooking) {
       console.log(`[EVENT] booking_requested for business ${businessId}`);
