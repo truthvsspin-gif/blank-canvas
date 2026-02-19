@@ -850,6 +850,24 @@ async function createBookingFromConversation(
 
     const serviceName = recommendedService || context.recommendationSummary || "TBD";
 
+    // Look up the service base_price from the services table
+    let servicePrice: number | null = null;
+    if (serviceName && serviceName !== "TBD") {
+      const { data: matchedService } = await supabase
+        .from("services")
+        .select("base_price")
+        .eq("business_id", businessId)
+        .eq("is_active", true)
+        .ilike("name", serviceName)
+        .maybeSingle();
+      if (matchedService?.base_price != null) {
+        servicePrice = matchedService.base_price;
+        console.log(`[BOOKING] Found service price: $${servicePrice} for "${serviceName}"`);
+      } else {
+        console.log(`[BOOKING] No price found for service "${serviceName}"`);
+      }
+    }
+
     let scheduledAt: string | null = null;
     if (context.scheduledDay) {
       const scheduledDate = getNextWeekday(context.scheduledDay);
@@ -940,6 +958,7 @@ async function createBookingFromConversation(
         vehicle_id: vehicleId,
         lead_id: leadId,
         service_name: serviceName,
+        price: servicePrice,
         status: bookingStatus,
         source: "chatbot",
         scheduled_at: scheduledAt,
