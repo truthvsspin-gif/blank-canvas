@@ -42,7 +42,7 @@ serve(async (req: Request) => {
 
     const { data: lead, error: leadError } = await supabase
       .from("leads")
-      .select("id, business_id, name, email, phone, source, stage, qualification_reason, conversation_id, created_at")
+      .select("id, business_id, name, email, phone, source, stage, qualification_reason, conversation_id, created_at, customer_id")
       .eq("business_id", businessId)
       .eq("id", leadId)
       .maybeSingle();
@@ -59,6 +59,25 @@ serve(async (req: Request) => {
         JSON.stringify({ skipped: true, reason: "stage_not_qualified" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // Fetch latest conversation context
+    let lastMessages = "";
+    if (lead.conversation_id) {
+      const { data: convRows } = await supabase
+        .from("conversations")
+        .select("sender_name, message_text, message_direction, message_timestamp")
+        .eq("business_id", businessId)
+        .eq("conversation_id", lead.conversation_id)
+        .order("message_timestamp", { ascending: false })
+        .limit(5);
+      if (convRows && convRows.length > 0) {
+        lastMessages = convRows.reverse().map((m: any) => {
+          const dir = m.message_direction === "outbound" ? "Bot" : (m.sender_name || "Customer");
+          const text = (m.message_text || "").substring(0, 200);
+          return `<strong>${dir}:</strong> ${text}`;
+        }).join("<br/>");
+      }
     }
 
     const { data: business } = await supabase
@@ -105,20 +124,39 @@ serve(async (req: Request) => {
     }
 
     const subject = `New qualified lead - ${businessName}`;
-    const createdAt = lead.created_at ? new Date(lead.created_at).toISOString() : "unknown";
+    const createdAt = lead.created_at ? new Date(lead.created_at).toLocaleString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "unknown";
 
     const html = `
-      <div style="font-family: Arial, sans-serif; line-height: 1.5;">
-        <h2>New qualified lead</h2>
-        <p><strong>Business:</strong> ${businessName}</p>
-        <p><strong>Name:</strong> ${lead.name || "Unknown"}</p>
-        <p><strong>Email:</strong> ${lead.email || "N/A"}</p>
-        <p><strong>Phone:</strong> ${lead.phone || "N/A"}</p>
-        <p><strong>Source:</strong> ${lead.source || "unknown"}</p>
-        <p><strong>Reason:</strong> ${lead.qualification_reason || "N/A"}</p>
-        <p><strong>Conversation:</strong> ${lead.conversation_id || "N/A"}</p>
-        <p><strong>Created:</strong> ${createdAt}</p>
-        <p><strong>Lead ID:</strong> ${lead.id}</p>
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; max-width: 600px;">
+        <h2 style="color: #1f2937;">New qualified lead</h2>
+        <table style="border-collapse: collapse; width: 100%; margin: 16px 0;">
+          <tr style="background: #f9fafb;">
+            <td style="padding: 8px 12px; font-weight: bold; color: #374151; border-bottom: 1px solid #e5e7eb;">Name</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb;">${lead.name || "Unknown"}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 12px; font-weight: bold; color: #374151; border-bottom: 1px solid #e5e7eb;">Phone</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb;">${lead.phone || "N/A"}</td>
+          </tr>
+          <tr style="background: #f9fafb;">
+            <td style="padding: 8px 12px; font-weight: bold; color: #374151; border-bottom: 1px solid #e5e7eb;">Email</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb;">${lead.email || "N/A"}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 12px; font-weight: bold; color: #374151; border-bottom: 1px solid #e5e7eb;">Source</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb;">${lead.source || "unknown"}</td>
+          </tr>
+          <tr style="background: #f9fafb;">
+            <td style="padding: 8px 12px; font-weight: bold; color: #374151; border-bottom: 1px solid #e5e7eb;">Qualification Reason</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb;">${lead.qualification_reason || "N/A"}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 12px; font-weight: bold; color: #374151; border-bottom: 1px solid #e5e7eb;">Created</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb;">${createdAt}</td>
+          </tr>
+        </table>
+        ${lastMessages ? `<div style="margin: 16px 0; padding: 12px; background: #f3f4f6; border-radius: 8px;"><h3 style="margin: 0 0 8px; font-size: 14px; color: #374151;">Last conversation</h3><p style="margin: 0; font-size: 13px; color: #4b5563;">${lastMessages}</p></div>` : ""}
+        <p style="color: #6b7280; font-size: 12px;">Business: ${businessName} · Lead ID: ${lead.id}</p>
       </div>
     `.trim();
 
