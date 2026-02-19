@@ -890,7 +890,8 @@ async function createBookingFromConversation(
       console.log(`[BOOKING] Calculated scheduled_at: ${scheduledAt} from day: ${context.scheduledDay}, time: ${context.scheduledTime || 'default'}, exact: ${context.scheduledHour ?? 'none'}:${context.scheduledMinute ?? 0}`);
     }
 
-    const bookingStatus = scheduledAt ? "confirmed" : "requested";
+    // Chatbot bookings start as "pending" so the owner can review before confirming
+    const bookingStatus = "pending";
 
     const { data: existingBooking } = await supabase
       .from("bookings")
@@ -2939,9 +2940,6 @@ Deno.serve(async (req: Request) => {
       
       if (createdLeadId) {
         console.log(`[EVENT] lead_qualified for business ${businessId}, leadId: ${createdLeadId}`);
-        if (!context.leadQualified) {
-          await notifyLeadQualifiedOwner(supabase, businessId, createdLeadId);
-        }
       }
     }
     
@@ -3000,8 +2998,16 @@ Deno.serve(async (req: Request) => {
 
       if (bookingResult.bookingId) {
         console.log(`[EVENT] booking_${bookingResult.created ? "created" : "updated"} for business ${businessId}, bookingId: ${bookingResult.bookingId}, service: ${recommendedService}`);
-        await notifyBookingConfirmedOwner(supabase, businessId, bookingResult.bookingId);
       }
+    }
+
+    // Send only ONE notification: lead OR booking, not both
+    if (bookingResult.bookingId && bookingResult.created) {
+      // Booking was created — send only booking notification (skip lead email)
+      await notifyBookingConfirmedOwner(supabase, businessId, bookingResult.bookingId);
+    } else if (createdLeadId && !context.leadQualified) {
+      // No booking created — send lead notification
+      await notifyLeadQualifiedOwner(supabase, businessId, createdLeadId);
     }
 
     const shouldQueueFollowUps =
