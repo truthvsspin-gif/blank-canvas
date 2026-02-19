@@ -1462,17 +1462,53 @@ Ask: "Are you looking for something that lasts a few months, or long-term protec
       }
       break;
 
-    case STATES.STATE_4_PRESCRIPTION:
-      stateGoal = language === "es"
-        ? `OBJETIVO: Recomendar PRIMERO el servicio Trojan Horse (entrada) con PRECIO.
+    case STATES.STATE_4_PRESCRIPTION: {
+      // Intent-aware prescription: recommend the service that matches what the customer asked for
+      const hasProtectionIntent = context.benefitIntent === "protection" || context.protectionDuration === "long";
+      const hasInteriorIntent = context.benefitIntent === "interior";
+      // If user expressed a clear intent, recommend the MATCHING service, not the Trojan Horse
+      const intentBasedEs = hasProtectionIntent
+        ? `OBJETIVO: El cliente quiere PROTECCION ROBUSTA/LARGO PLAZO. Recomienda el servicio de PROTECCION CERAMICA (el mas premium/proteccion) con su PRECIO EXACTO.
+1. Breve resumen mostrando que entiendes su necesidad de proteccion duradera
+2. Recomienda el servicio de ceramica/proteccion premium con su precio exacto
+3. Cierra con: "Te gustaria agendar una cita para este servicio?"
+NO recomiendes el servicio basico/de entrada. El cliente ya dijo que quiere algo robusto y duradero.`
+        : hasInteriorIntent
+          ? `OBJETIVO: El cliente quiere LIMPIEZA/RENOVACION INTERIOR. Recomienda el servicio de INTERIOR con su PRECIO EXACTO.
+1. Breve resumen mostrando que entiendes su necesidad de interior
+2. Recomienda el servicio de interior/limpieza profunda con su precio exacto
+3. Cierra con: "Te gustaria agendar una cita para este servicio?"
+NO recomiendes el servicio basico/de entrada. El cliente ya dijo que quiere interior.`
+          : `OBJETIVO: Recomendar PRIMERO el servicio Trojan Horse (entrada) con PRECIO.
 1. Breve resumen mostrando que entiendes su situacion
 2. Enmarca el beneficio principal (no proceso tecnico)
-3. Recomienda el servicio marcado como Trojan Horse (entrada) con su precio exacto (ej: '$99')
+3. Recomienda el servicio marcado como Trojan Horse (entrada) con su precio exacto
 4. Cierra SIEMPRE con esta pregunta: "Te interesa este servicio o prefieres algo mas completo y profundo?"
 5. Si el cliente dice que SI quiere el basico, avanza a agendar (STATE 5)
-6. Si el cliente pide algo mas completo/profundo, recomienda UNA opcion superior con precio y cierra con pregunta binaria para avanzar
-7. Si pregunta aclaraciones ("que incluye", "precio"), responde eso primero sin repetir el mismo pitch
-8. Si preguntan por TODOS los servicios, menciona brevemente las opciones y recomienda la que mejor aplica
+6. Si el cliente pide algo mas completo/profundo, recomienda UNA opcion superior con precio`;
+
+      const intentBasedEn = hasProtectionIntent
+        ? `GOAL: Customer wants ROBUST/LONG-TERM PROTECTION. Recommend the CERAMIC PROTECTION (premium) service with EXACT PRICE.
+1. Brief summary showing you understand their need for lasting protection
+2. Recommend the ceramic/premium protection service with exact price
+3. Close with: "Would you like to schedule an appointment for this service?"
+Do NOT recommend the basic/entry service. Customer already said they want something robust and lasting.`
+        : hasInteriorIntent
+          ? `GOAL: Customer wants INTERIOR CLEANING/RENEWAL. Recommend the INTERIOR service with EXACT PRICE.
+1. Brief summary showing you understand their interior need
+2. Recommend the interior/deep cleaning service with exact price
+3. Close with: "Would you like to schedule an appointment for this service?"
+Do NOT recommend the basic/entry service. Customer already said they want interior work.`
+          : `GOAL: Recommend the Trojan Horse (entry-level) service FIRST with PRICE.
+1. Brief summary showing you understand their situation
+2. Frame the primary benefit (not technical process)
+3. Recommend the Trojan Horse (entry) service with exact price
+4. ALWAYS close with: "Is this something you'd like, or would you prefer a deeper, more complete service?"
+5. If customer says YES to the basic, advance to scheduling (STATE 5)
+6. If customer asks for something deeper, recommend ONE superior option with price`;
+
+      stateGoal = language === "es"
+        ? `${intentBasedEs}
 
 CRITICO: Ya tienes TODA la informacion del vehiculo en INFORMACION CONFIRMADA.
 NO vuelvas a preguntar marca, modelo ni tipo de vehiculo.
@@ -1482,15 +1518,7 @@ IMPORTANTE: Selecciona precios basandote en:
 - Vehiculo del cliente (tamano, tipo)
 - Objetivo deseado (brillo, proteccion, interior)
 - Duracion de proteccion si aplica`
-        : `GOAL: Recommend the Trojan Horse (entry-level) service FIRST with PRICE.
-1. Brief summary showing you understand their situation
-2. Frame the primary benefit (not technical process)
-3. Recommend the Trojan Horse (entry) service with its exact price (e.g., '$99')
-4. ALWAYS close with: "Is this something you'd like, or would you prefer a deeper, more complete service?"
-5. If the customer says YES to the basic, advance to scheduling (STATE 5)
-6. If the customer asks for something deeper/more complete, recommend ONE superior option with price and close with a binary next-step question
-7. If customer asks clarification ("what's included", "price"), answer that first without repeating the same pitch
-8. If they ask about ALL services, briefly mention options and recommend the best fit
+        : `${intentBasedEn}
 
 CRITICAL: You already have ALL vehicle information in CONFIRMED INFORMATION.
 DO NOT ask for make, model, or vehicle type again.
@@ -1501,6 +1529,7 @@ IMPORTANT: Select prices based on:
 - Desired outcome (shine, protection, interior)
 - Protection duration if applicable`;
       break;
+    }
     case STATES.STATE_5_SCHEDULE: {
       const hasDay = !!context.scheduledDay;
       const hasTime = !!context.scheduledTime;
@@ -1656,15 +1685,19 @@ Let them know no services are configured and offer to try again later.
   const trojanHorseRule = trojanHorse && isPrescriptionReady
     ? language === "es"
       ? `
-REGLA TROJAN HORSE: Para consultas generales o cuando no hay un objetivo especifico:
-      Recomienda "${trojanHorse.name}"${trojanHorse.base_price ? ` (~$${trojanHorse.base_price})` : ""} como punto de entrada y menciona brevemente: "${otherTeaserEs.trim()}".
-      Si ya conoces el vehiculo, personaliza la recomendacion.
-      NO listes los otros servicios por nombre a menos que el cliente PREGUNTE EXPLICITAMENTE ("que otros servicios", "que mas ofrecen").`
+REGLA DE RECOMENDACION: Selecciona el servicio que MEJOR se ajuste a la necesidad expresada por el cliente:
+- Si el cliente pidio proteccion robusta/largo plazo/ceramica → recomienda el servicio de PROTECCION CERAMICA/PREMIUM
+- Si el cliente pidio limpieza interior → recomienda el servicio de INTERIOR
+- Si el cliente pidio brillo/limpieza rapida O no tiene objetivo especifico → recomienda "${trojanHorse.name}"${trojanHorse.base_price ? ` (~$${trojanHorse.base_price})` : ""} como punto de entrada
+${otherTeaserEs.trim()}
+NO listes los otros servicios por nombre a menos que el cliente PREGUNTE EXPLICITAMENTE.`
       : `
-TROJAN HORSE RULE: For general inquiries or when no specific goal is identified:
-      Recommend "${trojanHorse.name}"${trojanHorse.base_price ? ` (~$${trojanHorse.base_price})` : ""} as the entry point and briefly mention: "${otherTeaserEn.trim()}".
-      If you already know the vehicle, personalize the recommendation.
-      Do NOT list other services by name unless the customer EXPLICITLY ASKS ("what other services", "what else do you offer").`
+RECOMMENDATION RULE: Select the service that BEST matches the customer's expressed need:
+- If customer asked for robust/long-term protection/ceramic → recommend the CERAMIC/PREMIUM PROTECTION service
+- If customer asked for interior cleaning → recommend the INTERIOR service  
+- If customer asked for shine/quick clean OR has no specific goal → recommend "${trojanHorse.name}"${trojanHorse.base_price ? ` (~$${trojanHorse.base_price})` : ""} as the entry point
+${otherTeaserEn.trim()}
+Do NOT list other services by name unless the customer EXPLICITLY ASKS.`
     : trojanHorse && !isPrescriptionReady
       ? language === "es"
         ? `\nIMPORTANTE: NO recomiendes servicios todavia. Primero debes entender la necesidad del cliente (brillo, proteccion, interior). Los servicios listados son SOLO para tu referencia interna.`
