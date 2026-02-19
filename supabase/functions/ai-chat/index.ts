@@ -203,7 +203,9 @@ function parseVehicleInfo(text: string): ConversationContext["vehicleInfo"] | nu
     "toyota", "honda", "ford", "chevrolet", "chevy", "nissan", "hyundai", "kia",
     "bmw", "mercedes", "audi", "volkswagen", "vw", "mazda", "subaru", "lexus",
     "jeep", "dodge", "ram", "gmc", "cadillac", "buick", "tesla", "volvo",
-    "porsche", "jaguar", "land rover", "range rover", "infiniti", "acura"
+    "porsche", "jaguar", "land rover", "range rover", "infiniti", "acura",
+    "mitsubishi", "suzuki", "fiat", "peugeot", "renault", "seat", "skoda",
+    "mini", "alfa romeo", "genesis", "lincoln", "chrysler", "isuzu",
   ];
   
   const typePatterns = {
@@ -259,6 +261,19 @@ function parseVehicleInfo(text: string): ConversationContext["vehicleInfo"] | nu
     /\b(escalade|xt4|xt5|xt6|ct4|ct5|lyriq)\b/i,
     /\b(q50|q60|qx50|qx55|qx60|qx80)\b/i,
     /\b(mdx|rdx|tlx|integra)\b/i,
+    /\b(montero|outlander|eclipse|lancer|pajero|l200|asx|mirage|xpander|eclipse cross)\b/i,
+    /\b(jimny|swift|vitara|s-cross|baleno|ignis|ertiga|xl7)\b/i,
+    /\b(500|punto|tipo|panda|ducato|doblo|toro|argo|cronos|strada)\b/i,
+    /\b(208|308|3008|2008|5008|408|partner|rifter)\b/i,
+    /\b(duster|sandero|logan|koleos|captur|megane|clio|kwid|stepway)\b/i,
+    /\b(ibiza|leon|arona|ateca|tarraco)\b/i,
+    /\b(octavia|kodiaq|karoq|superb|fabia|kamiq|scala)\b/i,
+    /\b(cooper|countryman|clubman|paceman)\b/i,
+    /\b(giulia|stelvio|tonale)\b/i,
+    /\b(g70|g80|g90|gv70|gv80|gv60)\b/i,
+    /\b(navigator|aviator|corsair|nautilus)\b/i,
+    /\b(pacifica|300|voyager)\b/i,
+    /\b(d-max|mu-x)\b/i,
   ];
   
   for (const pattern of modelPatterns) {
@@ -1347,12 +1362,14 @@ ABSOLUTE RULES (NEVER BREAK):
 5. If the customer asks about services or prices, say you'd love to help but first need their vehicle info to give the best recommendation`;
       } else {
         stateGoal = language === "es"
-          ? `OBJETIVO: Confirmar y avanzar.
-Confirma el vehiculo brevemente y pregunta cual es su objetivo principal.
-No listes servicios en este paso.`
-          : `GOAL: Confirm and move forward.
-Briefly confirm the vehicle and ask their main goal.
-Do not list services at this step.`;
+          ? `OBJETIVO: Confirmar el vehiculo y preguntar su necesidad principal.
+Confirma brevemente el vehiculo y pregunta:
+"¿Cual es tu principal necesidad: brillo y proteccion ligera, limpieza completa de interior, o algo mas robusto o de mayor duracion?"
+NO listes servicios ni precios. Solo pregunta por su necesidad.`
+          : `GOAL: Confirm the vehicle and ask their main need.
+Briefly confirm the vehicle and ask:
+"What is your main concern: shine and light protection, a full interior cleaning, or something more robust or longer-lasting?"
+Do NOT list services or prices. Just ask about their need.`;
       }
       break;
     }
@@ -1391,12 +1408,12 @@ DO NOT list services or options; just CONFIRM the goal.`;
         stateGoal = language === "es"
           ? `OBJETIVO: Entender que beneficio/problema quieren resolver.
 ${vehicleRef ? `Menciona su ${vehicleRef} para mostrar que escuchaste.` : ""}
-Pregunta cual es el resultado principal que buscan con su vehiculo.
-NO listes servicios ni opciones; pregunta por el RESULTADO que desean.`
+Pregunta: "¿Cual es tu principal necesidad: brillo y proteccion ligera, limpieza completa de interior, o algo mas robusto o de mayor duracion?"
+NO listes servicios ni precios; solo pregunta por su NECESIDAD con esas tres opciones.`
           : `GOAL: Understand what benefit/problem they want to solve.
 ${vehicleRef ? `Reference their ${vehicleRef} to show you listened.` : ""}
-Ask what main result they want for their vehicle.
-DO NOT list services or options; ask about the OUTCOME they want.`;
+Ask: "What is your main concern: shine and light protection, a full interior cleaning, or something more robust or longer-lasting?"
+DO NOT list services or prices; just ask about their NEED with those three options.`;
       }
       break;
     }
@@ -2046,10 +2063,10 @@ async function processStateMachine(
       STATE_2_BENEFIT: {
         en: context.benefitIntent
           ? `You mentioned ${context.benefitIntent} for your ${vehicleRef || "vehicle"}. Is that your main priority, or is there something else?`
-          : "What main result do you want for your vehicle?",
+          : `What is your main concern for your ${vehicleRef || "vehicle"}: shine and light protection, a full interior cleaning, or something more robust or longer-lasting?`,
         es: context.benefitIntent
           ? `Mencionaste ${context.benefitIntent} para tu ${vehicleRef || "vehiculo"}. Es esa tu prioridad principal o hay algo mas?`
-          : "Cual es el resultado principal que buscas para tu vehiculo?"
+          : `¿Cual es tu principal necesidad para tu ${vehicleRef || "vehiculo"}: brillo y proteccion ligera, limpieza completa de interior, o algo mas robusto o de mayor duracion?`
       },
       STATE_3_USAGE: {
         en: "Are you looking for something that lasts a few months, or long-term protection (1 to 3 years)?",
