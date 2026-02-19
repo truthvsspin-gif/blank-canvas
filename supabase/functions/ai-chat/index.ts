@@ -295,8 +295,12 @@ function getVehicleMissingParts(vehicleInfo?: ConversationContext["vehicleInfo"]
 }
 
 // BENEFIT INTENT DETECTION (STATE 2)
+function stripAccents(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
 function parseBenefitIntent(text: string): string | null {
-  const lowerText = text.toLowerCase();
+  const lowerText = stripAccents(text.toLowerCase());
   
   if (/\b(shine|shiny|brillante|brillo|brillar|brilloso|new|nuevo|como nuevo|look|lucir|luzca|polish|pulir|scratch|swirl|detalle|detail|clean|limpio|limpia|limpiar|impecable|perfecto)\b/i.test(lowerText)) {
     return "shine";
@@ -319,7 +323,7 @@ function parseBenefitIntent(text: string): string | null {
 
 // PROTECTION DURATION DETECTION (STATE 3)
 function parseProtectionDuration(text: string): "short" | "long" | null {
-  const lowerText = text.toLowerCase();
+  const lowerText = stripAccents(text.toLowerCase());
 
   if (/\b(1\s*-\s*3\s*years?|1\s*a\s*3\s*anos?|1\s*to\s*3\s*years?)\b/i.test(lowerText)) {
     return "long";
