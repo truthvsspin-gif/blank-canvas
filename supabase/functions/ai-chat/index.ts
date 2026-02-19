@@ -274,6 +274,7 @@ function parseVehicleInfo(text: string): ConversationContext["vehicleInfo"] | nu
     /\b(navigator|aviator|corsair|nautilus)\b/i,
     /\b(pacifica|300|voyager)\b/i,
     /\b(d-max|mu-x)\b/i,
+    /\b(sport|velar|evoque|defender|discovery|freelander|vogue|autobiography|dynamic|se|hse)\b/i,
   ];
   
   for (const pattern of modelPatterns) {
@@ -1424,11 +1425,23 @@ DO NOT list services or options; just CONFIRM the goal.`;
           ? `OBJETIVO: Entender que beneficio/problema quieren resolver.
 ${vehicleRef ? `Menciona su ${vehicleRef} para mostrar que escuchaste.` : ""}
 Pregunta: "¿Cual es tu principal necesidad: brillo y proteccion ligera, limpieza completa de interior, o algo mas robusto o de mayor duracion?"
-NO listes servicios ni precios; solo pregunta por su NECESIDAD con esas tres opciones.`
+
+PROHIBIDO en este paso:
+- NO recomiendes NINGUN servicio ni paquete
+- NO menciones precios
+- NO menciones el servicio de entrada ni el Trojan Horse
+- NO listes servicios por nombre
+- SOLO haz la pregunta diagnostica sobre su NECESIDAD`
           : `GOAL: Understand what benefit/problem they want to solve.
 ${vehicleRef ? `Reference their ${vehicleRef} to show you listened.` : ""}
 Ask: "What is your main concern: shine and light protection, a full interior cleaning, or something more robust or longer-lasting?"
-DO NOT list services or prices; just ask about their NEED with those three options.`;
+
+FORBIDDEN at this step:
+- Do NOT recommend ANY service or package
+- Do NOT mention prices
+- Do NOT mention the entry-level or Trojan Horse service
+- Do NOT list services by name
+- ONLY ask the diagnostic question about their NEED`;
       }
       break;
     }
@@ -1566,7 +1579,8 @@ interface ServiceContext {
 function buildBusinessContextBlock(
   business: any,
   services: ServiceContext[],
-  language: "en" | "es"
+  language: "en" | "es",
+  currentState?: State
 ): string {
   const businessName = business?.name || "the business";
   const businessDesc = business?.business_description || "";
@@ -1635,23 +1649,27 @@ Let them know no services are configured and offer to try again later.
   const otherListEs = otherServices.map(s => `- ${s.name}${s.base_price ? ` (~$${s.base_price})` : ""}`).join("\n");
   const otherListEn = otherServices.map(s => `- ${s.name}${s.base_price ? ` (~$${s.base_price})` : ""}`).join("\n");
 
-  const trojanHorseRule = trojanHorse
+  // Only include Trojan Horse rule when we're in STATE_4+ (prescription or later)
+  // In earlier states (STATE_0-3), we must NOT recommend services - we're still diagnosing
+  const isPrescriptionReady = currentState && STATE_ORDER[currentState] >= STATE_ORDER[STATES.STATE_4_PRESCRIPTION];
+  
+  const trojanHorseRule = trojanHorse && isPrescriptionReady
     ? language === "es"
       ? `
-REGLA TROJAN HORSE: Para consultas generales iniciales ("que servicios tienen", "cuanto cuesta", "informacion")
+REGLA TROJAN HORSE: Para consultas generales o cuando no hay un objetivo especifico:
       Recomienda "${trojanHorse.name}"${trojanHorse.base_price ? ` (~$${trojanHorse.base_price})` : ""} como punto de entrada y menciona brevemente: "${otherTeaserEs.trim()}".
       Si ya conoces el vehiculo, personaliza la recomendacion.
-      PERO si el cliente PREGUNTA EXPLICITAMENTE por otros servicios ("que otros servicios", "que mas ofrecen", "cuales son los otros"), DEBES listar los servicios por nombre y precio:
-${otherListEs}
-      Despues de listarlos, pregunta cual les interesa.`
+      NO listes los otros servicios por nombre a menos que el cliente PREGUNTE EXPLICITAMENTE ("que otros servicios", "que mas ofrecen").`
       : `
-TROJAN HORSE RULE: For initial general inquiries ("what services", "how much", "information")
+TROJAN HORSE RULE: For general inquiries or when no specific goal is identified:
       Recommend "${trojanHorse.name}"${trojanHorse.base_price ? ` (~$${trojanHorse.base_price})` : ""} as the entry point and briefly mention: "${otherTeaserEn.trim()}".
       If you already know the vehicle, personalize the recommendation.
-      BUT if the customer EXPLICITLY ASKS about other services ("what other services", "what else do you offer", "what are the others"), you MUST list the services by name and price:
-${otherListEn}
-      After listing them, ask which one interests them.`
-    : "";
+      Do NOT list other services by name unless the customer EXPLICITLY ASKS ("what other services", "what else do you offer").`
+    : trojanHorse && !isPrescriptionReady
+      ? language === "es"
+        ? `\nIMPORTANTE: NO recomiendes servicios todavia. Primero debes entender la necesidad del cliente (brillo, proteccion, interior). Los servicios listados son SOLO para tu referencia interna.`
+        : `\nIMPORTANT: Do NOT recommend services yet. First understand the customer's need (shine, protection, interior). Services listed are for your INTERNAL reference only.`
+      : "";
 
   const rulesBlock = language === "es"
     ? `REGLAS DE USO:
@@ -1729,7 +1747,7 @@ function buildSystemPrompt(
   const confirmedFacts = buildConfirmedFactsBlock(context, language);
   const negativeConstraints = buildNegativeConstraints(context, language);
   const { coreRules, stateGoal } = buildAgentBrain(state, context, language);
-  const businessContext = buildBusinessContextBlock(business, services, language);
+  const businessContext = buildBusinessContextBlock(business, services, language, state);
 
   const languageInstruction = language === "es"
     ? "IDIOMA OBLIGATORIO: Responde SIEMPRE en ESPANOL. Bajo ninguna circunstancia respondas en ingles."
