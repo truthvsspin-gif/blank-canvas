@@ -776,7 +776,8 @@ async function createBookingFromConversation(
 
   try {
     let customerId: string | null = null;
-    const phone = customerIdentifier?.startsWith("+") ? customerIdentifier : null;
+    // Accept phone numbers with or without + prefix
+    const phone = customerIdentifier && /\d{7,}/.test(customerIdentifier.replace(/[-.\s]/g, "")) ? customerIdentifier : null;
 
     if (phone) {
       const { data: existingCustomer } = await supabase
@@ -1005,6 +1006,7 @@ function extractRecommendedService(
   
   const responseLower = aiResponse.toLowerCase();
   
+  // 1. Check if AI response mentions a service name directly
   for (const service of services) {
     const serviceName = service.name.toLowerCase();
     if (responseLower.includes(serviceName)) {
@@ -1012,12 +1014,24 @@ function extractRecommendedService(
       return service.name;
     }
   }
+
+  // 2. Check if recommendationSummary from context mentions a service
+  if (context.recommendationSummary) {
+    const summaryLower = context.recommendationSummary.toLowerCase();
+    for (const service of services) {
+      if (summaryLower.includes(service.name.toLowerCase())) {
+        console.log(`[SERVICE MATCH] Found "${service.name}" in recommendation summary`);
+        return service.name;
+      }
+    }
+  }
   
+  // 3. Match by benefit intent keywords against service names/descriptions
   if (context.benefitIntent) {
     const benefitKeywords: Record<string, string[]> = {
-      shine: ["brillo", "shine", "polish", "pulir", "abrillant", "wax", "cera"],
-      protection: ["ceramic", "ceramico", "coating", "ppf", "proteccion", "protection", "sellado"],
-      interior: ["interior", "tapiceria", "asiento", "seat", "leather", "piel"],
+      shine: ["brillo", "shine", "polish", "pulir", "abrillant", "wax", "cera", "express"],
+      protection: ["ceramic", "ceramico", "ceramica", "coating", "ppf", "proteccion", "protection", "sellado", "premium"],
+      interior: ["interior", "tapiceria", "asiento", "seat", "leather", "piel", "limpieza"],
     };
     
     const keywords = benefitKeywords[context.benefitIntent] || [];
@@ -1030,6 +1044,7 @@ function extractRecommendedService(
     }
   }
   
+  // 4. Fallback to trojan horse only if no intent was detected
   const trojanHorse = services.find(s => s.is_trojan_horse);
   if (trojanHorse) {
     console.log(`[SERVICE MATCH] Using Trojan Horse: "${trojanHorse.name}"`);
@@ -2932,6 +2947,19 @@ Deno.serve(async (req: Request) => {
 
     const reply = trimResponse(stateMachine.reply);
     const newContext = { ...stateMachine.newContext, detectedLanguage: language };
+
+    // Store recommendation summary when in prescription state so booking uses correct service
+    if (newContext.currentState === STATES.STATE_4_PRESCRIPTION || 
+        newContext.currentState === STATES.STATE_5_SCHEDULE ||
+        newContext.currentState === STATES.STATE_6_ACTION) {
+      if (!newContext.recommendationSummary) {
+        const matchedService = extractRecommendedService(reply, services || [], newContext);
+        if (matchedService) {
+          newContext.recommendationSummary = matchedService;
+          console.log(`[CONTEXT] Stored recommendation: "${matchedService}"`);
+        }
+      }
+    }
     const performance = stateMachine.performance;
     console.log(`[AI-CHAT] Response generated in ${performance.responseTimeMs}ms, fallback: ${performance.isFallback}`);
     // Determine flyer: prefer service-specific flyer_url based on which service is mentioned in the reply
@@ -2997,11 +3025,39 @@ Deno.serve(async (req: Request) => {
 
       const recommendedService = extractRecommendedService(reply, services || [], newContext);
 
+      // Extract customer name from contact info message if not provided in request body
+      let resolvedCustomerName = customerName || null;
+      if (!resolvedCustomerName) {
+        const nameMatch = userMessage.match(/\b(?:me llamo|my name is|soy|i'm|i am)\s+([A-Z][a-záéíóúñ]+(?:\s+[A-Z][a-záéíóúñ]+)*)/i);
+        if (nameMatch) {
+          resolvedCustomerName = nameMatch[1].trim();
+          console.log(`[BOOKING] Extracted customer name from message: "${resolvedCustomerName}"`);
+        }
+        // Also try "Name LastName" pattern before phone number
+        if (!resolvedCustomerName) {
+          const namePhoneMatch = userMessage.match(/([A-Z][a-záéíóúñ]+\s+[A-Z][a-záéíóúñ]+)[\s,]+.*\d{7,}/i);
+          if (namePhoneMatch) {
+            resolvedCustomerName = namePhoneMatch[1].trim();
+            console.log(`[BOOKING] Extracted customer name from name+phone pattern: "${resolvedCustomerName}"`);
+          }
+        }
+      }
+      
+      // Extract phone from contact info message if not provided
+      let resolvedPhone = customerIdentifier || null;
+      if (!resolvedPhone) {
+        const phoneMatch = userMessage.match(/(\d{3}[-.\s]?\d{3,4}[-.\s]?\d{4}|\d{10,11}|\+\d{1,3}\s?\d{6,12})/);
+        if (phoneMatch) {
+          resolvedPhone = phoneMatch[1].replace(/[-.\s]/g, "");
+          console.log(`[BOOKING] Extracted phone from message: "${resolvedPhone}"`);
+        }
+      }
+
       bookingResult = await createBookingFromConversation(supabase, {
         businessId,
         conversationId: conversationId || `auto-${Date.now()}`,
-        customerIdentifier: customerIdentifier || null,
-        customerName: customerName || null,
+        customerIdentifier: resolvedPhone,
+        customerName: resolvedCustomerName,
         channel: channel || null,
         context: newContext,
         recommendedService: recommendedService,
