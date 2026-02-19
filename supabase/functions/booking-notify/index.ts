@@ -42,7 +42,7 @@ serve(async (req: Request) => {
 
     const { data: booking, error: bookingError } = await supabase
       .from("bookings")
-      .select("id, business_id, customer_id, vehicle_id, service_name, price, status, scheduled_at, source, created_at")
+      .select("id, business_id, customer_id, vehicle_id, service_name, price, status, scheduled_at, source, created_at, confirmation_notes, assigned_to, lead_id")
       .eq("business_id", businessId)
       .eq("id", bookingId)
       .maybeSingle();
@@ -63,6 +63,38 @@ serve(async (req: Request) => {
 
     const isPending = booking.status === "pending";
     const subjectAction = isPending ? "New booking pending review" : "New booking confirmed";
+
+    // Fetch customer details
+    let customerName = "N/A";
+    let customerPhone = "N/A";
+    let customerEmail = "N/A";
+    if (booking.customer_id) {
+      const { data: customer } = await supabase
+        .from("customers")
+        .select("full_name, phone, email")
+        .eq("id", booking.customer_id)
+        .maybeSingle();
+      if (customer) {
+        customerName = customer.full_name || "N/A";
+        customerPhone = customer.phone || "N/A";
+        customerEmail = customer.email || "N/A";
+      }
+    }
+
+    // Fetch vehicle details
+    let vehicleInfo = "N/A";
+    if (booking.vehicle_id) {
+      const { data: vehicle } = await supabase
+        .from("vehicles")
+        .select("brand, model, size, color, license_plate")
+        .eq("id", booking.vehicle_id)
+        .maybeSingle();
+      if (vehicle) {
+        const parts = [vehicle.brand, vehicle.model, vehicle.size, vehicle.color].filter(Boolean);
+        vehicleInfo = parts.length > 0 ? parts.join(" · ") : "N/A";
+        if (vehicle.license_plate) vehicleInfo += ` (${vehicle.license_plate})`;
+      }
+    }
 
     const { data: business } = await supabase
       .from("businesses")
@@ -108,23 +140,56 @@ serve(async (req: Request) => {
     }
 
     const subject = `${subjectAction} - ${businessName}`;
-    const scheduledAt = booking.scheduled_at ? new Date(booking.scheduled_at).toISOString() : "TBD";
+    const scheduledAt = booking.scheduled_at ? new Date(booking.scheduled_at).toLocaleString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "TBD";
     const priceText = booking.price != null ? `$${booking.price}` : "TBD";
     const reviewNote = isPending
       ? `<p style="color: #d97706; font-weight: bold;">⚠️ This booking needs your review. Please confirm or reject it in the CRM.</p>`
       : "";
 
     const html = `
-      <div style="font-family: Arial, sans-serif; line-height: 1.5;">
-        <h2>${subjectAction}</h2>
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; max-width: 600px;">
+        <h2 style="color: #1f2937;">${subjectAction}</h2>
         ${reviewNote}
-        <p><strong>Business:</strong> ${businessName}</p>
-        <p><strong>Service:</strong> ${booking.service_name}</p>
-        <p><strong>Price:</strong> ${priceText}</p>
-        <p><strong>Scheduled:</strong> ${scheduledAt}</p>
-        <p><strong>Status:</strong> ${booking.status}</p>
-        <p><strong>Source:</strong> ${booking.source || "unknown"}</p>
-        <p><strong>Booking ID:</strong> ${booking.id}</p>
+        <table style="border-collapse: collapse; width: 100%; margin: 16px 0;">
+          <tr style="background: #f9fafb;">
+            <td style="padding: 8px 12px; font-weight: bold; color: #374151; border-bottom: 1px solid #e5e7eb;">Customer</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb;">${customerName}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 12px; font-weight: bold; color: #374151; border-bottom: 1px solid #e5e7eb;">Phone</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb;">${customerPhone}</td>
+          </tr>
+          <tr style="background: #f9fafb;">
+            <td style="padding: 8px 12px; font-weight: bold; color: #374151; border-bottom: 1px solid #e5e7eb;">Email</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb;">${customerEmail}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 12px; font-weight: bold; color: #374151; border-bottom: 1px solid #e5e7eb;">Vehicle</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb;">${vehicleInfo}</td>
+          </tr>
+          <tr style="background: #f9fafb;">
+            <td style="padding: 8px 12px; font-weight: bold; color: #374151; border-bottom: 1px solid #e5e7eb;">Service</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb;"><strong>${booking.service_name}</strong></td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 12px; font-weight: bold; color: #374151; border-bottom: 1px solid #e5e7eb;">Price</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb;"><strong>${priceText}</strong></td>
+          </tr>
+          <tr style="background: #f9fafb;">
+            <td style="padding: 8px 12px; font-weight: bold; color: #374151; border-bottom: 1px solid #e5e7eb;">Scheduled</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb;">${scheduledAt}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 12px; font-weight: bold; color: #374151; border-bottom: 1px solid #e5e7eb;">Status</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb;">${booking.status}</td>
+          </tr>
+          <tr style="background: #f9fafb;">
+            <td style="padding: 8px 12px; font-weight: bold; color: #374151; border-bottom: 1px solid #e5e7eb;">Source</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb;">${booking.source || "manual"}</td>
+          </tr>
+          ${booking.confirmation_notes ? `<tr><td style="padding: 8px 12px; font-weight: bold; color: #374151; border-bottom: 1px solid #e5e7eb;">Notes</td><td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb;">${booking.confirmation_notes}</td></tr>` : ""}
+        </table>
+        <p style="color: #6b7280; font-size: 12px;">Business: ${businessName} · Booking ID: ${booking.id}</p>
       </div>
     `.trim();
 
