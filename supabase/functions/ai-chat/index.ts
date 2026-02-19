@@ -2682,7 +2682,7 @@ async function loadConversationHistoryFromDb(
   try {
     const { data, error } = await supabase
       .from("messages")
-      .select("direction, message_text, timestamp, created_at")
+      .select("direction, message_text, timestamp")
       .eq("business_id", businessId)
       .eq("conversation_id", conversationId)
       .order("timestamp", { ascending: true });
