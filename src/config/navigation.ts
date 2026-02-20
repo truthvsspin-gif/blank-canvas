@@ -175,6 +175,17 @@ export const appSections: AppSection[] = [
     icon: User,
     group: "settings",
   },
+  {
+    name: { en: "Super Admin", es: "Super Admin" },
+    href: "/super-admin",
+    summary: {
+      en: "Approve businesses, manage roles and usage limits.",
+      es: "Aprueba negocios, gestiona roles y límites de uso.",
+    },
+    badge: { en: "Root", es: "Root" },
+    icon: Shield,
+    group: "settings",
+  },
 ]
 
 // CRM sections for the dedicated CRM sidebar
