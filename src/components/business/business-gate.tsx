@@ -28,6 +28,8 @@ export function BusinessGate({ children }: Props) {
   const [createError, setCreateError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [name, setName] = useState(() => defaultName)
+  const [bizStatus, setBizStatus] = useState<string | null>(null)
+  const [statusLoading, setStatusLoading] = useState(false)
 
   useEffect(() => {
     setName((prev) => {
@@ -42,6 +44,20 @@ export function BusinessGate({ children }: Props) {
     const localPart = (user?.email || "workspace").split("@")[0] || "workspace"
     return `${localPart.toLowerCase().replace(/[^a-z0-9-]/g, "-")}.detapro.app`
   }, [user])
+
+  useEffect(() => {
+    if (!businessId) return
+    setStatusLoading(true)
+    supabase
+      .from("businesses")
+      .select("status")
+      .eq("id", businessId)
+      .maybeSingle()
+      .then(({ data }) => {
+        setBizStatus(data?.status ?? null)
+        setStatusLoading(false)
+      })
+  }, [businessId])
 
   const handleCreate = async () => {
     if (!user) {
@@ -102,12 +118,34 @@ export function BusinessGate({ children }: Props) {
     setCreating(false)
   }
 
-  if (loading) {
+  if (loading || statusLoading) {
     return (
       <div className="grid min-h-[50vh] place-items-center text-muted-foreground">
         <div className="flex items-center gap-2 text-sm">
           <Loader2 className="size-4 animate-spin" />
           {isEs ? "Verificando tu negocio activo..." : "Checking your active business..."}
+        </div>
+      </div>
+    )
+  }
+
+  if (businessId && bizStatus && bizStatus !== "approved") {
+    return (
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 rounded-2xl border border-amber-100 bg-amber-50/60 p-6 shadow-sm">
+        <div className="flex items-start gap-3">
+          <div className="grid size-10 place-items-center rounded-xl bg-white text-amber-600 shadow-inner">
+            <Building2 className="size-5" />
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-amber-700">
+              {isEs ? "Tu negocio está en revisión" : "Your business is under review"}
+            </p>
+            <p className="text-sm text-amber-800/80">
+              {isEs
+                ? "Un administrador debe aprobar tu negocio antes de que puedas acceder. Esto puede tomar unas horas."
+                : "An administrator must approve your business before you can access it. This may take a few hours."}
+            </p>
+          </div>
         </div>
       </div>
     )

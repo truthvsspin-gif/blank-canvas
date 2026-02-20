@@ -34,6 +34,7 @@ import DevChatbot from "./pages/DevChatbot";
 import Profile from "./pages/Profile";
 import Admin from "./pages/Admin";
 import Integrations from "./pages/Integrations";
+import SuperAdmin from "./pages/SuperAdmin";
 import AppLayout from "./layouts/AppLayout";
 import CrmLayout from "./layouts/CrmLayout";
 import AuthLayout from "./layouts/AuthLayout";
@@ -68,6 +69,7 @@ function App() {
               <Route path="/profile" element={<Profile />} />
               <Route path="/integrations" element={<Integrations />} />
               <Route path="/admin" element={<Admin />} />
+              <Route path="/super-admin" element={<SuperAdmin />} />
             </Route>
             
             {/* CRM sub-app routes */}
