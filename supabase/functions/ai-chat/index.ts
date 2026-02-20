@@ -277,10 +277,29 @@ function parseVehicleInfo(text: string): ConversationContext["vehicleInfo"] | nu
     /\b(sport|velar|evoque|defender|discovery|freelander|vogue|autobiography|dynamic|se|hse)\b/i,
   ];
   
+  // Ambiguous short model names that collide with common Spanish words
+  // These should only match when their corresponding brand is also detected
+  const ambiguousModels = new Set(["es", "is", "se", "rs", "tt", "r8", "500", "300"]);
+  const ambiguousBrandMap: Record<string, string[]> = {
+    lexus: ["es", "is", "rx", "nx", "gx", "lx", "ux", "lc", "ls"],
+    audi: ["a3", "a4", "a5", "a6", "a7", "a8", "q3", "q5", "q7", "q8", "tt", "r8", "rs"],
+    fiat: ["500"],
+    chrysler: ["300"],
+  };
+
   for (const pattern of modelPatterns) {
     const match = text.match(pattern);
     if (match) {
-      detectedModel = match[0];
+      const matchedVal = match[0].toLowerCase();
+      // Skip ambiguous matches unless the corresponding brand was detected
+      if (ambiguousModels.has(matchedVal)) {
+        const brandLower = detectedBrand?.toLowerCase() || "";
+        const brandAllowed = Object.entries(ambiguousBrandMap).some(
+          ([brand, models]) => brandLower.includes(brand) && models.includes(matchedVal)
+        );
+        if (!brandAllowed) continue; // skip this pattern, try next
+      }
+      detectedModel = match[0].charAt(0).toUpperCase() + match[0].slice(1);
       break;
     }
   }
