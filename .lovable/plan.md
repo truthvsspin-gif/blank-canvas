@@ -1,70 +1,76 @@
 
 
-# CRM as a Standalone App Section
+# Usage Limits and WhatsApp API Volume Control
 
 ## Overview
-Transform the CRM module into its own self-contained sub-application with a dedicated layout, separate from the main app. CRM pages will have their own sidebar showing only CRM navigation items, while all other pages (Dashboard, Sales Analytics, Chatbot, Admin, etc.) keep the current layout unchanged.
+Add per-business usage limits so you can control how many conversations and WhatsApp API calls each business can use monthly. When a business exceeds its limit, the chatbot stops auto-replying and the business owner sees a notification.
 
-## What Changes
+## How It Works
 
-### 1. New CRM Layout (`src/layouts/CrmLayout.tsx`)
-- A dedicated layout component used exclusively for `/crm/*` routes
-- Its own sidebar with only CRM-specific navigation: CRM Home, Customers, Bookings, Services, Timeline, Work Orders, Leads, Follow-ups, Inbox
-- A "Back to Main" link at the top of the sidebar to return to the main app (e.g., Dashboard)
-- Same header style as AppLayout for visual consistency, but the sidebar content is CRM-only
-- Emerald color theme throughout (matching the existing CRM group color)
-
-### 2. New CRM Sidebar (`src/components/layout/crm-sidebar-nav.tsx`)
-- Renders only CRM navigation items (filtered from `appSections` where `group === "crm"`)
-- Includes a prominent back button/link to exit CRM and return to Dashboard
-- Collapsible mini-mode support (same as current sidebar)
-- Emerald-themed active states and indicators
-
-### 3. Updated Main Sidebar (`src/components/layout/sidebar-nav.tsx`)
-- Remove individual CRM sub-items (Customers, Bookings, Services, etc.) from the main sidebar
-- Keep only a single "CRM" entry that links to `/crm` as an entry point into the CRM sub-app
-- All other groups (Overview, Messaging, Settings) remain exactly as they are
-
-### 4. Updated Routing (`src/App.tsx`)
-- Move all `/crm/*` routes under a new parent route that uses `CrmLayout` instead of `AppLayout`
-- Non-CRM routes continue using `AppLayout` as before
-
-### 5. Navigation Config (`src/config/navigation.ts`)
-- Add a new export `crmSections` filtered for CRM items, used by the CRM sidebar
-- Update `navGroups` for the main sidebar to only include the CRM hub link (not sub-pages)
-
-## Visual Flow
-
-```text
-Main App (AppLayout)              CRM Sub-App (CrmLayout)
-+--------------------------+      +--------------------------+
-| Header                   |      | Header                   |
-|--------------------------|      |--------------------------|
-| Sidebar    | Content     |      | CRM        | Content     |
-| - Dashboard|             |      | Sidebar    |             |
-| - Analytics|             |  ->  | <- Back    |             |
-| - CRM -----+-- click -->|      | - Home     |             |
-| - Chatbot  |             |      | - Customers|             |
-| - Admin    |             |      | - Bookings |             |
-| - ...      |             |      | - Services |             |
-+--------------------------+      | - ...      |             |
-                                  +--------------------------+
-```
+1. **Each business gets a plan tier** with monthly limits (e.g., Free = 50 conversations, Pro = 500)
+2. **Every incoming WhatsApp/Instagram message** checks the limit before calling `ai-chat`
+3. **If over limit**, the webhook skips AI reply and tags the thread so the owner knows
+4. **The CRM dashboard** shows current usage vs. limits with a progress bar
 
 ## Technical Details
 
-### Files to Create
-- `src/layouts/CrmLayout.tsx` -- mirrors AppLayout structure but uses CRM sidebar
-- `src/components/layout/crm-sidebar-nav.tsx` -- CRM-only sidebar navigation
+### Step 1: Add plan columns to `businesses` table
+New migration adding:
+- `plan_tier` (text, default `'free'`) -- e.g., `free`, `starter`, `pro`, `unlimited`
+- `monthly_conversation_limit` (integer, default `50`) -- max 24h conversation windows per month
+- `monthly_ai_reply_limit` (integer, default `100`) -- max AI-generated replies per month
 
-### Files to Modify
-- `src/App.tsx` -- split CRM routes into their own layout group
-- `src/config/navigation.ts` -- export `crmSections` and adjust main sidebar items
-- `src/components/layout/sidebar-nav.tsx` -- remove CRM sub-items from main nav (keep only CRM hub link)
+This keeps limits configurable per business rather than hardcoded.
 
-### No Changes To
-- All page components (CRM.tsx, Customers.tsx, etc.) remain untouched
-- Header component stays the same
-- Auth, providers, and business gate remain unchanged
-- All non-CRM routes and layouts stay exactly as they are
+### Step 2: Add `ai_replies` metric tracking
+Update the `ai-chat` edge function to increment a new `ai_replies` counter in `usage_monthly` each time it generates a reply. This tracks actual WhatsApp API usage (each outbound message = 1 API call).
+
+### Step 3: Enforce limits in webhooks
+In both `webhook-whatsapp` and `webhook-instagram`, before delegating to `ai-chat`:
+
+```text
+1. Read business.monthly_conversation_limit and business.monthly_ai_reply_limit
+2. Read current usage_monthly counters for this period
+3. If conversations_24h >= limit OR ai_replies >= limit:
+   - Skip ai-chat delegation
+   - Update inbox_thread with a tag like "limit_reached"
+   - Log the skip event
+   - Still store the inbound message (don't lose data)
+```
+
+### Step 4: Update `get-usage` edge function
+Return limits alongside counters so the frontend can display progress:
+
+```text
+Response:
+{
+  period: "2026-02",
+  counters: { conversations_24h: 47, ai_replies: 89 },
+  limits: { conversations_24h: 50, ai_replies: 100 },
+  plan_tier: "free"
+}
+```
+
+### Step 5: Usage bar in CRM dashboard
+Add a usage indicator to the Chatbot settings page or Dashboard showing:
+- Conversations used: 47 / 50
+- AI replies used: 89 / 100
+- Visual progress bar that turns yellow at 80% and red at 95%
+- "Upgrade" prompt when approaching or exceeding limits
+
+### Files to modify
+
+| File | Change |
+|---|---|
+| New migration SQL | Add `plan_tier`, `monthly_conversation_limit`, `monthly_ai_reply_limit` to `businesses` |
+| `supabase/functions/webhook-whatsapp/index.ts` | Add limit check before `ai-chat` delegation |
+| `supabase/functions/webhook-instagram/index.ts` | Same limit check |
+| `supabase/functions/ai-chat/index.ts` | Increment `ai_replies` counter in `usage_monthly` after generating a reply |
+| `supabase/functions/get-usage/index.ts` | Return limits and plan_tier alongside counters |
+| `src/pages/Chatbot.tsx` or `src/pages/Dashboard.tsx` | Add usage progress bar component |
+
+### What this does NOT change
+- Inbound messages are always stored regardless of limits (no data loss)
+- Manual replies from the CRM inbox are not affected by limits
+- Existing conversation tracking logic stays the same
 
