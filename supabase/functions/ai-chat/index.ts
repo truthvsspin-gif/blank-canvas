@@ -2064,7 +2064,14 @@ async function processStateMachine(
     }
     case STATES.STATE_6_ACTION: {
       // Check if user provided contact info (name + phone) in this message
-      if (hasContactInfo(userMessage)) {
+      // On WhatsApp, customerIdentifier already provides the phone, so only name is needed
+      const hasPhoneAlready = customerIdentifier && /\d{7,}/.test(customerIdentifier.replace(/[-.\s]/g, ""));
+      const namePattern = /\b(?:me llamo|my name is|soy|i'm|i am)\s+([A-Z][a-záéíóúñ]+)/i;
+      const namePhonePattern = /([A-Z][a-záéíóúñ]+\s+[A-Z][a-záéíóúñ]+)[\s,]+.*\d{7,}/i;
+      const hasNameInMessage = namePattern.test(userMessage) || namePhonePattern.test(userMessage);
+      const contactInfoReady = hasContactInfo(userMessage) || (hasPhoneAlready && hasNameInMessage);
+      
+      if (contactInfoReady) {
         newContext.handoffRequired = true;
         newContext.currentState = STATES.STATE_7_HANDOFF;
       } else {
@@ -3078,32 +3085,45 @@ Deno.serve(async (req: Request) => {
 
       const recommendedService = extractRecommendedService(reply, services || [], newContext);
 
-      // Extract customer name from contact info message if not provided in request body
+      // Extract customer name from contact info — scan current message AND recent history
       let resolvedCustomerName = customerName || null;
-      if (!resolvedCustomerName) {
-        const nameMatch = userMessage.match(/\b(?:me llamo|my name is|soy|i'm|i am)\s+([A-Z][a-záéíóúñ]+(?:\s+[A-Z][a-záéíóúñ]+)*)/i);
-        if (nameMatch) {
-          resolvedCustomerName = nameMatch[1].trim();
-          console.log(`[BOOKING] Extracted customer name from message: "${resolvedCustomerName}"`);
-        }
-        // Also try "Name LastName" pattern before phone number
-        if (!resolvedCustomerName) {
-          const namePhoneMatch = userMessage.match(/([A-Z][a-záéíóúñ]+\s+[A-Z][a-záéíóúñ]+)[\s,]+.*\d{7,}/i);
-          if (namePhoneMatch) {
-            resolvedCustomerName = namePhoneMatch[1].trim();
-            console.log(`[BOOKING] Extracted customer name from name+phone pattern: "${resolvedCustomerName}"`);
-          }
+      let resolvedPhone = customerIdentifier || null;
+
+      // Build a combined text from recent inbound messages to scan for contact info
+      const recentInboundTexts = [userMessage];
+      const historyForScan = mergedHistory.filter((m: ChatMessage) => m.role === "user").slice(-5);
+      for (const msg of historyForScan) {
+        if (msg.content && msg.content !== userMessage) {
+          recentInboundTexts.push(msg.content);
         }
       }
-      
-      // Extract phone from contact info message if not provided
-      let resolvedPhone = customerIdentifier || null;
-      if (!resolvedPhone) {
-        const phoneMatch = userMessage.match(/(\d{3}[-.\s]?\d{3,4}[-.\s]?\d{4}|\d{10,11}|\+\d{1,3}\s?\d{6,12})/);
-        if (phoneMatch) {
-          resolvedPhone = phoneMatch[1].replace(/[-.\s]/g, "");
-          console.log(`[BOOKING] Extracted phone from message: "${resolvedPhone}"`);
+
+      for (const scanText of recentInboundTexts) {
+        if (!resolvedCustomerName) {
+          const nameMatch = scanText.match(/\b(?:me llamo|my name is|soy|i'm|i am)\s+([A-Z][a-záéíóúñ]+(?:\s+[A-Z][a-záéíóúñ]+)*)/i);
+          if (nameMatch) {
+            resolvedCustomerName = nameMatch[1].trim();
+            console.log(`[BOOKING] Extracted customer name from history: "${resolvedCustomerName}"`);
+          }
         }
+        if (!resolvedCustomerName) {
+          const namePhoneMatch = scanText.match(/([A-Z][a-záéíóúñ]+\s+[A-Z][a-záéíóúñ]+)[\s,]+.*\d{7,}/i);
+          if (namePhoneMatch) {
+            resolvedCustomerName = namePhoneMatch[1].trim();
+            console.log(`[BOOKING] Extracted customer name from name+phone pattern in history: "${resolvedCustomerName}"`);
+          }
+        }
+        if (!resolvedPhone || resolvedPhone === customerIdentifier) {
+          const phoneMatch = scanText.match(/(\d{3}[-.\s]?\d{3,4}[-.\s]?\d{4}|\d{10,11}|\+\d{1,3}\s?\d{6,12})/);
+          if (phoneMatch) {
+            const extractedPhone = phoneMatch[1].replace(/[-.\s]/g, "");
+            if (extractedPhone.length >= 8) {
+              resolvedPhone = extractedPhone;
+              console.log(`[BOOKING] Extracted phone from history: "${resolvedPhone}"`);
+            }
+          }
+        }
+        if (resolvedCustomerName && resolvedPhone) break;
       }
 
       bookingResult = await createBookingFromConversation(supabase, {
