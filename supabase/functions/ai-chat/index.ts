@@ -3167,6 +3167,35 @@ Deno.serve(async (req: Request) => {
       await queueFollowUps(supabase, businessId, conversationId, leadIdForFollowUp);
     }
 
+    // Increment ai_replies counter in usage_monthly
+    try {
+      const now = new Date();
+      const period = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+      const { data: existingUsage } = await supabase
+        .from("usage_monthly")
+        .select("id, value")
+        .eq("business_id", businessId)
+        .eq("metric", "ai_replies")
+        .eq("period", period)
+        .maybeSingle();
+
+      if (existingUsage?.id) {
+        await supabase
+          .from("usage_monthly")
+          .update({ value: (existingUsage.value ?? 0) + 1, updated_at: now.toISOString() })
+          .eq("id", existingUsage.id);
+      } else {
+        await supabase.from("usage_monthly").insert({
+          business_id: businessId,
+          metric: "ai_replies",
+          value: 1,
+          period,
+        });
+      }
+    } catch (usageErr) {
+      console.error("[AI-CHAT] Failed to increment ai_replies counter:", usageErr);
+    }
+
     const response: AIResponse = {
       success: true,
       reply,

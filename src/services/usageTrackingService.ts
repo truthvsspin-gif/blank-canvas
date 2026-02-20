@@ -1,7 +1,7 @@
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin"
 import type { NormalizedMessage } from "@/services/messageIngest"
 
-export type UsageMonthlyMetric = "conversations_24h" | "qualified_leads"
+export type UsageMonthlyMetric = "conversations_24h" | "qualified_leads" | "ai_replies"
 
 type UsageCounter = {
   business_id: string
@@ -125,19 +125,38 @@ export async function incrementQualifiedLeads(businessId: string, amount = 1) {
 export async function getUsageCounters(businessId: string, period?: string) {
   const supabase = getSupabaseAdmin()
   const targetPeriod = period ?? getCurrentPeriod()
-  const { data } = await supabase
-    .from("usage_monthly")
+  const { data } = await (supabase
+    .from("usage_monthly") as any)
     .select("metric, value, period")
     .eq("business_id", businessId)
     .eq("period", targetPeriod)
-  return data ?? []
+  return (data ?? []) as Array<{ metric: string; value: number; period: string }>
 }
 
 export async function evaluateUsageLimits(businessId: string) {
+  const supabase = getSupabaseAdmin()
   const counters = await getUsageCounters(businessId)
+
+  // Fetch business limits
+  const { data: business } = await (supabase.from("businesses") as any)
+    .select("monthly_conversation_limit, monthly_ai_reply_limit")
+    .eq("id", businessId)
+    .single()
+
+  const convLimit = business?.monthly_conversation_limit ?? 50
+  const replyLimit = business?.monthly_ai_reply_limit ?? 100
+
+  const convUsage = counters.find((c) => c.metric === "conversations_24h")
+  const replyUsage = counters.find((c) => c.metric === "ai_replies")
+
+  const overLimit =
+    (Number((convUsage as any)?.value ?? 0) >= convLimit) ||
+    (Number((replyUsage as any)?.value ?? 0) >= replyLimit)
+
   return {
-    overLimit: false,
+    overLimit,
     counters,
+    limits: { conversations_24h: convLimit, ai_replies: replyLimit },
   }
 }
 

@@ -45,6 +45,7 @@ import { useLanguage } from "@/components/providers/language-provider";
 import { supabase } from "@/lib/supabaseClient";
 import { useCurrentBusiness } from "@/hooks/use-current-business";
 import { FlyerManager } from "@/components/chatbot/FlyerManager";
+import { UsageBar } from "@/components/chatbot/UsageBar";
 
 // Industry presets for auto-fill (automotive/detailing only)
 const INDUSTRY_PRESETS: Record<string, { description: { en: string; es: string }; instructions: { en: string; es: string } }> = {
@@ -653,6 +654,9 @@ export default function ChatbotPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Usage Bar */}
+      <UsageBar />
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Main Settings */}
