@@ -1821,7 +1821,8 @@ async function processStateMachine(
   services: any[],
   conversationHistory: ChatMessage[],
   fullHistory: ChatMessage[],
-  apiKey: string
+  apiKey: string,
+  customerIdentifier?: string | null
 ): Promise<StateMachineResult> {
   const newContext = { ...context };
   const effectiveHistory = fullHistory && fullHistory.length > 0 ? fullHistory : conversationHistory;
@@ -3002,7 +3003,8 @@ Deno.serve(async (req: Request) => {
       services || [],
       conversationHistory,
       mergedHistory,
-      GROQ_API_KEY
+      GROQ_API_KEY,
+      customerIdentifier
     );
 
     const reply = trimResponse(stateMachine.reply);
