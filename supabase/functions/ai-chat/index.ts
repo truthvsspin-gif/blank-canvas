@@ -689,7 +689,9 @@ async function createOrUpdateLead(
   
   const emailFromMessage = extractEmail(messageText);
   const phoneFromMessage = extractPhone(messageText);
-  const phone = phoneFromMessage || (customerIdentifier?.startsWith("+") ? customerIdentifier : null);
+  // Accept customerIdentifier as phone if it looks like a phone number (with or without + prefix)
+  const identifierAsPhone = customerIdentifier && /\d{7,}/.test(customerIdentifier.replace(/[-.\s]/g, "")) ? customerIdentifier : null;
+  const phone = phoneFromMessage || identifierAsPhone;
   
   const qualificationParts = [];
   if (context.benefitIntent) qualificationParts.push(`intent=${context.benefitIntent}`);
@@ -3129,7 +3131,20 @@ Deno.serve(async (req: Request) => {
             .update({ lead_id: leadData.id })
             .eq("business_id", businessId)
             .eq("id", bookingResult.bookingId);
+          createdLeadId = leadData.id;
         }
+      }
+
+      // Backfill lead record with name/phone extracted during booking creation
+      if (createdLeadId && (resolvedCustomerName || resolvedPhone)) {
+        const leadUpdate: Record<string, any> = { updated_at: new Date().toISOString() };
+        if (resolvedCustomerName) leadUpdate.name = resolvedCustomerName;
+        if (resolvedPhone) leadUpdate.phone = resolvedPhone;
+        await supabase
+          .from("leads")
+          .update(leadUpdate)
+          .eq("id", createdLeadId);
+        console.log(`[LEAD] Backfilled lead ${createdLeadId} with name="${resolvedCustomerName}", phone="${resolvedPhone}"`);
       }
 
       if (bookingResult.bookingId) {
