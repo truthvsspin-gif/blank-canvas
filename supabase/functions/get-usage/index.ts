@@ -34,6 +34,7 @@ serve(async (req: Request) => {
     const now = new Date();
     const targetPeriod = period || `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
 
+    // Fetch usage counters
     const { data: usage, error } = await supabase
       .from("usage_monthly")
       .select("metric, value, period")
@@ -48,9 +49,21 @@ serve(async (req: Request) => {
       );
     }
 
+    // Fetch business limits and plan tier
+    const { data: business, error: bizError } = await supabase
+      .from("businesses")
+      .select("plan_tier, monthly_conversation_limit, monthly_ai_reply_limit")
+      .eq("id", businessId)
+      .single();
+
+    if (bizError) {
+      console.error("Business fetch error:", bizError);
+    }
+
     const counters = {
       conversations_24h: 0,
       qualified_leads: 0,
+      ai_replies: 0,
     };
 
     for (const row of usage || []) {
@@ -58,14 +71,23 @@ serve(async (req: Request) => {
         counters.conversations_24h = row.value || 0;
       } else if (row.metric === "qualified_leads") {
         counters.qualified_leads = row.value || 0;
+      } else if (row.metric === "ai_replies") {
+        counters.ai_replies = row.value || 0;
       }
     }
+
+    const limits = {
+      conversations_24h: business?.monthly_conversation_limit ?? 50,
+      ai_replies: business?.monthly_ai_reply_limit ?? 100,
+    };
 
     return new Response(
       JSON.stringify({
         success: true,
         period: targetPeriod,
         counters,
+        limits,
+        plan_tier: business?.plan_tier ?? "free",
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

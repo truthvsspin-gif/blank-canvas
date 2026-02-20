@@ -235,9 +235,12 @@ export type Database = {
           id: string
           industry_type: string | null
           language_preference: string | null
+          monthly_ai_reply_limit: number
+          monthly_conversation_limit: number
           name: string
           office_hours: string | null
           owner_user_id: string | null
+          plan_tier: string
           updated_at: string
         }
         Insert: {
@@ -254,9 +257,12 @@ export type Database = {
           id?: string
           industry_type?: string | null
           language_preference?: string | null
+          monthly_ai_reply_limit?: number
+          monthly_conversation_limit?: number
           name: string
           office_hours?: string | null
           owner_user_id?: string | null
+          plan_tier?: string
           updated_at?: string
         }
         Update: {
@@ -273,9 +279,12 @@ export type Database = {
           id?: string
           industry_type?: string | null
           language_preference?: string | null
+          monthly_ai_reply_limit?: number
+          monthly_conversation_limit?: number
           name?: string
           office_hours?: string | null
           owner_user_id?: string | null
+          plan_tier?: string
           updated_at?: string
         }
         Relationships: [

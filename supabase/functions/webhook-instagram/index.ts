@@ -94,7 +94,7 @@ serve(async (req: Request) => {
 
       const { data: business } = await supabase
         .from("businesses")
-        .select("chatbot_enabled, ai_reply_enabled, language_preference, greeting_message, office_hours")
+        .select("chatbot_enabled, ai_reply_enabled, language_preference, greeting_message, office_hours, monthly_conversation_limit, monthly_ai_reply_limit")
         .eq("id", businessId)
         .single();
 
@@ -123,8 +123,40 @@ serve(async (req: Request) => {
         await recordMessage(supabase, message, threadId, "inbound", intent);
         await trackConversationWindow(supabase, message);
 
-        // Delegate AI response to ai-chat (handles state machine, flyers, lead qualification)
+        // Check usage limits before AI delegation
+        let limitReached = false;
         if (business.ai_reply_enabled) {
+          const convLimit = business?.monthly_conversation_limit ?? 50;
+          const replyLimit = business?.monthly_ai_reply_limit ?? 100;
+          const now = new Date();
+          const period = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+          const { data: usageRows } = await supabase
+            .from("usage_monthly")
+            .select("metric, value")
+            .eq("business_id", message.business_id)
+            .eq("period", period)
+            .in("metric", ["conversations_24h", "ai_replies"]);
+
+          const counters: Record<string, number> = {};
+          for (const row of usageRows || []) {
+            counters[row.metric] = Number(row.value ?? 0);
+          }
+
+          if ((counters.conversations_24h ?? 0) >= convLimit || (counters.ai_replies ?? 0) >= replyLimit) {
+            limitReached = true;
+            console.log(`[LIMIT] Business ${message.business_id} exceeded usage limits. conversations=${counters.conversations_24h}/${convLimit}, ai_replies=${counters.ai_replies}/${replyLimit}`);
+            const threadKey = message.sender_phone_or_handle || message.conversation_id;
+            await supabase
+              .from("inbox_threads")
+              .update({ last_intent: "limit_reached" })
+              .eq("business_id", message.business_id)
+              .eq("channel", message.channel)
+              .eq("conversation_id", threadKey);
+          }
+        }
+
+        // Delegate AI response to ai-chat (handles state machine, flyers, lead qualification)
+        if (business.ai_reply_enabled && !limitReached) {
           const aiResult = await delegateToAiChat(supabase, message);
 
           if (aiResult?.reply) {
