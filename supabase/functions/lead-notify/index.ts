@@ -61,17 +61,40 @@ serve(async (req: Request) => {
       );
     }
 
-    // Fetch latest conversation context
+    // Fetch latest conversation context and enrich lead data
     let lastMessages = "";
+    let enrichedName = lead.name;
+    let enrichedPhone = lead.phone;
     if (lead.conversation_id) {
       const { data: convRows } = await supabase
         .from("conversations")
-        .select("sender_name, message_text, message_direction, message_timestamp")
+        .select("sender_name, sender_phone_or_handle, message_text, message_direction, message_timestamp")
         .eq("business_id", businessId)
         .eq("conversation_id", lead.conversation_id)
         .order("message_timestamp", { ascending: false })
         .limit(5);
       if (convRows && convRows.length > 0) {
+        // Enrich lead name/phone from conversation if missing
+        if (!enrichedName || enrichedName === "Unknown") {
+          const senderRow = convRows.find((m: any) => m.message_direction === "inbound" && m.sender_name);
+          if (senderRow?.sender_name) enrichedName = senderRow.sender_name;
+        }
+        if (!enrichedPhone) {
+          const phoneRow = convRows.find((m: any) => m.message_direction === "inbound" && m.sender_phone_or_handle);
+          if (phoneRow?.sender_phone_or_handle) enrichedPhone = phoneRow.sender_phone_or_handle;
+        }
+        // Also scan user messages for name patterns (e.g. "me llamo Jose Guitierrez")
+        for (const m of convRows) {
+          if (m.message_direction !== "inbound" || !m.message_text) continue;
+          if (!enrichedName || enrichedName === "Unknown") {
+            const nameMatch = m.message_text.match(/\b(?:me llamo|my name is|soy|i'm|i am)\s+([A-Z][a-záéíóúñ]+(?:\s+[A-Z][a-záéíóúñ]+)*)/i);
+            if (nameMatch) enrichedName = nameMatch[1].trim();
+          }
+          if (!enrichedPhone) {
+            const phoneMatch = m.message_text.match(/(\d{3}[-.\s]?\d{3,4}[-.\s]?\d{4}|\d{7,11}|\+\d{1,3}\s?\d{6,12})/);
+            if (phoneMatch) enrichedPhone = phoneMatch[1];
+          }
+        }
         lastMessages = convRows.reverse().map((m: any) => {
           const dir = m.message_direction === "outbound" ? "Bot" : (m.sender_name || "Customer");
           const text = (m.message_text || "").substring(0, 200);
@@ -132,11 +155,11 @@ serve(async (req: Request) => {
         <table style="border-collapse: collapse; width: 100%; margin: 16px 0;">
           <tr style="background: #f9fafb;">
             <td style="padding: 8px 12px; font-weight: bold; color: #374151; border-bottom: 1px solid #e5e7eb;">Name</td>
-            <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb;">${lead.name || "Unknown"}</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb;">${enrichedName || "Unknown"}</td>
           </tr>
           <tr>
             <td style="padding: 8px 12px; font-weight: bold; color: #374151; border-bottom: 1px solid #e5e7eb;">Phone</td>
-            <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb;">${lead.phone || "N/A"}</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb;">${enrichedPhone || "N/A"}</td>
           </tr>
           <tr style="background: #f9fafb;">
             <td style="padding: 8px 12px; font-weight: bold; color: #374151; border-bottom: 1px solid #e5e7eb;">Email</td>
