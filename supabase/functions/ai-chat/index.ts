@@ -479,11 +479,24 @@ function parseScheduleResponse(text: string): { day: string | null; time: string
       detectedMinute = parseInt(twentyFourMatch[2], 10);
       detectedTime = detectedHour < 12 ? "morning" : "afternoon";
     } else {
-      if (/\b(morning|manana|am|por la manana)\b/i.test(lowerText)) {
-        detectedTime = "morning";
+      // Bare hour: "a las 11", "at 2", "11 hrs", "a las 3"
+      const bareHourMatch = lowerText.match(/\b(?:a las|at|a la|para las?)?\s*(\d{1,2})\s*(?:hrs?|horas?|o'?clock)?\b/i);
+      if (bareHourMatch) {
+        const candidateHour = parseInt(bareHourMatch[1], 10);
+        // Only accept reasonable appointment hours (7-21)
+        if (candidateHour >= 7 && candidateHour <= 21) {
+          detectedHour = candidateHour;
+          detectedMinute = 0;
+          detectedTime = candidateHour < 12 ? "morning" : "afternoon";
+        }
       }
-      if (/\b(afternoon|tarde|pm|por la tarde|evening)\b/i.test(lowerText)) {
-        detectedTime = "afternoon";
+      if (!detectedTime) {
+        if (/\b(morning|manana|am|por la manana)\b/i.test(lowerText)) {
+          detectedTime = "morning";
+        }
+        if (/\b(afternoon|tarde|pm|por la tarde|evening)\b/i.test(lowerText)) {
+          detectedTime = "afternoon";
+        }
       }
     }
   }
@@ -1560,14 +1573,14 @@ IMPORTANT: Select prices based on:
           ? "Que dia te queda mejor (lunes a viernes)?"
           : !hasTime
             ? "Prefieres manana o tarde?"
-            : "Confirmo tu reserva. Si necesitas cambios, avisame.";
+            : "Perfecto! Para confirmar tu cita necesito tu nombre completo y un numero de WhatsApp o telefono de contacto.";
       const askEn = !hasDay && !hasTime
         ? `I have ${nextSlotSuggestion} available. Does that work for you, or do you prefer another day (Mon-Fri)?`
         : !hasDay
           ? "What day works best (Mon-Fri)?"
           : !hasTime
             ? "Do you prefer morning or afternoon?"
-            : "Your booking is confirmed. If you need changes, just let me know.";
+            : "Great! To confirm your appointment, I just need your full name and a WhatsApp or phone number where we can reach you.";
 
       stateGoal = language === "es"
         ? `OBJETIVO: Agendar la reserva.
